@@ -8,8 +8,10 @@ from the working P0 service described here.
   gates would have no executable path.
 - Content ingestion is pinned to `dev.libretexts.org/Sandboxes/johnnyphung`, GET-only, and fails
   closed. The generic mirror client is not exposed.
-- Ollama Cloud is the selected hosted runtime, with a local Ollama profile retained. Cloud responses
-  are client-validated because Ollama Cloud does not currently enforce JSON-schema output.
+- Ollama Cloud remains the first selected hosted runtime, with Gemini configured as the deployed
+  fallback and a local Ollama profile retained. Ollama Cloud responses are client-validated because
+  its hosted API does not currently enforce JSON-schema output; Gemini uses native JSON Schema and
+  is validated again with the same Pydantic contract before persistence.
 - ADAPT has no POST framework-sync endpoint. Question alignment is written through the
   `framework_item_sync_question` field on question create/update.
 - ADAPT publication needs a JWT instructor/editor identity and an owned `my_questions` folder.
