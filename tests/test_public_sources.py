@@ -19,7 +19,9 @@ from app.content import (
     PUBLIC_API_USER_AGENT,
     PublicLibreTextsContentAdapter,
     UnsafePublicSourceError,
+    build_content_adapter,
 )
+from app.schemas import SourceType
 from app.source_policy import (
     PUBLIC_LIBRETEXTS_LIBRARIES,
     PublicSourceValidationError,
@@ -277,3 +279,8 @@ async def test_public_source_size_limit_is_enforced(tmp_path: Path) -> None:
 def test_public_adapter_is_disabled_by_default(tmp_path: Path) -> None:
     with pytest.raises(ContentConfigurationError, match="not enabled"):
         PublicLibreTextsContentAdapter(settings(tmp_path, public_sources_enabled=False))
+
+
+def test_content_factory_blocks_sandbox_sources_by_default(tmp_path: Path) -> None:
+    with pytest.raises(ContentConfigurationError, match="sandbox sources are disabled"):
+        build_content_adapter(settings(tmp_path), SourceType.SANDBOX)

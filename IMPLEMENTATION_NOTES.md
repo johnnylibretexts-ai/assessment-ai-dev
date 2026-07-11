@@ -6,11 +6,11 @@ from the working P0 service described here.
 
 - P0 includes minimal SQLite persistence and a review surface; otherwise its human Bloom/difficulty
   gates would have no executable path.
-- Content ingestion supports the pinned `dev.libretexts.org/Sandboxes/johnnyphung` GET-only reader
-  and, behind `ASSESSMENT_AI_PUBLIC_SOURCES_ENABLED`, a credential-free public-page reader. The
-  public reader accepts only the 14 official library hosts and can call only the fixed LibreTexts
-  `/endpoint/info` and `/endpoint/contents` proxy operations. Both paths fail closed; the generic
-  mirror client, direct public Deki API, and HTML scraping are not exposed.
+- Content ingestion is public-only. The credential-free reader accepts only the 14 official library
+  hosts and can call only the fixed LibreTexts `/endpoint/info` and `/endpoint/contents` proxy
+  operations. Sandbox generation and stored sandbox drafts are blocked at the HTTP boundary, the
+  adapter factory defaults sandbox support off, and the container receives no CXone credential
+  file. The generic mirror client, direct public Deki API, and HTML scraping are not exposed.
 - Ollama Cloud remains the first selected hosted runtime, with Gemini configured as the deployed
   fallback and a local Ollama profile retained. Ollama Cloud responses are client-validated because
   its hosted API does not currently enforce JSON-schema output; Gemini uses native JSON Schema and

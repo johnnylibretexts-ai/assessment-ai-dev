@@ -718,6 +718,10 @@ def build_content_adapter(
         raise ContentConfigurationError("Choose a supported source type.") from exc
     if selected is SourceType.PUBLIC:
         return PublicLibreTextsContentAdapter(settings)
+    if not settings.sandbox_sources_enabled:
+        raise ContentConfigurationError(
+            "Dev sandbox sources are disabled for this service."
+        )
     return CXoneSandboxContentAdapter(settings)
 
 

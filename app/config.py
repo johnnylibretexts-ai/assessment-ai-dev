@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     allowed_origin: str = "http://localhost:8000"
     max_source_chars: int = Field(default=60_000, ge=1_000, le=250_000)
     public_sources_enabled: bool = False
+    sandbox_sources_enabled: bool = False
 
     sandbox_root: str = "Sandboxes/johnnyphung"
     cxone_host: str = "dev.libretexts.org"

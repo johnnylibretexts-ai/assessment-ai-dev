@@ -17,7 +17,6 @@ from app.schemas import (
     QuestionDraft,
     ReviewStatus,
     SourceInfo,
-    SourceType,
 )
 
 
@@ -41,9 +40,10 @@ def page() -> NormalizedPage:
         htmlBody=f"<p>{text}</p>",
         paragraphs=[Paragraph(index=0, text=text, start=0, end=len(text))],
         source=SourceInfo(
-            canonical_url="https://dev.libretexts.org/Sandboxes/johnnyphung/Energy",
-            path="Sandboxes/johnnyphung/Energy",
-            page_id="7",
+            backend="libretexts_public",
+            canonical_url="https://chem.libretexts.org/Bookshelves/Test/Page",
+            path="chem.libretexts.org/Bookshelves/Test/Page",
+            page_id="86187",
         ),
     )
 
@@ -91,12 +91,15 @@ def seed(repository: DraftRepository, source_page: NormalizedPage | None = None)
 
 
 def public_page() -> NormalizedPage:
+    return page()
+
+
+def sandbox_page() -> NormalizedPage:
     source_page = page()
     source_page.source = SourceInfo(
-        backend="libretexts_public",
-        canonical_url="https://chem.libretexts.org/Bookshelves/Test/Page",
-        path="chem.libretexts.org/Bookshelves/Test/Page",
-        page_id="86187",
+        canonical_url="https://dev.libretexts.org/Sandboxes/johnnyphung/Energy",
+        path="Sandboxes/johnnyphung/Energy",
+        page_id="7",
     )
     return source_page
 
@@ -109,6 +112,7 @@ def test_health_and_empty_queue_work_without_cloud_key(tmp_path: Path) -> None:
             "status": "ok",
             "generation": "needs_ollama_api_key",
             "public_sources": "disabled",
+            "sandbox_sources": "disabled",
             "adapt_publishing": "disabled",
         }
         readiness = client.get("/readyz")
@@ -166,13 +170,14 @@ def test_generation_form_rejects_cross_origin_before_provider_calls(
         assert missing_identity.status_code == 403
 
 
-def test_source_selector_and_public_feature_disabled_behavior(tmp_path: Path) -> None:
+def test_public_only_form_and_public_feature_disabled_behavior(tmp_path: Path) -> None:
     disabled_app = create_app(settings(tmp_path))
     with TestClient(disabled_app) as client:
         form = client.get("/")
-        assert 'name="source_type" value="public" disabled' in form.text
-        assert 'name="source_type" value="sandbox" checked' in form.text
+        assert 'type="hidden" name="source_type" value="public"' in form.text
         assert 'name="source_locator"' in form.text
+        assert "sandbox" not in form.text.casefold()
+        assert "dev.libretexts.org" not in form.text
         response = client.post(
             "/generate",
             data={
@@ -193,21 +198,24 @@ def test_source_selector_and_public_feature_disabled_behavior(tmp_path: Path) ->
     )
     with TestClient(create_app(enabled_settings)) as client:
         form = client.get("/")
-        assert 'name="source_type" value="public" checked' in form.text
-        assert 'name="source_type" value="sandbox" checked' not in form.text
+        assert 'type="hidden" name="source_type" value="public"' in form.text
+        assert "sandbox" not in form.text.casefold()
 
 
-def test_legacy_sandbox_path_is_dispatched_as_sandbox(tmp_path: Path) -> None:
+def test_sandbox_and_legacy_requests_are_blocked_before_adapter_creation(
+    tmp_path: Path,
+) -> None:
     app = create_app(settings(tmp_path))
-    selected: list[SourceType] = []
+    adapter_calls = 0
 
-    def record_source_type(source_type: SourceType) -> None:
-        selected.append(source_type)
-        raise ValueError("stop after dispatch")
+    def fail_if_called(_source_type: object) -> None:
+        nonlocal adapter_calls
+        adapter_calls += 1
+        raise AssertionError("sandbox request reached the adapter factory")
 
     with TestClient(app) as client:
-        app.state.content_factory = record_source_type
-        response = client.post(
+        app.state.content_factory = fail_if_called
+        legacy = client.post(
             "/generate",
             data={"sandbox_path": "Sandboxes/johnnyphung/Energy"},
             headers={
@@ -216,8 +224,67 @@ def test_legacy_sandbox_path_is_dispatched_as_sandbox(tmp_path: Path) -> None:
             },
             follow_redirects=False,
         )
-    assert response.status_code == 303
-    assert selected == [SourceType.SANDBOX]
+        explicit = client.post(
+            "/generate",
+            data={
+                "source_type": "sandbox",
+                "source_locator": "Sandboxes/johnnyphung/Energy",
+            },
+            headers={
+                "Origin": "http://testserver",
+                "X-Reviewer": "reviewer@example.org",
+            },
+            follow_redirects=False,
+        )
+    assert legacy.status_code == 303
+    assert explicit.status_code == 303
+    assert "sandbox+sources+are+disabled" in legacy.headers["location"].casefold()
+    assert "sandbox+sources+are+disabled" in explicit.headers["location"].casefold()
+    assert adapter_calls == 0
+
+
+def test_stored_sandbox_drafts_are_hidden_and_inaccessible(tmp_path: Path) -> None:
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        public_id = seed(app.state.repository, public_page())
+        sandbox_id = seed(app.state.repository, sandbox_page())
+
+        queue = client.get("/")
+        assert queue.status_code == 200
+        assert f'href="/drafts/{public_id}"' in queue.text
+        assert f'href="/drafts/{sandbox_id}"' not in queue.text
+        assert "dev.libretexts.org" not in queue.text
+        assert client.get(f"/drafts/{sandbox_id}").status_code == 404
+
+        review = client.post(
+            f"/drafts/{sandbox_id}/review",
+            data={"decision": "rejected"},
+            headers={
+                "Origin": "http://testserver",
+                "X-Reviewer": "reviewer@example.org",
+            },
+        )
+        assert review.status_code == 404
+
+        edit = client.post(
+            f"/drafts/{sandbox_id}/edit",
+            data={
+                "stem": "What happens to total energy?",
+                "choice_a": "It remains conserved.",
+                "choice_b": "It vanishes.",
+                "choice_c": "It becomes matter.",
+                "choice_d": "It loses all units.",
+                "correct_choice": "A",
+                "explanation": "The source states that energy is conserved.",
+                "bloom": "understand",
+                "difficulty": "easy",
+            },
+            headers={
+                "Origin": "http://testserver",
+                "X-Reviewer": "reviewer@example.org",
+            },
+        )
+        assert edit.status_code == 404
 
 
 def test_public_source_provenance_is_clickable_on_review_page(tmp_path: Path) -> None:

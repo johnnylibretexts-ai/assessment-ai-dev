@@ -7,7 +7,6 @@ services:
     init: true
     read_only: true
     env_file:
-      - ${CXONE_ENV_FILE:-/home/johnnylibretexts/.cxone.env}
       - ${ASSESSMENT_AI_ENV_FILE:-.env}
     ports:
       - "127.0.0.1:8093:8000"

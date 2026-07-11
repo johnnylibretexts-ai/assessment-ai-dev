@@ -5,7 +5,7 @@
     <div>
       <p class="eyebrow">Draft workspace</p>
       <h1>Assessment review queue</h1>
-      <p>Generate from one public LibreTexts page or the approved dev sandbox, then check the source, answer, Bloom level, and difficulty before anything can move toward ADAPT.</p>
+      <p>Generate from one public LibreTexts page, then check the source, answer, Bloom level, and difficulty before anything can move toward ADAPT.</p>
     </div>
   </section>
 
@@ -15,18 +15,8 @@
   <section class="panel">
     <h2>Generate a cited MCQ</h2>
     <form method="post" action="/generate" class="generate-form">
-      <fieldset>
-        <legend>Source type</legend>
-        <label class="check">
-          <input type="radio" name="source_type" value="public" {% if public_sources_enabled %}checked{% else %}disabled{% endif %}>
-          <span><strong>Public LibreTexts page</strong> — an approved chem, bio, math, or other official library URL.</span>
-        </label>
-        <label class="check">
-          <input type="radio" name="source_type" value="sandbox" {% if not public_sources_enabled %}checked{% endif %}>
-          <span><strong>Dev sandbox page</strong> — a path under <code>Sandboxes/johnnyphung</code>.</span>
-        </label>
-      </fieldset>
-      <label for="source_locator">Page URL or sandbox path</label>
+      <input type="hidden" name="source_type" value="public">
+      <label for="source_locator">Public LibreTexts page URL</label>
       <div class="form-row">
         <input id="source_locator" name="source_locator" required
                placeholder="https://chem.libretexts.org/Bookshelves/..."
@@ -34,7 +24,7 @@
         <button type="submit">Generate draft</button>
       </div>
       <p id="source-help" class="help">
-        Public sources read one page through LibreTexts’ credential-free read proxy; no book crawl or publishing occurs.
+        Assessment AI reads one public page through LibreTexts’ credential-free read proxy; no book crawl or publishing occurs.
         {% if not public_sources_enabled %}<strong>Public page sources are currently disabled during rollout verification.</strong>{% endif %}
         Generation uses the configured Ollama Cloud/Gemini provider chain and always requires human review.
       </p>

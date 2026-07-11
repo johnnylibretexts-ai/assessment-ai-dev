@@ -78,6 +78,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "public_sources": "enabled"
                 if resolved_settings.public_sources_enabled
                 else "disabled",
+                "sandbox_sources": "disabled",
                 "adapt_publishing": "disabled",
             }
         )
@@ -93,7 +94,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:
-        drafts = request.app.state.repository.list_drafts()
+        drafts = [
+            draft
+            for draft in request.app.state.repository.list_drafts()
+            if draft.source.backend == "libretexts_public"
+        ]
         return templates.TemplateResponse(
             request,
             "index.html",
@@ -117,11 +122,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             locator = (source_locator or "").strip()
             selected_type = SourceType(source_type)
-            if not locator and sandbox_path is not None:
-                locator = sandbox_path.strip()
-                selected_type = SourceType.SANDBOX
+            if selected_type is not SourceType.PUBLIC or sandbox_path is not None:
+                raise ValueError("Dev sandbox sources are disabled for this service.")
             if not locator:
-                raise ValueError("Choose a source page to generate from.")
+                raise ValueError("Choose a public LibreTexts page to generate from.")
             content = request.app.state.content_factory(selected_type)
             llm = request.app.state.llm_factory()
             async with content, llm:
@@ -141,9 +145,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/drafts/{draft_id}", response_class=HTMLResponse)
     async def draft_detail(request: Request, draft_id: int) -> HTMLResponse:
-        draft = request.app.state.repository.get_draft(draft_id)
-        if draft is None:
-            raise HTTPException(status_code=404, detail="Draft not found")
+        draft = _require_public_draft(request.app.state.repository, draft_id)
         return templates.TemplateResponse(
             request,
             "draft.html",
@@ -173,6 +175,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> RedirectResponse:
         _require_same_origin(request, resolved_settings)
         repository: DraftRepository = request.app.state.repository
+        _require_public_draft(repository, draft_id)
         try:
             stored = repository.require_draft(draft_id)
             current = stored.current
@@ -224,6 +227,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         reviewer_notes: str = Form(""),
     ) -> RedirectResponse:
         _require_same_origin(request, resolved_settings)
+        _require_public_draft(request.app.state.repository, draft_id)
         try:
             review_decision = ReviewDecision(
                 status=ReviewStatus(decision),
@@ -320,6 +324,13 @@ def _draft_detail(draft: Draft) -> dict[str, Any]:
 
 def _source_type(backend: str) -> str:
     return "public" if backend == "libretexts_public" else "sandbox"
+
+
+def _require_public_draft(repository: DraftRepository, draft_id: int) -> Draft:
+    draft = repository.get_draft(draft_id)
+    if draft is None or draft.source.backend != "libretexts_public":
+        raise HTTPException(status_code=404, detail="Draft not found")
+    return draft
 
 
 def _reviewer(request: Request) -> str:

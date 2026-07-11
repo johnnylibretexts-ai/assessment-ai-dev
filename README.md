@@ -1,10 +1,10 @@
 # LibreTexts Assessment AI
 
-Standalone, review-gated assessment drafting from public LibreTexts pages and the approved LibreTexts dev sandbox.
+Standalone, review-gated assessment drafting from public LibreTexts pages.
 
 The first vertical slice is deliberately narrow:
 
-1. read one public LibreTexts page through the fixed read proxy, or one page under `dev.libretexts.org/Sandboxes/johnnyphung`;
+1. read one public LibreTexts page through the fixed read proxy;
 2. normalize cited paragraphs with stable offsets;
 3. extract concepts and draft one multiple-choice item;
 4. run a separate critique/revision pass;
@@ -17,12 +17,11 @@ payload. Publishing stays fail-closed until that identity and destination are pr
 
 ## Page sources
 
-The generation form accepts exactly one page per request:
+The generation form accepts exactly one public page per request:
 
-- **Public LibreTexts page** (default when enabled): a full HTTPS URL from `bio`, `biz`, `chem`,
+- A full HTTPS URL from `bio`, `biz`, `chem`,
   `eng`, `espanol`, `geo`, `human`, `k12`, `math`, `med`, `phys`, `socialsci`, `stats`, or
   `workforce` at `*.libretexts.org`.
-- **Dev sandbox page**: the existing relative path under `Sandboxes/johnnyphung`.
 
 Public sources are disabled by default. Enable them only after read-only proxy smoke checks:
 
@@ -36,8 +35,10 @@ and `/endpoint/contents` with `mode: view`. It never sends CXone credentials, co
 headers, or requests directly to the source host. Proxy failures fail closed; there is no HTML
 scraping or raw Deki fallback. Book-wide crawling and public-page publishing are not supported.
 
-Existing `sandbox_path` form submissions remain accepted as sandbox requests for compatibility.
-New forms submit `source_type=public|sandbox` and `source_locator=<value>`.
+Dev sandbox sources are disabled at the adapter factory and HTTP route. Legacy `sandbox_path`
+submissions are rejected, stored sandbox drafts are omitted from the queue and return HTTP 404,
+and the Docker service does not load the CXone credential file. New forms submit
+`source_type=public` and `source_locator=<value>`.
 
 ## LLM providers
 
@@ -80,7 +81,6 @@ pytest
 uvicorn app.main:app --reload
 ```
 
-Use `.env.example` as the non-secret template. Never commit `.env` or CXone/LLM credentials.
-For Docker Compose on a non-VPS machine, point Compose at the existing credential file without
-copying it and use the non-secret template for validation:
-`CXONE_ENV_FILE="$HOME/.cxone.env" ASSESSMENT_AI_ENV_FILE=.env.example docker compose config`.
+Use `.env.example` as the non-secret template. Never commit `.env` or LLM credentials.
+For Docker Compose on a non-VPS machine, use the non-secret template for validation:
+`ASSESSMENT_AI_ENV_FILE=.env.example docker compose config`.
