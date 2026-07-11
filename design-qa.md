@@ -1,73 +1,77 @@
-# Design QA — public source link containment
+# Design QA — generation progress state
 
-- Source visual truth: `/Users/johnnyrobot/Desktop/Screenshot 2026-07-11 at 12.23.52 PM.png`
-- Rendered implementation: `/tmp/assessment-ui-after.png`
-- Responsive implementation: `/tmp/assessment-ui-mobile-viewport.png`
-- Desktop viewport: 1206 × 900 CSS pixels, full-page capture at 1191 × 1522 pixels
-- Mobile viewport: 390 × 844 CSS pixels, viewport capture at 375 × 844 pixels
-- State: public Chemistry draft `#2`, ready for review, edit panel collapsed
+- Source visual truth: `/Users/johnnyrobot/Desktop/Screenshot 2026-07-11 at 3.39.12 PM.png`
+- Desktop implementation: `/tmp/assessment-ai-generation-normal.png`
+- Loading implementation: `/tmp/assessment-ai-generation-loading.png`
+- Mobile loading implementation: `/tmp/assessment-ai-generation-mobile-loading.png`
+- Side-by-side source comparison: `/tmp/assessment-ai-generation-reference-comparison.png`
+- Desktop viewport: 1439 × 1008
+- Mobile viewport: 390 × 844
+- States: populated queue at rest; generation request in progress
 
 ## Full-view comparison evidence
 
-The reference establishes the two-column review composition: sticky source card on the left and the
-review form on the right. The revised implementation preserves that hierarchy, spacing, card
-treatment, typography, colors, review controls, and cited-paragraph presentation. The public source
-URL is now represented by a compact action inside the source card instead of exposing the full URL
-as visible text.
+The source screenshot and desktop implementation were combined into
+`/tmp/assessment-ai-generation-reference-comparison.png`
+at the same 1439 × 1008 viewport. Header height, maximum content width, hero hierarchy, form-card
+position and proportions, button placement, queue spacing, draft card, typography, border colors,
+radii, shadows, and semantic colors remain visually aligned. The implementation input has a focus
+ring because browser automation filled it immediately before capture; this is an expected interaction
+state rather than design drift.
 
-The source screenshot predates public-only mode, so its sandbox title and content intentionally
-differ from the rendered public Chemistry draft. Those content differences are not design drift.
+## Focused loading-state evidence
 
-## Focused-region comparison evidence
+`/tmp/assessment-ai-generation-loading.png` shows the new desktop state directly beneath the
+existing URL row. It uses the
+existing brand blue, muted text, border radius, and panel spacing. The submit button retains its
+width while changing to “Generating…” and becomes disabled. The status block displays one rotating
+plain-language message, animated sequential trailing dots, and a keep-open duration note without
+obscuring the queue.
 
-The source/provenance region was checked directly because it contains the reported defect. At the
-desktop viewport:
-
-- Source card bounds: x=16–528.55, client width 511px.
-- Source link bounds: x=41–245.92, width 204.92px.
-- Review card begins at x=548.55.
-- The link is fully contained, the columns remain separated, and document scroll width equals the
-  viewport width.
-
-At 390px responsive width, the source card and review card stack into one 343px column. The link is
-fully contained and the document has no horizontal overflow.
-
-## Comparison history
-
-1. Earlier finding — P1: the visible canonical URL could extend beyond the source card and overlap
-   the review column.
-2. Fix — retained the canonical URL in `href` and `title`, changed visible copy to “Open original
-   LibreTexts page,” added `min-width: 0` to grid children, and added defensive `overflow-wrap` and
-   width constraints to the source card/link.
-3. Post-fix evidence — desktop and mobile captures show the action contained within the card;
-   measured bounds confirm no overlap or horizontal overflow.
+`/tmp/assessment-ai-generation-mobile-loading.png` confirms the form stacks at 390 px, the loading
+block stays within the card,
+copy remains readable, the primary button remains visible, and there is no horizontal overflow.
+The focused region was necessary because the requested animation is not visible in the source's
+resting state.
 
 ## Required fidelity surfaces
 
-- Fonts and typography: existing system font stack, weights, hierarchy, line heights, and wrapping
-  remain unchanged; the compact source action uses the existing link styling with a clear 700
-  weight.
-- Spacing and layout rhythm: two-column grid, 20px gap, card padding/radii, sticky positioning, and
-  responsive stacking are preserved.
-- Colors and visual tokens: existing brand, muted text, border, surface, warning, and success tokens
-  are unchanged.
-- Image quality and asset fidelity: this screen contains no image assets; no assets were introduced
-  or replaced.
-- Copy and content: the full raw URL was replaced only as visible copy. The canonical URL remains
-  available as the actual link destination and tooltip, while library and page ID remain visible.
+- Fonts and typography: existing system/Inter stack, weights, hierarchy, line height, wrapping, and
+  small-label treatment are preserved. Loading copy follows the same hierarchy and optical weight.
+- Spacing and layout rhythm: the resting page remains aligned to the source. Loading adds one compact
+  14 px-separated block inside the form card and stacks cleanly at the mobile breakpoint.
+- Colors and visual tokens: loading uses the existing brand, brand-dark, muted, and blue-border
+  family; contrast remains clear in normal and disabled states.
+- Image quality and asset fidelity: the screen contains no raster illustrations, logos, or custom
+  icon assets to reproduce. No replacement image assets or handcrafted icons were introduced.
+- Copy and content: status language is student-friendly, concise, and sets a realistic expectation
+  to keep the page open. Rotating messages describe the generation workflow without exposing model
+  or infrastructure jargon.
+- Accessibility and interaction: the status uses `role="status"`, polite live announcements, an
+  atomic update, `aria-busy` on the form, a disabled submit control to prevent duplicates, a
+  back-forward-cache reset, and a static-dot reduced-motion mode.
 
 ## Findings
 
-No actionable P0, P1, or P2 findings remain for the reported overflow defect.
+No actionable P0, P1, or P2 visual or interaction issues remain. The filled desktop input shows its
+normal focus ring in the automated capture; this is acceptable P3 state variance.
 
-## Interaction and console checks
+## Comparison history
 
-- The source link is exposed as one accessible link with the expected canonical LibreTexts URL.
-- Review controls remain present in the DOM.
-- Browser console warnings/errors: none.
+- Initial comparison: desktop resting layout matched the supplied screenshot; no P0/P1/P2 drift.
+- Loading comparison: progress panel, button state, rotating message, trailing dots, and duration
+  guidance were visible and contained.
+- Responsive comparison: mobile viewport showed a readable stacked form and contained loading panel
+  with no horizontal overflow.
+- Console check: no browser console errors.
 
-## Follow-up polish
+## Implementation checklist
 
-No P3 follow-up is needed for this scoped fix.
+- [x] Preserve existing visual system and resting layout.
+- [x] Disable duplicate submissions while the request is active.
+- [x] Show animated trailing dots and rotating plain-language progress text.
+- [x] Provide live-region and reduced-motion behavior.
+- [x] Verify desktop and mobile loading states in the in-app browser.
+- [x] Confirm zero browser console errors.
 
 final result: passed

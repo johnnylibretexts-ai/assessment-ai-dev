@@ -176,8 +176,19 @@ def test_public_only_form_and_public_feature_disabled_behavior(tmp_path: Path) -
         form = client.get("/")
         assert 'type="hidden" name="source_type" value="public"' in form.text
         assert 'name="source_locator"' in form.text
+        assert 'id="generate-submit"' in form.text
+        assert 'id="generation-status"' in form.text
+        assert 'role="status"' in form.text
+        assert 'aria-live="polite"' in form.text
+        assert "This can take about a minute. Keep this page open." in form.text
+        assert 'src="/static/generation.js"' in form.text
         assert "sandbox" not in form.text.casefold()
         assert "dev.libretexts.org" not in form.text
+        generation_script = client.get("/static/generation.js")
+        assert generation_script.status_code == 200
+        assert "Finding the clearest teachable concepts" in generation_script.text
+        assert 'form.dataset.submitting === "true"' in generation_script.text
+        assert "sourceInput.readOnly = true" in generation_script.text
         response = client.post(
             "/generate",
             data={
