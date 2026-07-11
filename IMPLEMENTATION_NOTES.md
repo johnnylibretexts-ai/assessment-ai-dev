@@ -1,7 +1,8 @@
 # P0 implementation contract
 
 These notes capture verified differences between the v2.1 design document and the current live
-ADAPT/CXone contracts. The canonical spec is preserved unchanged.
+ADAPT/CXone contracts. The canonical spec now records the audited P1 hinting contract separately
+from the working P0 service described here.
 
 - P0 includes minimal SQLite persistence and a review surface; otherwise its human Bloom/difficulty
   gates would have no executable path.
@@ -13,5 +14,11 @@ ADAPT/CXone contracts. The canonical spec is preserved unchanged.
   `framework_item_sync_question` field on question create/update.
 - ADAPT publication needs a JWT instructor/editor identity and an owned `my_questions` folder.
   Caddy authentication for the review UI does not satisfy that API contract.
-- Existing ADAPT hint UI and telemetry support one flat hint, not per-rung progressive reveal. The
-  three-rung ladder remains deferred unless a later scope explicitly allows ADAPT UI/telemetry work.
+- Existing ADAPT hint UI and telemetry support one flat hint, not per-rung progressive reveal. P1
+  graduated hinting therefore requires the additive private-fork contract: server-only rung storage
+  (never `qti_json`), append-only attempt inputs, one-row-per-request lifecycle telemetry,
+  `shown_hints` retained as the legacy penalty marker, and `off | observe | enforce` rollout modes
+  with a pilot allowlist. Assessment AI may generate and review ladders behind its own
+  disabled-by-default flag, but ADAPT publication must remain off until that consumer contract and
+  its no-leak/legacy-parity tests are deployed. Client-reported active time is not enforcement-grade
+  and WebWork's JWT path does not provide it, so the first rollout must remain `off` or `observe`.
