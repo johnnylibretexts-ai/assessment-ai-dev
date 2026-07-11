@@ -8,10 +8,13 @@ from pydantic import BaseModel, Field
 
 from app.config import Settings
 from app.llm import (
+    GeminiClient,
     LLMConfigurationError,
+    LLMProviderChain,
     LLMStructuredOutputError,
     LLMTransportError,
     OllamaClient,
+    generation_status,
 )
 
 
@@ -289,3 +292,176 @@ def test_direct_cloud_fails_closed_without_key() -> None:
 def test_direct_cloud_rejects_plain_http_even_with_key() -> None:
     with pytest.raises(LLMConfigurationError, match="HTTPS"):
         OllamaClient(settings(ollama_base_url="http://ollama.com"))
+
+
+@pytest.mark.asyncio
+async def test_gemini_uses_api_key_and_native_json_schema() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "role": "model",
+                            "parts": [{"text": '{"answer":"four","confidence":1}'}],
+                        },
+                        "finishReason": "STOP",
+                    }
+                ],
+                "usageMetadata": {
+                    "promptTokenCount": 20,
+                    "candidatesTokenCount": 8,
+                    "totalTokenCount": 28,
+                },
+                "modelVersion": "gemini-2.5-flash-001",
+            },
+        )
+
+    client = GeminiClient(
+        settings(
+            gemini_api_key="test-gemini-key",
+            gemini_model="gemini-2.5-flash",
+            gemini_max_retries=0,
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        result = await client.complete(
+            "What is two plus two?",
+            Answer,
+            prompt_version="gemini-v1",
+        )
+    finally:
+        await client.aclose()
+
+    request = requests[0]
+    assert request.url == httpx.URL(
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        "gemini-2.5-flash:generateContent"
+    )
+    assert request.headers["x-goog-api-key"] == "test-gemini-key"
+    payload = json.loads(request.content)
+    assert payload["contents"][0]["role"] == "user"
+    config = payload["generationConfig"]
+    assert config["temperature"] == 0
+    assert config["responseMimeType"] == "application/json"
+    assert config["responseJsonSchema"] == Answer.model_json_schema()
+    assert result.value == Answer(answer="four", confidence=1)
+    assert result.metadata.provider == "gemini"
+    assert result.metadata.model == "gemini-2.5-flash"
+    assert result.metadata.response_metadata["totalTokenCount"] == 28
+
+
+@pytest.mark.asyncio
+async def test_gemini_safety_block_is_bounded_and_safe() -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            200,
+            json={"promptFeedback": {"blockReason": "SAFETY"}},
+        )
+
+    client = GeminiClient(
+        settings(gemini_api_key="secret-key", gemini_max_retries=1),
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(LLMStructuredOutputError) as exc_info:
+            await client.complete("Blocked input.", Answer)
+    finally:
+        await client.aclose()
+
+    assert calls == 2
+    assert "safety policy" in str(exc_info.value)
+    assert "secret-key" not in str(exc_info.value)
+
+
+class _FailingProvider:
+    async def complete(self, *_args: object, **_kwargs: object):
+        raise LLMTransportError("primary quota exhausted")
+
+    async def aclose(self) -> None:
+        return None
+
+
+class _SuccessfulProvider:
+    async def complete(
+        self,
+        _prompt: str,
+        schema: type[Answer],
+        *,
+        prompt_version: str = "v1",
+    ):
+        value = schema(answer="fallback", confidence=1)
+        raw = value.model_dump_json()
+        from app.llm import LLMAttemptMetadata, LLMCallMetadata, LLMResult
+
+        attempt = LLMAttemptMetadata(attempt=1, raw_response=raw)
+        metadata = LLMCallMetadata(
+            provider="gemini",
+            model="gemini-test",
+            prompt_version=prompt_version,
+            attempt=1,
+            raw_response=raw,
+            attempts=(attempt,),
+        )
+        return LLMResult(value=value, metadata=metadata)
+
+    async def aclose(self) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+async def test_provider_chain_falls_back_and_records_actual_provider() -> None:
+    chain = LLMProviderChain(
+        [
+            ("ollama", _FailingProvider()),
+            ("gemini", _SuccessfulProvider()),
+        ]
+    )
+    result = await chain.complete("Use fallback.", Answer)
+
+    assert result.value.answer == "fallback"
+    assert result.metadata.provider == "gemini"
+    assert result.metadata.response_metadata["fallback_count"] == 1
+    assert result.metadata.response_metadata["fallback_from"] == "ollama"
+
+
+def test_generation_status_accepts_either_selected_provider() -> None:
+    assert (
+        generation_status(
+            settings(
+                llm_provider_order="ollama,gemini",
+                ollama_api_key=None,
+                gemini_api_key="gemini-key",
+            )
+        )
+        == "configured"
+    )
+    assert (
+        generation_status(
+            settings(
+                llm_provider_order="ollama,gemini",
+                ollama_api_key=None,
+                gemini_api_key=None,
+            )
+        )
+        == "needs_llm_api_key"
+    )
+
+
+def test_gemini_fails_closed_without_key_or_https() -> None:
+    with pytest.raises(LLMConfigurationError, match="requires"):
+        GeminiClient(settings(gemini_api_key=None))
+    insecure = settings(gemini_api_key="key").model_copy(
+        update={"gemini_base_url": "http://generativelanguage.googleapis.com/v1beta"}
+    )
+    with pytest.raises(LLMConfigurationError, match="HTTPS"):
+        GeminiClient(insecure)

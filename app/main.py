@@ -20,7 +20,7 @@ from .db import (
     ReviewTransitionError,
     init_database,
 )
-from .llm import LLMError, OllamaClient
+from .llm import LLMError, build_llm_client, generation_status
 from .pipeline import AssessmentPipeline, PipelineError, ReviewService
 from .schemas import (
     BloomLevel,
@@ -51,7 +51,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.content_factory = lambda: CXoneSandboxContentAdapter(
             resolved_settings
         )
-        app.state.llm_factory = lambda: OllamaClient(resolved_settings)
+        app.state.llm_factory = lambda: build_llm_client(resolved_settings)
         try:
             yield
         finally:
@@ -69,20 +69,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/healthz")
     async def healthz() -> JSONResponse:
-        cloud_ready = _ollama_generation_ready(resolved_settings)
+        current_generation_status = generation_status(resolved_settings)
         return JSONResponse(
             {
                 "status": "ok",
-                "generation": "configured" if cloud_ready else "needs_ollama_api_key",
+                "generation": current_generation_status,
                 "adapt_publishing": "disabled",
             }
         )
 
     @app.get("/readyz")
     async def readyz() -> JSONResponse:
-        ready = _ollama_generation_ready(resolved_settings)
+        current_generation_status = generation_status(resolved_settings)
+        ready = current_generation_status == "configured"
         return JSONResponse(
-            {"status": "ready" if ready else "needs_ollama_api_key"},
+            {"status": "ready" if ready else current_generation_status},
             status_code=200 if ready else 503,
         )
 
@@ -320,14 +321,6 @@ def _require_same_origin(request: Request, settings: Settings) -> None:
             raise HTTPException(
                 status_code=403, detail="Cross-origin form submission refused"
             )
-
-
-def _ollama_generation_ready(settings: Settings) -> bool:
-    if not settings.ollama_is_cloud:
-        return True
-    if settings.ollama_api_key is None:
-        return False
-    return bool(settings.ollama_api_key.get_secret_value().strip())
 
 
 def _redirect_with_message(path: str, field: str, message: str) -> RedirectResponse:

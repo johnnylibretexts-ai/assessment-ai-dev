@@ -234,7 +234,7 @@ class AssessmentPipeline:
         attempts = metadata.get("attempts", [])
         call = LLMCallWrite(
             stage=stage,
-            provider=_provider_name(self.llm),
+            provider=str(metadata.get("provider") or _provider_name(self.llm)),
             model_id=str(metadata["model"]),
             prompt_version=str(metadata["prompt_version"]),
             prompt=prompt,

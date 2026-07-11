@@ -113,6 +113,21 @@ def test_blank_cloud_key_is_not_reported_ready(tmp_path: Path) -> None:
         assert client.get("/readyz").status_code == 503
 
 
+def test_gemini_can_make_generation_ready_without_ollama_key(
+    tmp_path: Path,
+) -> None:
+    configured = settings(tmp_path).model_copy(
+        update={
+            "llm_provider_order": "ollama,gemini",
+            "gemini_api_key": SecretStr("gemini-key"),
+        }
+    )
+    with TestClient(create_app(configured)) as client:
+        assert client.get("/healthz").json()["generation"] == "configured"
+        assert client.get("/readyz").status_code == 200
+        assert client.get("/readyz").json() == {"status": "ready"}
+
+
 def test_generation_form_rejects_cross_origin_before_provider_calls(
     tmp_path: Path,
 ) -> None:

@@ -46,6 +46,21 @@ class Settings(BaseSettings):
     ollama_timeout_seconds: float = Field(default=180.0, ge=5, le=600)
     ollama_max_retries: int = Field(default=2, ge=0, le=5)
 
+    # Providers are tried in order. Keeping Ollama first preserves the deployed
+    # behavior while allowing Gemini to serve as an explicit fallback.
+    llm_provider_order: str = "ollama"
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "ASSESSMENT_AI_GEMINI_API_KEY",
+            "GEMINI_API_KEY",
+        ),
+    )
+    gemini_timeout_seconds: float = Field(default=180.0, ge=5, le=600)
+    gemini_max_retries: int = Field(default=2, ge=0, le=5)
+
     adapt_publishing_enabled: bool = False
 
     @field_validator("sandbox_root")
@@ -72,9 +87,35 @@ class Settings(BaseSettings):
             raise ValueError("ollama_base_url must be an absolute HTTP(S) URL")
         return value.rstrip("/")
 
+    @field_validator("gemini_base_url")
+    @classmethod
+    def validate_gemini_base_url(cls, value: str) -> str:
+        parsed = urlparse(value)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("gemini_base_url must be an absolute HTTPS URL")
+        return value.rstrip("/")
+
+    @field_validator("llm_provider_order")
+    @classmethod
+    def validate_llm_provider_order(cls, value: str) -> str:
+        providers = [item.strip().casefold() for item in value.split(",")]
+        providers = [item for item in providers if item]
+        if not providers:
+            raise ValueError("llm_provider_order must select at least one provider")
+        unknown = sorted(set(providers) - {"ollama", "gemini"})
+        if unknown:
+            raise ValueError(f"unsupported LLM provider(s): {', '.join(unknown)}")
+        if len(providers) != len(set(providers)):
+            raise ValueError("llm_provider_order must not contain duplicates")
+        return ",".join(providers)
+
     @property
     def ollama_is_cloud(self) -> bool:
         return urlparse(self.ollama_base_url).hostname == "ollama.com"
+
+    @property
+    def llm_providers(self) -> tuple[str, ...]:
+        return tuple(self.llm_provider_order.split(","))
 
 
 @lru_cache

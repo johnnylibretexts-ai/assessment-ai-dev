@@ -35,3 +35,23 @@ def test_detects_direct_ollama_cloud() -> None:
     assert settings.ollama_is_cloud is True
     local = Settings(_env_file=None, ollama_base_url="http://localhost:11434")
     assert local.ollama_is_cloud is False
+
+
+def test_normalizes_provider_order_and_reads_gemini_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-secret")
+    settings = Settings(
+        _env_file=None,
+        llm_provider_order=" Gemini, OLLAMA ",
+    )
+    assert settings.llm_providers == ("gemini", "ollama")
+    assert settings.gemini_api_key is not None
+    assert settings.gemini_api_key.get_secret_value() == "gemini-secret"
+    assert "gemini-secret" not in repr(settings)
+
+
+@pytest.mark.parametrize("provider_order", ["", "openrouter", "ollama,ollama"])
+def test_rejects_invalid_provider_order(provider_order: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, llm_provider_order=provider_order)

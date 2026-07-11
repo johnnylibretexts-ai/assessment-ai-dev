@@ -15,14 +15,20 @@ Nothing publishes to ADAPT yet. The current ADAPT API requires a JWT identity wi
 `my_questions` folder, and framework alignment must be submitted in the question create/update
 payload. Publishing stays fail-closed until that identity and destination are provisioned.
 
-## Ollama Cloud
+## LLM providers
 
-The deployed profile uses Ollama's direct cloud API:
+The service supports Ollama Cloud and the Gemini API behind the same validated structured-output
+interface. Providers are tried in the configured order, so either can be primary and the other can
+be a fallback:
 
 ```dotenv
+ASSESSMENT_AI_LLM_PROVIDER_ORDER=ollama,gemini
 ASSESSMENT_AI_OLLAMA_BASE_URL=https://ollama.com
 ASSESSMENT_AI_OLLAMA_MODEL=gpt-oss:120b
 ASSESSMENT_AI_OLLAMA_API_KEY=...
+ASSESSMENT_AI_GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+ASSESSMENT_AI_GEMINI_MODEL=gemini-2.5-flash
+ASSESSMENT_AI_GEMINI_API_KEY=...
 ```
 
 Ollama Cloud currently does not enforce structured outputs. The client therefore includes the JSON
@@ -31,9 +37,14 @@ errors. A truly local model uses native schema-constrained output; a `:cloud`/`-
 through a signed-in local Ollama daemon uses the same client-side validation as the direct cloud
 API. This keeps the model transport swappable and preserves a fully self-hostable path.
 
-`/healthz` is container liveness; `/readyz` returns HTTP 503 until the selected direct cloud profile
-has a non-empty API key. This lets the review shell stay observable without claiming generation is
-ready.
+Gemini uses its native JSON Schema structured-output mode and the response is still validated with
+the same Pydantic models before it can enter the review queue. If a provider fails after its bounded
+attempts, the next ready provider is tried. The successful provider and model are stored with each
+LLM call for audit provenance.
+
+`/healthz` is container liveness; `/readyz` returns HTTP 503 until at least one selected provider is
+ready. A direct cloud provider is ready only when its API key is non-empty. This lets the review
+shell stay observable without claiming generation is ready.
 
 ## Local development
 
@@ -45,7 +56,7 @@ pytest
 uvicorn app.main:app --reload
 ```
 
-Use `.env.example` as the non-secret template. Never commit `.env` or CXone/Ollama credentials.
+Use `.env.example` as the non-secret template. Never commit `.env` or CXone/LLM credentials.
 For Docker Compose on a non-VPS machine, point Compose at the existing credential file without
 copying it and use the non-secret template for validation:
 `CXONE_ENV_FILE="$HOME/.cxone.env" ASSESSMENT_AI_ENV_FILE=.env.example docker compose config`.
