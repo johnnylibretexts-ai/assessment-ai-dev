@@ -297,6 +297,9 @@ def test_public_source_provenance_is_clickable_on_review_page(tmp_path: Path) ->
     assert "chem.libretexts.org" in detail.text
     assert "Page ID: 86187" in detail.text
     assert 'target="_blank" rel="noopener noreferrer"' in detail.text
+    assert 'class="source-link"' in detail.text
+    assert ">Open original LibreTexts page</a>" in detail.text
+    assert 'title="https://chem.libretexts.org/Bookshelves/Test/Page"' in detail.text
     assert "Paragraph 0" in detail.text
 
 
