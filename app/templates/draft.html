@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Draft {{ draft.id }}{% endblock %}
+{% block content %}
+  <nav class="back"><a href="/">← Back to queue</a></nav>
+  {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+  {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+  <div class="review-layout">
+    <section class="panel source-pane">
+      <p class="eyebrow">Source</p>
+      <h1>{{ draft.source_title }}</h1>
+      <p class="source-path">{{ draft.source_path }}</p>
+      {% for paragraph in draft.cited_paragraphs %}
+        <article class="source-paragraph">
+          <span>Paragraph {{ paragraph.index }}</span>
+          <p>{{ paragraph.text }}</p>
+        </article>
+      {% endfor %}
+    </section>
+
+    <section class="panel review-pane">
+      <div class="card-topline">
+        <span class="status status-{{ draft.status }}">{{ draft.status|replace('_', ' ') }}</span>
+        <span class="muted">{{ draft.model_id }} · {{ draft.prompt_version }}</span>
+      </div>
+      <p class="eyebrow">Revised AI draft</p>
+      <h2>{{ draft.stem }}</h2>
+      <ol class="choices" type="A">
+        {% for choice in draft.choices %}
+          <li class="{% if choice.correct %}correct{% endif %}">
+            {{ choice.text }}
+            {% if choice.correct %}<strong>Correct answer</strong>{% endif %}
+          </li>
+        {% endfor %}
+      </ol>
+      <div class="explanation">
+        <h3>Explanation</h3>
+        <p>{{ draft.explanation }}</p>
+      </div>
+      {% if draft.critique_issues %}
+        <details>
+          <summary>See critique used for revision</summary>
+          <ul>{% for issue in draft.critique_issues %}<li>{{ issue }}</li>{% endfor %}</ul>
+        </details>
+      {% endif %}
+
+      <details class="edit-box">
+        <summary>Edit this draft</summary>
+        <form method="post" action="/drafts/{{ draft.id }}/edit" class="review-form">
+          <label for="stem">Question</label>
+          <textarea id="stem" name="stem" rows="3" required>{{ draft.stem }}</textarea>
+          <fieldset>
+            <legend>Choices and correct answer</legend>
+            {% for choice in draft.choices %}
+              <div class="choice-edit">
+                <input aria-label="Correct answer {{ choice.id }}" type="radio" name="correct_choice" value="{{ choice.id }}" {% if choice.correct %}checked{% endif %} required>
+                <label for="choice_{{ choice.id }}">{{ choice.id }}</label>
+                <input id="choice_{{ choice.id }}" name="choice_{{ choice.id|lower }}" value="{{ choice.text }}" required>
+              </div>
+            {% endfor %}
+          </fieldset>
+          <label for="explanation">Explanation</label>
+          <textarea id="explanation" name="explanation" rows="4" required>{{ draft.explanation }}</textarea>
+          <div class="two-column">
+            <label>Bloom level
+              <select name="bloom">
+                {% for option in bloom_options %}<option value="{{ option }}" {% if option == draft.bloom %}selected{% endif %}>{{ option }}</option>{% endfor %}
+              </select>
+            </label>
+            <label>Difficulty
+              <select name="difficulty">
+                {% for option in difficulty_options %}<option value="{{ option }}" {% if option == draft.difficulty %}selected{% endif %}>{{ option }}</option>{% endfor %}
+              </select>
+            </label>
+          </div>
+          <label for="edit_notes">Edit note</label>
+          <textarea id="edit_notes" name="reviewer_notes" rows="2"></textarea>
+          <button type="submit">Save edited draft</button>
+          <p class="help">Saving an edit resets both human confirmation checks.</p>
+        </form>
+      </details>
+
+      <form method="post" action="/drafts/{{ draft.id }}/review" class="review-form">
+        <fieldset>
+          <legend>Required human checks</legend>
+          <label class="check">
+            <input type="checkbox" name="bloom_confirmed" value="true" {% if draft.bloom_confirmed %}checked{% endif %}>
+            <span><strong>Bloom level:</strong> {{ draft.bloom }} is accurate for the work the learner must do.</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" name="difficulty_confirmed" value="true" {% if draft.difficulty_confirmed %}checked{% endif %}>
+            <span><strong>Difficulty:</strong> {{ draft.difficulty }} is accurate for the intended learner.</span>
+          </label>
+        </fieldset>
+        <label for="reviewer_notes">Reviewer notes</label>
+        <textarea id="reviewer_notes" name="reviewer_notes" rows="4">{{ draft.reviewer_notes }}</textarea>
+        <div class="button-row">
+          <button type="submit" name="decision" value="ready_to_publish">Mark ready to publish</button>
+          <button class="secondary" type="submit" name="decision" value="rejected">Reject draft</button>
+        </div>
+        <p class="help">“Ready to publish” is only a local review state. ADAPT publishing is disabled until its service identity and destination folder are provisioned.</p>
+      </form>
+    </section>
+  </div>
+{% endblock %}

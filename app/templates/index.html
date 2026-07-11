@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Review queue{% endblock %}
+{% block content %}
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Draft workspace</p>
+      <h1>Assessment review queue</h1>
+      <p>Generate from one approved sandbox page, then check the source, answer, Bloom level, and difficulty before anything can move toward ADAPT.</p>
+    </div>
+  </section>
+
+  {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+  {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+  <section class="panel">
+    <h2>Generate a cited MCQ</h2>
+    <form method="post" action="/generate" class="generate-form">
+      <label for="sandbox_path">Sandbox page path</label>
+      <div class="form-row">
+        <input id="sandbox_path" name="sandbox_path" required
+               value="Sandboxes/johnnyphung/"
+               aria-describedby="path-help">
+        <button type="submit">Generate draft</button>
+      </div>
+      <p id="path-help" class="help">Only pages under <code>Sandboxes/johnnyphung</code> are accepted. Generation fails closed when Ollama Cloud is not configured.</p>
+    </form>
+  </section>
+
+  <section class="queue">
+    <div class="section-heading">
+      <h2>Drafts</h2>
+      <span>{{ drafts|length }} total</span>
+    </div>
+    {% if drafts %}
+      <div class="cards">
+        {% for draft in drafts %}
+          <a class="card" href="/drafts/{{ draft.id }}">
+            <div class="card-topline">
+              <span class="status status-{{ draft.status }}">{{ draft.status|replace('_', ' ') }}</span>
+              <span class="muted">#{{ draft.id }}</span>
+            </div>
+            <h3>{{ draft.source_title }}</h3>
+            <p>{{ draft.stem }}</p>
+            <div class="meta">
+              <span>Bloom: {{ draft.bloom }}</span>
+              <span>Difficulty: {{ draft.difficulty }}</span>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <h3>No drafts yet</h3>
+        <p>Enter a sandbox page above after the Ollama Cloud key is installed on the VPS.</p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

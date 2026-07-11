@@ -1,0 +1,17 @@
+assess-ai.libretexts.dev {
+	import secheaders
+	import gate
+	header {
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Permissions-Policy "camera=(), geolocation=(), microphone=()"
+		X-Frame-Options "DENY"
+	}
+
+	request_body {
+		max_size 256KB
+	}
+
+	reverse_proxy 127.0.0.1:8093 {
+		header_up X-Reviewer {http.auth.user.id}
+	}
+}

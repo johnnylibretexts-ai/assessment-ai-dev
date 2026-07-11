@@ -1,0 +1,29 @@
+services:
+  assessment-ai:
+    build: .
+    image: assessment-ai:local
+    container_name: assessment-ai
+    restart: unless-stopped
+    init: true
+    read_only: true
+    env_file:
+      - ${CXONE_ENV_FILE:-/home/johnnylibretexts/.cxone.env}
+      - ${ASSESSMENT_AI_ENV_FILE:-.env}
+    ports:
+      - "127.0.0.1:8093:8000"
+    volumes:
+      - assessment_ai_data:/data
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 200
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  assessment_ai_data:
