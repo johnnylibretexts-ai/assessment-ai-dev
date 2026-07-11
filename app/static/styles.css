@@ -35,7 +35,18 @@ input:focus, textarea:focus, select:focus { outline: 3px solid #a9dcf4; border-c
 .form-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-top: 7px; }
 button { border: 0; border-radius: 8px; padding: 11px 18px; background: var(--brand); color: #fff; font: inherit; font-weight: 750; cursor: pointer; }
 button:hover { background: var(--brand-dark); }
+button:disabled { background: var(--brand-dark); cursor: wait; opacity: .92; }
 button.secondary { background: #566575; }
+.generate-form button[type="submit"] { min-width: 153px; }
+.generate-form.is-generating input { background: #f8fafc; color: #435366; }
+.generation-status { display: grid; gap: 2px; margin-top: 14px; padding: 13px 15px; border: 1px solid #b9dceb; border-radius: 9px; background: #eff8fc; color: var(--brand-dark); }
+.generation-status[hidden] { display: none; }
+.generation-status-message { color: #28465a; }
+.generation-status-note { margin-top: 2px; color: var(--muted); font-size: .82rem; }
+.loading-dots { display: inline-flex; min-width: 1.1em; margin-left: .08em; letter-spacing: .05em; }
+.loading-dots span { opacity: .25; animation: trailing-dot 1.2s infinite ease-in-out; }
+.loading-dots span:nth-child(2) { animation-delay: .16s; }
+.loading-dots span:nth-child(3) { animation-delay: .32s; }
 .help, .muted, .source-path { color: var(--muted); font-size: .88rem; }
 code { padding: 2px 5px; border-radius: 5px; background: #eef3f7; }
 .section-heading, .card-topline, .button-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -77,6 +88,15 @@ fieldset { margin: 0 0 18px; border: 1px solid var(--line); border-radius: 9px; 
 .choice-edit { display: grid; grid-template-columns: 24px 24px 1fr; align-items: center; gap: 8px; margin: 10px 0; }
 .choice-edit input[type="radio"] { width: 18px; height: 18px; }
 .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+
+@keyframes trailing-dot {
+  0%, 60%, 100% { opacity: .25; }
+  30% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-dots span { animation: none; opacity: 1; }
+}
 
 @media (max-width: 780px) {
   .review-layout { grid-template-columns: 1fr; }

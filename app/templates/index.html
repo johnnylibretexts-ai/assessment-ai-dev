@@ -20,8 +20,21 @@
       <div class="form-row">
         <input id="source_locator" name="source_locator" required
                placeholder="https://chem.libretexts.org/Bookshelves/..."
-               aria-describedby="source-help">
-        <button type="submit">Generate draft</button>
+               aria-describedby="source-help generation-status">
+        <button id="generate-submit" type="submit">
+          <span data-submit-label>Generate draft</span>
+          <span data-submit-busy hidden>
+            Generating<span class="loading-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
+          </span>
+        </button>
+      </div>
+      <div id="generation-status" class="generation-status" role="status"
+           aria-live="polite" aria-atomic="true" hidden>
+        <strong>Generating your cited question</strong>
+        <span class="generation-status-message">
+          <span id="generation-status-message">Reading the LibreTexts page</span><span class="loading-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
+        </span>
+        <span class="generation-status-note">This can take about a minute. Keep this page open.</span>
       </div>
       <p id="source-help" class="help">
         Assessment AI reads one public page through LibreTexts’ credential-free read proxy; no book crawl or publishing occurs.
