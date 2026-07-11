@@ -55,7 +55,10 @@ code { padding: 2px 5px; border-radius: 5px; background: #eef3f7; }
 .notice.error { background: var(--danger-bg); color: var(--danger); }
 .back { margin: 24px 0 0; }
 .review-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 20px; align-items: start; }
-.source-pane { position: sticky; top: 18px; }
+.review-layout > * { min-width: 0; }
+.source-pane { position: sticky; top: 18px; min-width: 0; overflow-wrap: anywhere; }
+.source-path { max-width: 100%; margin: 12px 0 8px; }
+.source-link { display: inline-block; max-width: 100%; font-weight: 700; overflow-wrap: anywhere; }
 .source-paragraph { margin-top: 15px; padding: 15px; border-left: 4px solid #9ccbe1; background: #f5f9fc; }
 .source-paragraph span { color: var(--muted); font-size: .78rem; font-weight: 800; text-transform: uppercase; }
 .source-paragraph p { margin-bottom: 0; }

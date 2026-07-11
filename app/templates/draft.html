@@ -11,7 +11,7 @@
       <h1>{{ draft.source_title }}</h1>
       <p><span class="status">{{ draft.source_type }} source</span></p>
       <p class="source-path">
-        <a href="{{ draft.source_url }}" target="_blank" rel="noopener noreferrer">{{ draft.source_url }}</a>
+        <a class="source-link" href="{{ draft.source_url }}" title="{{ draft.source_url }}" target="_blank" rel="noopener noreferrer">Open original LibreTexts page</a>
       </p>
       <p class="muted">
         Library: {{ draft.source_library }}
