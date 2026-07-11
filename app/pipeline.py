@@ -37,7 +37,7 @@ REVISION_PROMPT_VERSION = "mcq-revision-v1"
 
 
 class ContentFetcher(Protocol):
-    async def fetch_page(self, sandbox_path: str) -> NormalizedPage: ...
+    async def fetch_page(self, source_locator: str) -> NormalizedPage: ...
 
 
 class PipelineError(RuntimeError):
@@ -108,8 +108,8 @@ class AssessmentPipeline:
         self.max_source_chars = max_source_chars
         self.max_source_paragraphs = max_source_paragraphs
 
-    async def generate(self, sandbox_path: str) -> GenerationOutcome:
-        page = await self.content.fetch_page(sandbox_path)
+    async def generate(self, source_locator: str) -> GenerationOutcome:
+        page = await self.content.fetch_page(source_locator)
         return await self.generate_page(page)
 
     async def generate_page(self, page: NormalizedPage) -> GenerationOutcome:

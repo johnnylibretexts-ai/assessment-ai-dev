@@ -16,12 +16,20 @@ from bs4 import BeautifulSoup
 from pydantic import SecretStr
 
 from .config import Settings
-from .schemas import NormalizedPage, Paragraph, SourceInfo, TocNode
+from .schemas import NormalizedPage, Paragraph, SourceInfo, SourceType, TocNode
+from .source_policy import (
+    PublicSourceLocation,
+    PublicSourceValidationError,
+    parse_public_source_url,
+)
 
 
 CXONE_HOST = "dev.libretexts.org"
 SANDBOX_ROOT = "Sandboxes/johnnyphung"
 CXONE_API_BASE = f"https://{CXONE_HOST}/@api/deki"
+PUBLIC_API_BASE = "https://api.libretexts.org/endpoint"
+PUBLIC_API_ORIGIN = "https://libretexts.org"
+PUBLIC_API_USER_AGENT = "LibreTexts-Assessment-AI/0.2"
 
 DEFAULT_TOC_MAX_DEPTH = 8
 DEFAULT_TOC_MAX_PAGES = 500
@@ -85,6 +93,10 @@ class ContentConfigurationError(ContentAdapterError):
 
 class UnsafeSandboxPathError(ContentAdapterError):
     code = "unsafe_sandbox_path"
+
+
+class UnsafePublicSourceError(ContentAdapterError):
+    code = "unsafe_public_source"
 
 
 class ContentAuthenticationError(ContentAdapterError):
@@ -281,7 +293,7 @@ def _normalize_html(html_body: str) -> tuple[str, list[Paragraph]]:
             paragraphs_text.append(normalized)
 
     if not paragraphs_text:
-        raise ContentResponseError("The CXone page did not contain readable text.")
+        raise ContentResponseError("The source page did not contain readable text.")
 
     plaintext = "\n\n".join(paragraphs_text)
     paragraphs: list[Paragraph] = []
@@ -542,6 +554,173 @@ class CXoneSandboxContentAdapter:
         )
 
 
+class PublicLibreTextsContentAdapter:
+    """Credential-free reader pinned to the official LibreTexts read proxy."""
+
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        if not settings.public_sources_enabled:
+            raise ContentConfigurationError(
+                "Public LibreTexts page sources are not enabled yet."
+            )
+        self._settings = settings
+        self._client = httpx.AsyncClient(
+            transport=transport,
+            timeout=httpx.Timeout(60.0),
+            follow_redirects=False,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Origin": PUBLIC_API_ORIGIN,
+                "User-Agent": PUBLIC_API_USER_AGENT,
+            },
+        )
+        self._closed = False
+
+    async def __aenter__(self) -> PublicLibreTextsContentAdapter:
+        return self
+
+    async def __aexit__(self, *_exc_info: object) -> None:
+        await self.aclose()
+
+    async def aclose(self) -> None:
+        if not self._closed:
+            self._closed = True
+            await self._client.aclose()
+
+    async def _put_json(
+        self, endpoint: str, source: PublicSourceLocation, *, mode: str | None = None
+    ) -> dict[str, Any]:
+        if self._closed:
+            raise ContentTransportError("The public content adapter is closed.")
+
+        payload: dict[str, str] = {
+            "subdomain": source.library,
+            "path": source.path,
+            "dreamformat": "json",
+        }
+        if mode is not None:
+            payload["mode"] = mode
+        try:
+            response = await self._client.put(
+                f"{PUBLIC_API_BASE}/{endpoint}",
+                json=payload,
+                follow_redirects=False,
+            )
+        except httpx.RequestError as exc:
+            raise ContentTransportError(
+                "The LibreTexts public content proxy could not be reached."
+            ) from exc
+
+        if response.status_code in {401, 403}:
+            raise ContentAuthenticationError(
+                "The LibreTexts public content proxy refused this page request."
+            )
+        if response.status_code == 404:
+            raise ContentNotFoundError("The requested public page was not found.")
+        if response.status_code == 429:
+            raise ContentTransportError(
+                "The LibreTexts public content proxy is temporarily rate limited."
+            )
+        if response.status_code != 200:
+            raise ContentTransportError(
+                "The LibreTexts public content proxy is temporarily unavailable."
+            )
+
+        try:
+            document = response.json()
+        except ValueError as exc:
+            raise ContentResponseError(
+                "The LibreTexts public content proxy returned malformed JSON."
+            ) from exc
+        if not isinstance(document, dict):
+            raise ContentResponseError(
+                "The LibreTexts public content proxy returned unexpected data."
+            )
+        return document
+
+    async def fetch_page(self, source_url: str) -> NormalizedPage:
+        try:
+            source = parse_public_source_url(source_url)
+        except PublicSourceValidationError as exc:
+            raise UnsafePublicSourceError(str(exc)) from exc
+
+        info = await self._put_json("info", source)
+        contents = await self._put_json("contents", source, mode="view")
+
+        body = contents.get("body")
+        if isinstance(body, str):
+            html_body = body
+        elif isinstance(body, list):
+            html_body = "".join(part for part in body if isinstance(part, str))
+        elif body is None:
+            html_body = ""
+        else:
+            raise ContentResponseError(
+                "The LibreTexts public content proxy returned an unexpected page body."
+            )
+        if not html_body.strip():
+            raise ContentResponseError("The public LibreTexts page body was empty.")
+
+        plaintext, paragraphs = _normalize_html(html_body)
+        if len(plaintext) > self._settings.max_source_chars:
+            raise ContentLimitError(
+                "The public LibreTexts page exceeds the configured source limit."
+            )
+
+        canonical_url = source.canonical_url
+        uri = info.get("uri")
+        uri_ui = uri.get("ui") if isinstance(uri, Mapping) else info.get("uri.ui")
+        if isinstance(uri_ui, str) and uri_ui.strip():
+            try:
+                proxy_location = parse_public_source_url(uri_ui)
+            except PublicSourceValidationError as exc:
+                raise ContentResponseError(
+                    "The public proxy returned an invalid canonical page URL."
+                ) from exc
+            if proxy_location.identity != source.identity:
+                raise ContentResponseError(
+                    "The public proxy returned a mismatched canonical page URL."
+                )
+            canonical_url = proxy_location.canonical_url
+
+        title = (
+            _string_value(info.get("title"))
+            or _string_value(info.get("@title"))
+            or _string_value(contents.get("title"))
+            or _string_value(contents.get("@title"))
+            or source.path.rsplit("/", 1)[-1]
+        )
+        return NormalizedPage(
+            title=title,
+            plaintext=plaintext,
+            htmlBody=html_body,
+            paragraphs=paragraphs,
+            source=SourceInfo(
+                backend="libretexts_public",
+                canonical_url=canonical_url,
+                path=source.identity,
+                page_id=_page_identifier(info.get("@id")),
+            ),
+        )
+
+
+def build_content_adapter(
+    settings: Settings, source_type: SourceType | str
+) -> CXoneSandboxContentAdapter | PublicLibreTextsContentAdapter:
+    try:
+        selected = SourceType(source_type)
+    except ValueError as exc:
+        raise ContentConfigurationError("Choose a supported source type.") from exc
+    if selected is SourceType.PUBLIC:
+        return PublicLibreTextsContentAdapter(settings)
+    return CXoneSandboxContentAdapter(settings)
+
+
 __all__ = [
     "ContentAdapterError",
     "ContentAuthenticationError",
@@ -551,5 +730,8 @@ __all__ = [
     "ContentResponseError",
     "ContentTransportError",
     "CXoneSandboxContentAdapter",
+    "PublicLibreTextsContentAdapter",
     "UnsafeSandboxPathError",
+    "UnsafePublicSourceError",
+    "build_content_adapter",
 ]

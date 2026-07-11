@@ -1,10 +1,10 @@
 # LibreTexts Assessment AI
 
-Standalone, review-gated assessment drafting for the LibreTexts dev sandbox.
+Standalone, review-gated assessment drafting from public LibreTexts pages and the approved LibreTexts dev sandbox.
 
 The first vertical slice is deliberately narrow:
 
-1. read one page under `dev.libretexts.org/Sandboxes/johnnyphung` using GET only;
+1. read one public LibreTexts page through the fixed read proxy, or one page under `dev.libretexts.org/Sandboxes/johnnyphung`;
 2. normalize cited paragraphs with stable offsets;
 3. extract concepts and draft one multiple-choice item;
 4. run a separate critique/revision pass;
@@ -14,6 +14,30 @@ The first vertical slice is deliberately narrow:
 Nothing publishes to ADAPT yet. The current ADAPT API requires a JWT identity with an owned
 `my_questions` folder, and framework alignment must be submitted in the question create/update
 payload. Publishing stays fail-closed until that identity and destination are provisioned.
+
+## Page sources
+
+The generation form accepts exactly one page per request:
+
+- **Public LibreTexts page** (default when enabled): a full HTTPS URL from `bio`, `biz`, `chem`,
+  `eng`, `espanol`, `geo`, `human`, `k12`, `math`, `med`, `phys`, `socialsci`, `stats`, or
+  `workforce` at `*.libretexts.org`.
+- **Dev sandbox page**: the existing relative path under `Sandboxes/johnnyphung`.
+
+Public sources are disabled by default. Enable them only after read-only proxy smoke checks:
+
+```dotenv
+ASSESSMENT_AI_PUBLIC_SOURCES_ENABLED=true
+```
+
+The public adapter validates the URL before networking, ignores query strings and fragments for
+identity, and sends only fixed `PUT` read requests to `https://api.libretexts.org/endpoint/info`
+and `/endpoint/contents` with `mode: view`. It never sends CXone credentials, cookies, caller
+headers, or requests directly to the source host. Proxy failures fail closed; there is no HTML
+scraping or raw Deki fallback. Book-wide crawling and public-page publishing are not supported.
+
+Existing `sandbox_path` form submissions remain accepted as sandbox requests for compatibility.
+New forms submit `source_type=public|sandbox` and `source_locator=<value>`.
 
 ## LLM providers
 

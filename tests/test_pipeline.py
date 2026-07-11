@@ -111,6 +111,17 @@ def page(*, second_text: str = "Energy can change form.") -> NormalizedPage:
     )
 
 
+def public_page(*, second_text: str = "Energy can change form.") -> NormalizedPage:
+    source_page = page(second_text=second_text)
+    source_page.source = SourceInfo(
+        backend="libretexts_public",
+        canonical_url="https://chem.libretexts.org/Bookshelves/Test/Energy",
+        path="chem.libretexts.org/Bookshelves/Test/Energy",
+        page_id="456",
+    )
+    return source_page
+
+
 def concept_batch(*, paragraph: int = 0) -> ConceptBatch:
     return ConceptBatch(
         concepts=[
@@ -236,6 +247,50 @@ async def test_identical_rerun_returns_existing_reviewed_draft_without_model_cal
     assert stored.status == ReviewStatus.REJECTED
     assert stored.review_history_json == reviewed.review_history_json
     assert stored.reviewer_notes == "Keep this review history on a retry."
+
+
+@pytest.mark.asyncio
+async def test_equivalent_public_locators_reuse_the_same_generation(store) -> None:
+    database, repository = store
+    llm = FakeLLM(generation_responses())
+    content = FakeContent(public_page())
+    pipeline = AssessmentPipeline(content, llm, repository)
+
+    first = await pipeline.generate(
+        "https://chem.libretexts.org/Bookshelves/Test%2FEnergy?one=1#top"
+    )
+    second = await pipeline.generate(
+        "https://chem.libretexts.org/Bookshelves/Test/Energy?two=2#bottom"
+    )
+
+    assert first.source_id == second.source_id
+    assert first.draft_id == second.draft_id
+    assert len(llm.calls) == 4
+    with database.session() as session:
+        assert session.scalar(select(func.count(SourceSnapshot.id))) == 1
+
+
+@pytest.mark.asyncio
+async def test_changed_public_content_creates_a_new_current_snapshot(store) -> None:
+    database, repository = store
+    content = FakeContent(public_page())
+    llm = FakeLLM([*generation_responses(), *generation_responses()])
+    pipeline = AssessmentPipeline(content, llm, repository)
+
+    first = await pipeline.generate(content.page.source.canonical_url)
+    content.page = public_page(second_text="Energy transfers between systems.")
+    second = await pipeline.generate(content.page.source.canonical_url)
+
+    assert first.source_id != second.source_id
+    with database.session() as session:
+        snapshots = list(
+            session.scalars(select(SourceSnapshot).order_by(SourceSnapshot.id))
+        )
+    assert [snapshot.backend for snapshot in snapshots] == [
+        "libretexts_public",
+        "libretexts_public",
+    ]
+    assert [snapshot.is_current for snapshot in snapshots] == [False, True]
 
 
 def test_repository_identical_write_cannot_replace_reviewed_generation(store) -> None:
@@ -414,10 +469,10 @@ def test_canonical_source_path_rejects_traversal_aliases() -> None:
         "Library_Content/Production/Page",
     ],
 )
-def test_canonical_source_path_rejects_everything_outside_owner_sandbox(
+def test_canonical_source_path_rejects_unapproved_source_identities(
     path: str,
 ) -> None:
-    with pytest.raises(ValueError, match="Sandboxes/johnnyphung"):
+    with pytest.raises(ValueError, match="approved LibreTexts"):
         canonicalize_source_path(path)
 
 
@@ -426,3 +481,14 @@ def test_canonical_source_path_normalizes_only_the_pinned_root_case() -> None:
         canonicalize_source_path("sandboxes/JOHNNYPHUNG/Demo/MixedCase")
         == "Sandboxes/johnnyphung/Demo/MixedCase"
     )
+
+
+def test_canonical_source_path_accepts_host_qualified_public_identity() -> None:
+    assert canonicalize_source_path("CHEM.LIBRETEXTS.ORG/Books/Page") == (
+        "chem.libretexts.org/Books/Page"
+    )
+
+
+def test_canonical_source_path_rejects_backslash_public_identity() -> None:
+    with pytest.raises(ValueError):
+        canonicalize_source_path(r"chem.libretexts.org\Books\Page")

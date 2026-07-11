@@ -9,7 +9,14 @@
     <section class="panel source-pane">
       <p class="eyebrow">Source</p>
       <h1>{{ draft.source_title }}</h1>
-      <p class="source-path">{{ draft.source_path }}</p>
+      <p><span class="status">{{ draft.source_type }} source</span></p>
+      <p class="source-path">
+        <a href="{{ draft.source_url }}" target="_blank" rel="noopener noreferrer">{{ draft.source_url }}</a>
+      </p>
+      <p class="muted">
+        Library: {{ draft.source_library }}
+        {% if draft.source_page_id %} · Page ID: {{ draft.source_page_id }}{% endif %}
+      </p>
       {% for paragraph in draft.cited_paragraphs %}
         <article class="source-paragraph">
           <span>Paragraph {{ paragraph.index }}</span>

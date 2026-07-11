@@ -5,7 +5,7 @@
     <div>
       <p class="eyebrow">Draft workspace</p>
       <h1>Assessment review queue</h1>
-      <p>Generate from one approved sandbox page, then check the source, answer, Bloom level, and difficulty before anything can move toward ADAPT.</p>
+      <p>Generate from one public LibreTexts page or the approved dev sandbox, then check the source, answer, Bloom level, and difficulty before anything can move toward ADAPT.</p>
     </div>
   </section>
 
@@ -15,14 +15,29 @@
   <section class="panel">
     <h2>Generate a cited MCQ</h2>
     <form method="post" action="/generate" class="generate-form">
-      <label for="sandbox_path">Sandbox page path</label>
+      <fieldset>
+        <legend>Source type</legend>
+        <label class="check">
+          <input type="radio" name="source_type" value="public" {% if public_sources_enabled %}checked{% else %}disabled{% endif %}>
+          <span><strong>Public LibreTexts page</strong> — an approved chem, bio, math, or other official library URL.</span>
+        </label>
+        <label class="check">
+          <input type="radio" name="source_type" value="sandbox" {% if not public_sources_enabled %}checked{% endif %}>
+          <span><strong>Dev sandbox page</strong> — a path under <code>Sandboxes/johnnyphung</code>.</span>
+        </label>
+      </fieldset>
+      <label for="source_locator">Page URL or sandbox path</label>
       <div class="form-row">
-        <input id="sandbox_path" name="sandbox_path" required
-               value="Sandboxes/johnnyphung/"
-               aria-describedby="path-help">
+        <input id="source_locator" name="source_locator" required
+               placeholder="https://chem.libretexts.org/Bookshelves/..."
+               aria-describedby="source-help">
         <button type="submit">Generate draft</button>
       </div>
-      <p id="path-help" class="help">Only pages under <code>Sandboxes/johnnyphung</code> are accepted. Generation fails closed when Ollama Cloud is not configured.</p>
+      <p id="source-help" class="help">
+        Public sources read one page through LibreTexts’ credential-free read proxy; no book crawl or publishing occurs.
+        {% if not public_sources_enabled %}<strong>Public page sources are currently disabled during rollout verification.</strong>{% endif %}
+        Generation uses the configured Ollama Cloud/Gemini provider chain and always requires human review.
+      </p>
     </form>
   </section>
 
@@ -37,7 +52,7 @@
           <a class="card" href="/drafts/{{ draft.id }}">
             <div class="card-topline">
               <span class="status status-{{ draft.status }}">{{ draft.status|replace('_', ' ') }}</span>
-              <span class="muted">#{{ draft.id }}</span>
+              <span class="muted">{{ draft.source_type }} · #{{ draft.id }}</span>
             </div>
             <h3>{{ draft.source_title }}</h3>
             <p>{{ draft.stem }}</p>
@@ -51,7 +66,7 @@
     {% else %}
       <div class="empty-state">
         <h3>No drafts yet</h3>
-        <p>Enter a sandbox page above after the Ollama Cloud key is installed on the VPS.</p>
+        <p>Choose a page above. The configured Ollama Cloud/Gemini chain generates a cited draft for human review.</p>
       </div>
     {% endif %}
   </section>

@@ -17,6 +17,7 @@ from app.schemas import (
     QuestionDraft,
     ReviewStatus,
     SourceInfo,
+    SourceType,
 )
 
 
@@ -64,9 +65,9 @@ def question(stem: str = "Which statement about energy is accurate?") -> Questio
     )
 
 
-def seed(repository: DraftRepository) -> int:
+def seed(repository: DraftRepository, source_page: NormalizedPage | None = None) -> int:
     stored = repository.replace_generated_drafts(
-        page=page(),
+        page=source_page or page(),
         pipeline_version="test-v1",
         drafts=[
             DraftWrite(
@@ -89,6 +90,17 @@ def seed(repository: DraftRepository) -> int:
     return stored.draft_ids[0]
 
 
+def public_page() -> NormalizedPage:
+    source_page = page()
+    source_page.source = SourceInfo(
+        backend="libretexts_public",
+        canonical_url="https://chem.libretexts.org/Bookshelves/Test/Page",
+        path="chem.libretexts.org/Bookshelves/Test/Page",
+        page_id="86187",
+    )
+    return source_page
+
+
 def test_health_and_empty_queue_work_without_cloud_key(tmp_path: Path) -> None:
     with TestClient(create_app(settings(tmp_path))) as client:
         response = client.get("/healthz")
@@ -96,6 +108,7 @@ def test_health_and_empty_queue_work_without_cloud_key(tmp_path: Path) -> None:
         assert response.json() == {
             "status": "ok",
             "generation": "needs_ollama_api_key",
+            "public_sources": "disabled",
             "adapt_publishing": "disabled",
         }
         readiness = client.get("/readyz")
@@ -151,6 +164,73 @@ def test_generation_form_rejects_cross_origin_before_provider_calls(
             headers={"Origin": "http://testserver"},
         )
         assert missing_identity.status_code == 403
+
+
+def test_source_selector_and_public_feature_disabled_behavior(tmp_path: Path) -> None:
+    disabled_app = create_app(settings(tmp_path))
+    with TestClient(disabled_app) as client:
+        form = client.get("/")
+        assert 'name="source_type" value="public" disabled' in form.text
+        assert 'name="source_type" value="sandbox" checked' in form.text
+        assert 'name="source_locator"' in form.text
+        response = client.post(
+            "/generate",
+            data={
+                "source_type": "public",
+                "source_locator": "https://chem.libretexts.org/Bookshelves/Test/Page",
+            },
+            headers={
+                "Origin": "http://testserver",
+                "X-Reviewer": "reviewer@example.org",
+            },
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+        assert "not+enabled" in response.headers["location"]
+
+    enabled_settings = settings(tmp_path).model_copy(
+        update={"public_sources_enabled": True}
+    )
+    with TestClient(create_app(enabled_settings)) as client:
+        form = client.get("/")
+        assert 'name="source_type" value="public" checked' in form.text
+        assert 'name="source_type" value="sandbox" checked' not in form.text
+
+
+def test_legacy_sandbox_path_is_dispatched_as_sandbox(tmp_path: Path) -> None:
+    app = create_app(settings(tmp_path))
+    selected: list[SourceType] = []
+
+    def record_source_type(source_type: SourceType) -> None:
+        selected.append(source_type)
+        raise ValueError("stop after dispatch")
+
+    with TestClient(app) as client:
+        app.state.content_factory = record_source_type
+        response = client.post(
+            "/generate",
+            data={"sandbox_path": "Sandboxes/johnnyphung/Energy"},
+            headers={
+                "Origin": "http://testserver",
+                "X-Reviewer": "reviewer@example.org",
+            },
+            follow_redirects=False,
+        )
+    assert response.status_code == 303
+    assert selected == [SourceType.SANDBOX]
+
+
+def test_public_source_provenance_is_clickable_on_review_page(tmp_path: Path) -> None:
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository, public_page())
+        detail = client.get(f"/drafts/{draft_id}")
+    assert detail.status_code == 200
+    assert "public source" in detail.text
+    assert "chem.libretexts.org" in detail.text
+    assert "Page ID: 86187" in detail.text
+    assert 'target="_blank" rel="noopener noreferrer"' in detail.text
+    assert "Paragraph 0" in detail.text
 
 
 def test_edit_and_independent_review_gates(tmp_path: Path) -> None:

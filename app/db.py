@@ -50,6 +50,7 @@ from .schemas import (
     ReviewDecision,
     ReviewStatus,
 )
+from .source_policy import PublicSourceValidationError, canonicalize_public_identity
 
 
 PIPELINE_TOOL_NAME = "LibreTexts Assessment AI"
@@ -62,9 +63,10 @@ def utc_now() -> datetime:
 
 
 def canonicalize_source_path(path: str) -> str:
-    """Return one stable, relative POSIX representation of a CXone path."""
+    """Return one stable sandbox path or host-qualified public page identity."""
 
-    stripped = path.strip().replace("\\", "/")
+    raw_path = path.strip()
+    stripped = raw_path.replace("\\", "/")
     if not stripped:
         raise ValueError("source path must not be blank")
     raw_parts = PurePosixPath(stripped).parts
@@ -74,12 +76,15 @@ def canonicalize_source_path(path: str) -> str:
     if normalized in {"", "."} or normalized.startswith("../"):
         raise ValueError("source path must identify a page")
     parts = PurePosixPath(normalized).parts
-    if len(parts) < 2 or tuple(part.casefold() for part in parts[:2]) != (
+    if len(parts) >= 2 and tuple(part.casefold() for part in parts[:2]) == (
         "sandboxes",
         "johnnyphung",
     ):
-        raise ValueError("source path must stay under Sandboxes/johnnyphung")
-    return str(PurePosixPath(*SANDBOX_ROOT_PARTS, *parts[2:]))
+        return str(PurePosixPath(*SANDBOX_ROOT_PARTS, *parts[2:]))
+    try:
+        return canonicalize_public_identity(raw_path)
+    except PublicSourceValidationError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 def normalized_page_hash(page: NormalizedPage) -> str:

@@ -117,8 +117,14 @@ class ReviewStatus(StrEnum):
     REJECTED = "rejected"
 
 
+class SourceType(StrEnum):
+    PUBLIC = "public"
+    SANDBOX = "sandbox"
+
+
 class GenerateRequest(BaseModel):
-    sandbox_path: str
+    source_type: SourceType
+    source_locator: str
 
 
 class ReviewDecision(BaseModel):

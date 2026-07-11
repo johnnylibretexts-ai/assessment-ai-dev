@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from .config import Settings, get_settings
-from .content import ContentAdapterError, CXoneSandboxContentAdapter
+from .content import ContentAdapterError, build_content_adapter
 from .db import (
     Draft,
     DraftNotFoundError,
@@ -29,6 +29,7 @@ from .schemas import (
     QuestionDraft,
     ReviewDecision,
     ReviewStatus,
+    SourceType,
 )
 
 
@@ -48,8 +49,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.database = database
         app.state.repository = repository
         app.state.review = ReviewService(repository)
-        app.state.content_factory = lambda: CXoneSandboxContentAdapter(
-            resolved_settings
+        app.state.content_factory = lambda source_type: build_content_adapter(
+            resolved_settings, source_type
         )
         app.state.llm_factory = lambda: build_llm_client(resolved_settings)
         try:
@@ -59,7 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title=resolved_settings.app_name,
-        version="0.1.0",
+        version="0.2.0",
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
@@ -74,6 +75,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             {
                 "status": "ok",
                 "generation": current_generation_status,
+                "public_sources": "enabled"
+                if resolved_settings.public_sources_enabled
+                else "disabled",
                 "adapt_publishing": "disabled",
             }
         )
@@ -97,17 +101,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "drafts": [_draft_summary(draft) for draft in drafts],
                 "notice": request.query_params.get("notice"),
                 "error": request.query_params.get("error"),
+                "public_sources_enabled": resolved_settings.public_sources_enabled,
             },
         )
 
     @app.post("/generate")
     async def generate(
-        request: Request, sandbox_path: str = Form(...)
+        request: Request,
+        source_type: str = Form(SourceType.PUBLIC.value),
+        source_locator: str | None = Form(None),
+        sandbox_path: str | None = Form(None),
     ) -> RedirectResponse:
         _require_same_origin(request, resolved_settings)
         _reviewer(request)
         try:
-            content = request.app.state.content_factory()
+            locator = (source_locator or "").strip()
+            selected_type = SourceType(source_type)
+            if not locator and sandbox_path is not None:
+                locator = sandbox_path.strip()
+                selected_type = SourceType.SANDBOX
+            if not locator:
+                raise ValueError("Choose a source page to generate from.")
+            content = request.app.state.content_factory(selected_type)
             llm = request.app.state.llm_factory()
             async with content, llm:
                 pipeline = AssessmentPipeline(
@@ -116,7 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     request.app.state.repository,
                     max_source_chars=resolved_settings.max_source_chars,
                 )
-                outcome = await pipeline.generate(sandbox_path)
+                outcome = await pipeline.generate(locator)
         except (ContentAdapterError, LLMError, PipelineError, ValueError) as exc:
             return _redirect_with_message("/", "error", str(exc))
         return RedirectResponse(
@@ -247,6 +262,7 @@ def _draft_summary(draft: Draft) -> dict[str, Any]:
         "id": draft.id,
         "status": draft.status.value,
         "source_title": draft.source.title,
+        "source_type": _source_type(draft.source.backend),
         "stem": current.stem,
         "bloom": current.bloom.value,
         "difficulty": current.difficulty.value,
@@ -277,6 +293,13 @@ def _draft_detail(draft: Draft) -> dict[str, Any]:
         "status": draft.status.value,
         "source_title": draft.source.title,
         "source_path": draft.source.canonical_path,
+        "source_type": _source_type(draft.source.backend),
+        "source_backend": draft.source.backend,
+        "source_url": draft.source.canonical_url,
+        "source_page_id": draft.source.page_id,
+        "source_library": draft.source.canonical_path.split("/", 1)[0]
+        if draft.source.backend == "libretexts_public"
+        else "dev.libretexts.org",
         "cited_paragraphs": cited,
         "concept_label": current.concept_label,
         "stem": current.stem,
@@ -293,6 +316,10 @@ def _draft_detail(draft: Draft) -> dict[str, Any]:
         "difficulty_confirmed": draft.difficulty_confirmed,
         "reviewer_notes": draft.reviewer_notes,
     }
+
+
+def _source_type(backend: str) -> str:
+    return "public" if backend == "libretexts_public" else "sandbox"
 
 
 def _reviewer(request: Request) -> str:
