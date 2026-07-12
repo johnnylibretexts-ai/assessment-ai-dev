@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any, Generic, Protocol, TypeVar
 from urllib.parse import urlparse
 
@@ -316,6 +317,7 @@ class GeminiClient:
         *,
         client: httpx.AsyncClient | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         if client is not None and transport is not None:
             raise ValueError("pass either client or transport, not both")
@@ -337,6 +339,7 @@ class GeminiClient:
         self._model = settings.gemini_model.strip()
         self._url = f"{settings.gemini_base_url}/models/{self._model}:generateContent"
         self._max_attempts = settings.gemini_max_retries + 1
+        self._sleep = sleep
         self._headers = {"x-goog-api-key": self._secret}
         self._owns_client = client is None
         self._client = client or httpx.AsyncClient(
@@ -433,20 +436,35 @@ class GeminiClient:
         ) from None
 
     async def _post(self, payload: Mapping[str, Any]) -> httpx.Response:
-        try:
-            response = await self._client.post(
-                self._url,
-                headers=self._headers,
-                json=payload,
-            )
-        except httpx.RequestError:
-            raise LLMTransportError("Gemini request failed") from None
+        for request_attempt in range(1, self._max_attempts + 1):
+            try:
+                response = await self._client.post(
+                    self._url,
+                    headers=self._headers,
+                    json=payload,
+                )
+            except httpx.RequestError:
+                if request_attempt >= self._max_attempts:
+                    raise LLMTransportError(
+                        "Gemini network request failed after "
+                        f"{request_attempt} attempt(s)"
+                    ) from None
+                await self._sleep(min(0.5 * request_attempt, 2.0))
+                continue
 
-        if response.is_error:
-            raise LLMTransportError(
-                f"Gemini request failed with HTTP {response.status_code}"
-            ) from None
-        return response
+            retryable_status = response.status_code == 429 or (
+                500 <= response.status_code <= 599
+            )
+            if retryable_status and request_attempt < self._max_attempts:
+                await self._sleep(min(0.5 * request_attempt, 2.0))
+                continue
+            if response.is_error:
+                raise LLMTransportError(
+                    f"Gemini request failed with HTTP {response.status_code}"
+                ) from None
+            return response
+
+        raise LLMTransportError("Gemini request failed")
 
     def _read_response(
         self,
