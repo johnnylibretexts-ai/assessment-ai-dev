@@ -248,6 +248,7 @@ class PublicationService:
                         description=title,
                         author=destination.author,
                         source=compiled.source,
+                        source_url=draft.source.canonical_url,
                     )
                     technology_id = engine_question.question_id
                 except EnginePublishingError as exc:

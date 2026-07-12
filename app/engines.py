@@ -30,6 +30,7 @@ class IMathASBridgeClient:
         description: str,
         author: str,
         source: str,
+        source_url: str,
     ) -> IMathASQuestion:
         if self._settings.imathas_status != "configured":
             raise EnginePublishingError(
@@ -50,6 +51,7 @@ class IMathASBridgeClient:
                         "description": description,
                         "author": author,
                         "source": source,
+                        "source_url": source_url,
                     },
                 )
         except (httpx.TimeoutException, httpx.NetworkError) as exc:

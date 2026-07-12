@@ -31,14 +31,16 @@ async def test_imathas_bridge_client_uses_pinned_host_token_and_idempotency_key(
     result = await IMathASBridgeClient(settings(tmp_path)).create_question(
         publication_key="a" * 64,
         description="Parameterized item",
-        author="Assessment AI",
+        author="LibreTexts Assessment AI",
         source='{"engine":"imathas"}',
+        source_url="https://math.libretexts.org/Bookshelves/Validation",
     )
     assert result.question_id == 17
     assert result.created is False
     assert seen["url"] == "https://imathas.libretexts.dev/bridge/v1/questions"
     assert seen["headers"] == {"Authorization": "Bearer bridge-secret"}
     assert seen["json"]["publication_key"] == "a" * 64  # type: ignore[index]
+    assert seen["json"]["source_url"] == "https://math.libretexts.org/Bookshelves/Validation"  # type: ignore[index]
 
 
 @pytest.mark.asyncio
@@ -53,7 +55,8 @@ async def test_imathas_bridge_client_redacts_remote_failure_body(
         await IMathASBridgeClient(settings(tmp_path)).create_question(
             publication_key="b" * 64,
             description="Parameterized item",
-            author="Assessment AI",
+            author="LibreTexts Assessment AI",
             source='{"engine":"imathas"}',
+            source_url="https://math.libretexts.org/Bookshelves/Validation",
         )
     assert "password" not in str(caught.value)
