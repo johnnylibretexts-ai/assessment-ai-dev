@@ -158,6 +158,13 @@ class Settings(BaseSettings):
             raise ValueError("adapt_email is pinned to assessment-ai@libretexts.dev")
         return "assessment-ai@libretexts.dev"
 
+    @field_validator("adapt_author")
+    @classmethod
+    def validate_adapt_author(cls, value: str) -> str:
+        if value.strip() != "LibreTexts Assessment AI":
+            raise ValueError("adapt_author is pinned to LibreTexts Assessment AI")
+        return "LibreTexts Assessment AI"
+
     @field_validator("webwork_base_url")
     @classmethod
     def validate_webwork_base_url(cls, value: str) -> str:
