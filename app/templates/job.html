@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Generating assessment items{% endblock %}
+{% block content %}
+  <section class="panel job-panel" data-generation-job="{{ job.id }}">
+    <p class="eyebrow">Durable generation job</p>
+    <h1 id="job-heading">Creating cited assessment items<span class="loading-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></h1>
+    <p id="job-stage" role="status" aria-live="polite">Queued</p>
+    <div class="progress-track" role="progressbar" aria-label="Generation progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ job.progress }}">
+      <div class="progress-bar" style="width: {{ job.progress }}%"></div>
+    </div>
+    <p class="help">You can safely reload this page. Generation is recorded as a durable job.</p>
+    <p id="job-error" class="error-text" hidden></p>
+    <div class="job-actions">
+      <a id="job-result" class="button-link" href="/" hidden>Review generated item</a>
+      <a href="/">Back to queue</a>
+    </div>
+  </section>
+  <script src="/static/jobs.js" defer></script>
+{% endblock %}

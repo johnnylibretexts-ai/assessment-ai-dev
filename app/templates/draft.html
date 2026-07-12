@@ -27,19 +27,55 @@
 
     <section class="panel review-pane">
       <div class="card-topline">
-        <span class="status status-{{ draft.status }}">{{ draft.status_label }}</span>
+        <span><span class="status status-{{ draft.status }}">{{ draft.status_label }}</span> <span class="status">{{ draft.item_type_label }}</span></span>
         <span class="muted">{{ draft.model_id }} · {{ draft.prompt_version }}</span>
       </div>
       <p class="eyebrow">Revised AI draft</p>
+      {% if draft.stimulus %}<div class="stimulus"><strong>Stimulus</strong><p>{{ draft.stimulus }}</p></div>{% endif %}
       <h2>{{ draft.stem }}</h2>
-      <ol class="choices" type="A">
-        {% for choice in draft.choices %}
-          <li class="{% if choice.correct %}correct{% endif %}">
-            {{ choice.text }}
-            {% if choice.correct %}<strong>Correct answer</strong>{% endif %}
-          </li>
-        {% endfor %}
-      </ol>
+      {% if draft.choices %}
+        <ol class="choices" type="A">
+          {% for choice in draft.choices %}
+            <li class="{% if choice.correct %}correct{% endif %}">
+              {{ choice.text }}
+              {% if choice.correct %}<strong>Correct answer</strong>{% endif %}
+            </li>
+          {% endfor %}
+        </ol>
+      {% endif %}
+      {% if draft.item_type == 'ordering' %}
+        <div class="interaction-preview"><strong>Correct order:</strong> {{ draft.response.correct_order|join(' → ') }}</div>
+      {% elif draft.item_type == 'matching' %}
+        <table class="interaction-table"><thead><tr><th>Prompt</th><th>Match</th></tr></thead><tbody>
+          {% for pair in draft.response.matching_pairs %}<tr><td>{{ pair.prompt }}</td><td>{{ pair.target }}</td></tr>{% endfor %}
+        </tbody></table>
+      {% elif draft.item_type in ['fill_in_blank', 'drag_drop_cloze'] %}
+        <ul>{% for blank in draft.response.blanks %}<li><strong>{{ blank.id }}:</strong> {{ blank.correct|join(' or ') }}</li>{% endfor %}</ul>
+      {% elif draft.item_type == 'numerical' %}
+        <div class="interaction-preview"><strong>Answer:</strong> {{ draft.response.numeric_answer }} ± {{ draft.response.numeric_tolerance }}</div>
+      {% elif draft.item_type == 'image_hotspot' %}
+        <div class="interaction-preview"><strong>Image:</strong> {{ draft.response.image_alt }}<br><span class="muted">{{ draft.response.image_url }}</span>
+          <ul>{% for region in draft.response.hotspot_regions %}<li>{% if region.correct %}<strong>Correct: </strong>{% endif %}{{ region.label }} ({{ region.shape }})</li>{% endfor %}</ul>
+        </div>
+      {% elif draft.item_type in ['highlight_text', 'highlight_table'] %}
+        <div class="interaction-preview">{% for segment in draft.response.highlight_segments %}<span class="highlight-segment {% if segment.correct %}correct{% endif %}">{{ segment.text }}</span>{% endfor %}</div>
+      {% elif draft.item_type == 'matrix' %}
+        <table class="interaction-table"><thead><tr><th>Row</th><th>Correct column(s)</th></tr></thead><tbody>
+          {% for row in draft.response.matrix_rows %}<tr><td>{{ row.text }}</td><td>{{ row.correct_column_ids|join(', ') }}</td></tr>{% endfor %}
+        </tbody></table>
+      {% elif draft.item_type == 'bow_tie' %}
+        <div class="interaction-preview"><strong>Clinical bow-tie structure</strong><p>Actions, central condition, and monitored parameters require specialist review.</p></div>
+      {% elif draft.item_type in ['webwork', 'imathas'] %}
+        <div class="interaction-preview"><strong>{{ draft.item_type_label }} parameter specification</strong><pre>{{ draft.response.parameterized|tojson(indent=2) }}</pre></div>
+        {% if draft.engine_validation %}
+          <div class="interaction-preview">
+            <strong>Fixed-seed validation:</strong> {{ draft.engine_validation.seed_count }} seeds passed with {{ draft.engine_validation.compiler_version }}.
+            <table class="interaction-table"><thead><tr><th>Seed</th><th>Generated prompt</th><th>Correct answer</th><th>Explanation</th></tr></thead><tbody>
+              {% for preview in draft.engine_validation.previews %}<tr><td>{{ preview.seed }}</td><td>{{ preview.prompt }}</td><td>{{ preview.answer }}</td><td>{{ preview.explanation }}</td></tr>{% endfor %}
+            </tbody></table>
+          </div>
+        {% endif %}
+      {% endif %}
       <div class="explanation">
         <h3>Explanation</h3>
         <p>{{ draft.explanation }}</p>
@@ -54,6 +90,7 @@
       <details class="edit-box">
         <summary>Edit this draft</summary>
         <form method="post" action="/drafts/{{ draft.id }}/edit" class="review-form">
+          {% if draft.item_type == 'multiple_choice' %}
           <label for="stem">Question</label>
           <textarea id="stem" name="stem" rows="3" required>{{ draft.stem }}</textarea>
           <fieldset>
@@ -84,8 +121,43 @@
           <textarea id="edit_notes" name="reviewer_notes" rows="2"></textarea>
           <button type="submit">Save edited draft</button>
           <p class="help">Saving an edit resets both human confirmation checks.</p>
+          {% else %}
+            <label for="item_json">Typed assessment item JSON</label>
+            <textarea id="item_json" name="item_json" rows="24" required>{{ draft.item_json }}</textarea>
+            <label for="advanced_edit_notes">Edit note</label>
+            <textarea id="advanced_edit_notes" name="reviewer_notes" rows="2"></textarea>
+            <button type="submit">Validate and save item</button>
+            <p class="help">The complete type-specific schema is validated before saving. Saving resets question and hint approvals.</p>
+          {% endif %}
         </form>
       </details>
+
+      {% if draft.hint_ladder %}
+        <section class="hint-review" aria-labelledby="hint-review-heading">
+          <p class="eyebrow">Graduated hints</p>
+          <h3 id="hint-review-heading">Three-rung hint ladder</h3>
+          <form method="post" action="/drafts/{{ draft.id }}/hints/edit">
+            {% for rung in draft.hint_ladder.rungs %}
+              <fieldset class="hint-rung">
+                <legend>{{ rung.rung|capitalize }} hint</legend>
+                <label>Hint text<textarea name="{{ rung.rung }}_text" rows="3" required>{{ rung.text }}</textarea></label>
+                <label>Cited paragraphs<input name="{{ rung.rung }}_citations" value="{{ rung.citations_text }}" required></label>
+                {% if rung.answer_leak_detected %}<p class="error-text">The generator flagged possible answer leakage. Edit this rung before approval.</p>{% endif %}
+              </fieldset>
+            {% endfor %}
+            <label>Edit note<textarea name="reviewer_notes" rows="2"></textarea></label>
+            <button type="submit">Save hint edits</button>
+          </form>
+          <form method="post" action="/drafts/{{ draft.id }}/hints/review" class="review-form">
+            {% for rung in draft.hint_ladder.rungs %}
+              <label class="check"><input type="checkbox" name="{{ rung.rung }}_confirmed" value="true" {% if draft.hint_ladder.confirmations.get(rung.rung) %}checked{% endif %}><span>I verified the {{ rung.rung }} hint, its citation, and that it does not reveal the answer.</span></label>
+            {% endfor %}
+            <label>Hint review notes<textarea name="reviewer_notes" rows="2">{{ draft.hint_ladder.reviewer_notes }}</textarea></label>
+            <button type="submit">Approve all three hints</button>
+            <p class="help">Hint approval is separate from question approval. Progressive student enforcement remains disabled.</p>
+          </form>
+        </section>
+      {% endif %}
 
       <form method="post" action="/drafts/{{ draft.id }}/review" class="review-form">
         <fieldset>
@@ -94,6 +166,12 @@
             <input type="checkbox" name="bloom_confirmed" value="true" {% if draft.bloom_confirmed %}checked{% endif %}>
             <span><strong>Bloom level:</strong> {{ draft.bloom }} is accurate for the work the learner must do.</span>
           </label>
+          {% if draft.specialist_review_required %}
+            <label class="check">
+              <input type="checkbox" name="specialist_confirmed" value="true">
+              <span><strong>Specialist review:</strong> I am qualified to verify this clinical or parameterized item and its scoring behavior.</span>
+            </label>
+          {% endif %}
           <label class="check">
             <input type="checkbox" name="difficulty_confirmed" value="true" {% if draft.difficulty_confirmed %}checked{% endif %}>
             <span><strong>Difficulty:</strong> {{ draft.difficulty }} is accurate for the intended learner.</span>

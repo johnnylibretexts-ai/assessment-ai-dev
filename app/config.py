@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     max_source_chars: int = Field(default=60_000, ge=1_000, le=250_000)
     public_sources_enabled: bool = False
     sandbox_sources_enabled: bool = False
+    advanced_items_enabled: bool = False
+    parameterized_items_enabled: bool = False
+    hint_generation_enabled: bool = False
+    webwork_enabled: bool = False
+    imathas_enabled: bool = False
 
     sandbox_root: str = "Sandboxes/johnnyphung"
     cxone_host: str = "dev.libretexts.org"
@@ -73,6 +78,15 @@ class Settings(BaseSettings):
     adapt_public: bool = True
     adapt_timeout_seconds: float = Field(default=30.0, ge=5, le=120)
     qti_storage_dir: Path = Path("/data/qti")
+    hotspot_media_dir: Path = Path("./data/media")
+    hotspot_media_public_base: str = "https://assess-ai.libretexts.dev/media"
+
+    webwork_base_url: str = "https://webwork.libretexts.dev"
+    webwork_renderer_url: str = "https://wwrenderer.libretexts.dev"
+    webwork_timeout_seconds: float = Field(default=30.0, ge=5, le=120)
+    imathas_base_url: str = "https://imathas.libretexts.dev"
+    imathas_bridge_token: SecretStr | None = None
+    imathas_timeout_seconds: float = Field(default=30.0, ge=5, le=120)
 
     @field_validator("sandbox_root")
     @classmethod
@@ -144,6 +158,40 @@ class Settings(BaseSettings):
             raise ValueError("adapt_email is pinned to assessment-ai@libretexts.dev")
         return "assessment-ai@libretexts.dev"
 
+    @field_validator("webwork_base_url")
+    @classmethod
+    def validate_webwork_base_url(cls, value: str) -> str:
+        return _pinned_dev_url(value, "webwork.libretexts.dev")
+
+    @field_validator("webwork_renderer_url")
+    @classmethod
+    def validate_webwork_renderer_url(cls, value: str) -> str:
+        return _pinned_dev_url(value, "wwrenderer.libretexts.dev")
+
+    @field_validator("imathas_base_url")
+    @classmethod
+    def validate_imathas_base_url(cls, value: str) -> str:
+        return _pinned_dev_url(value, "imathas.libretexts.dev")
+
+    @field_validator("hotspot_media_public_base")
+    @classmethod
+    def validate_hotspot_media_base(cls, value: str) -> str:
+        parsed = urlparse(value)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "assess-ai.libretexts.dev"
+            or parsed.port is not None
+            or parsed.path.rstrip("/") != "/media"
+            or parsed.query
+            or parsed.fragment
+            or parsed.username
+            or parsed.password
+        ):
+            raise ValueError(
+                "hotspot_media_public_base is pinned to the Assessment AI media route"
+            )
+        return "https://assess-ai.libretexts.dev/media"
+
     @property
     def ollama_is_cloud(self) -> bool:
         return urlparse(self.ollama_base_url).hostname == "ollama.com"
@@ -170,6 +218,37 @@ class Settings(BaseSettings):
         ):
             return "misconfigured"
         return "configured"
+
+    @property
+    def webwork_status(self) -> str:
+        return "configured" if self.webwork_enabled else "disabled"
+
+    @property
+    def imathas_status(self) -> str:
+        if not self.imathas_enabled:
+            return "disabled"
+        token = (
+            self.imathas_bridge_token.get_secret_value().strip()
+            if self.imathas_bridge_token is not None
+            else ""
+        )
+        return "configured" if token else "misconfigured"
+
+
+def _pinned_dev_url(value: str, hostname: str) -> str:
+    parsed = urlparse(value)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != hostname
+        or parsed.port is not None
+        or parsed.path.rstrip("/")
+        or parsed.query
+        or parsed.fragment
+        or parsed.username
+        or parsed.password
+    ):
+        raise ValueError(f"URL is pinned to https://{hostname}")
+    return f"https://{hostname}"
 
 
 @lru_cache

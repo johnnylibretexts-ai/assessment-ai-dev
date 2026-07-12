@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -23,7 +24,9 @@ from .db import (
     ReviewTransitionError,
     init_database,
 )
+from .jobs import GenerationWorker
 from .llm import LLMError, build_llm_client, generation_status
+from .media import HotspotMediaStore
 from .pipeline import AssessmentPipeline, PipelineError, ReviewService
 from .publishing import (
     LicenseSelection,
@@ -31,10 +34,15 @@ from .publishing import (
     PublicationValidationError,
 )
 from .schemas import (
+    AssessmentItemType,
     BloomLevel,
     Choice,
     Difficulty,
     QuestionDraft,
+    GenerateRequest,
+    HintLadderDraft,
+    HintRungDraft,
+    HintRungType,
     ReviewDecision,
     ReviewStatus,
     SourceType,
@@ -70,9 +78,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             resolved_settings, source_type
         )
         app.state.llm_factory = lambda: build_llm_client(resolved_settings)
+        worker = GenerationWorker(
+            resolved_settings,
+            repository,
+            content_factory=app.state.content_factory,
+            llm_factory=app.state.llm_factory,
+        )
+        app.state.generation_worker = worker
+        worker.start()
         try:
             yield
         finally:
+            await worker.stop()
             await adapt_client.aclose()
             database.dispose()
 
@@ -85,6 +102,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url=None,
     )
     app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+    resolved_settings.hotspot_media_dir.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/media",
+        StaticFiles(directory=resolved_settings.hotspot_media_dir),
+        name="hotspot-media",
+    )
 
     @app.get("/healthz")
     async def healthz() -> JSONResponse:
@@ -98,6 +121,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 else "disabled",
                 "sandbox_sources": "disabled",
                 "adapt_publishing": resolved_settings.adapt_publishing_status,
+                "advanced_items": "enabled"
+                if resolved_settings.advanced_items_enabled
+                else "disabled",
+                "parameterized_items": "enabled"
+                if resolved_settings.parameterized_items_enabled
+                else "disabled",
+                "hint_generation": "enabled"
+                if resolved_settings.hint_generation_enabled
+                else "disabled",
+                "webwork": resolved_settings.webwork_status,
+                "imathas": resolved_settings.imathas_status,
             }
         )
 
@@ -125,6 +159,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "notice": request.query_params.get("notice"),
                 "error": request.query_params.get("error"),
                 "public_sources_enabled": resolved_settings.public_sources_enabled,
+                "advanced_items_enabled": resolved_settings.advanced_items_enabled,
+                "hint_generation_enabled": resolved_settings.hint_generation_enabled,
+                "item_type_options": [item.value for item in AssessmentItemType],
             },
         )
 
@@ -134,6 +171,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         source_type: str = Form(SourceType.PUBLIC.value),
         source_locator: str | None = Form(None),
         sandbox_path: str | None = Form(None),
+        generation_mode: str = Form("auto"),
+        item_types: list[str] = Form(default_factory=list),
+        item_count: int = Form(4),
+        include_hint_ladder: bool = Form(False),
     ) -> RedirectResponse:
         _require_same_origin(request, resolved_settings)
         _reviewer(request)
@@ -144,6 +185,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise ValueError("Dev sandbox sources are disabled for this service.")
             if not locator:
                 raise ValueError("Choose a public LibreTexts page to generate from.")
+            if resolved_settings.advanced_items_enabled:
+                generation_request = GenerateRequest(
+                    source_type=selected_type,
+                    source_locator=locator,
+                    generation_mode=generation_mode,
+                    item_types=[AssessmentItemType(item) for item in item_types],
+                    item_count=item_count,
+                    include_hint_ladder=include_hint_ladder,
+                )
+                job = request.app.state.repository.create_generation_job(
+                    source_type=selected_type.value,
+                    source_locator=locator,
+                    request=generation_request.model_dump(mode="json"),
+                    reviewer=_reviewer(request),
+                )
+                return RedirectResponse(
+                    f"/jobs/{job.id}", status_code=status.HTTP_303_SEE_OTHER
+                )
             content = request.app.state.content_factory(selected_type)
             llm = request.app.state.llm_factory()
             async with content, llm:
@@ -152,6 +211,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     llm,
                     request.app.state.repository,
                     max_source_chars=resolved_settings.max_source_chars,
+                    hotspot_media=HotspotMediaStore(resolved_settings),
                 )
                 outcome = await pipeline.generate(locator)
         except (ContentAdapterError, LLMError, PipelineError, ValueError) as exc:
@@ -159,6 +219,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return RedirectResponse(
             f"/drafts/{outcome.draft_id}?notice=Draft+generated+and+revised",
             status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    @app.get("/jobs/{job_id}")
+    async def generation_job(request: Request, job_id: str):
+        reviewer = _reviewer(request)
+        job = request.app.state.repository.get_generation_job(job_id)
+        if job is None or job.reviewer_identity != reviewer:
+            raise HTTPException(status_code=404, detail="Generation job not found")
+        payload = {
+            "id": job.id,
+            "status": job.status,
+            "stage": job.stage,
+            "progress": job.progress,
+            "draft_ids": job.draft_ids_json,
+            "error": job.error_message,
+            "draft_url": (
+                f"/drafts/{job.draft_ids_json[0]}" if job.draft_ids_json else None
+            ),
+            "queue_url": "/",
+        }
+        if "application/json" in request.headers.get("accept", ""):
+            return JSONResponse(payload)
+        return templates.TemplateResponse(
+            request,
+            "job.html",
+            {"job": payload},
         )
 
     @app.get("/drafts/{draft_id}", response_class=HTMLResponse)
@@ -204,15 +290,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def edit_draft(
         request: Request,
         draft_id: int,
-        stem: str = Form(...),
-        choice_a: str = Form(...),
-        choice_b: str = Form(...),
-        choice_c: str = Form(...),
-        choice_d: str = Form(...),
-        correct_choice: str = Form(...),
-        explanation: str = Form(...),
-        bloom: str = Form(...),
-        difficulty: str = Form(...),
+        item_json: str | None = Form(None),
+        stem: str | None = Form(None),
+        choice_a: str | None = Form(None),
+        choice_b: str | None = Form(None),
+        choice_c: str | None = Form(None),
+        choice_d: str | None = Form(None),
+        correct_choice: str | None = Form(None),
+        explanation: str | None = Form(None),
+        bloom: str | None = Form(None),
+        difficulty: str | None = Form(None),
         reviewer_notes: str = Form(""),
     ) -> RedirectResponse:
         _require_same_origin(request, resolved_settings)
@@ -221,38 +308,54 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             stored = repository.require_draft(draft_id)
             current = stored.current
-            submitted = [choice_a, choice_b, choice_c, choice_d]
-            choices = []
-            for index, text in enumerate(submitted):
-                identifier = chr(ord("A") + index)
-                prior = next(
-                    (item for item in current.choices if item.id == identifier), None
-                )
-                choices.append(
-                    Choice(
-                        id=identifier,
-                        text=text,
-                        correct=identifier == correct_choice,
-                        feedback=prior.feedback if prior else None,
+            if item_json is not None:
+                updated = QuestionDraft.model_validate(json.loads(item_json))
+            else:
+                if None in {
+                    stem,
+                    choice_a,
+                    choice_b,
+                    choice_c,
+                    choice_d,
+                    correct_choice,
+                    explanation,
+                    bloom,
+                    difficulty,
+                }:
+                    raise ValueError("The edited multiple-choice item is incomplete.")
+                submitted = [choice_a, choice_b, choice_c, choice_d]
+                choices = []
+                for index, text in enumerate(submitted):
+                    identifier = chr(ord("A") + index)
+                    prior = next(
+                        (item for item in current.choices if item.id == identifier),
+                        None,
                     )
+                    choices.append(
+                        Choice(
+                            id=identifier,
+                            text=str(text),
+                            correct=identifier == correct_choice,
+                            feedback=prior.feedback if prior else None,
+                        )
+                    )
+                updated = QuestionDraft(
+                    concept_label=current.concept_label,
+                    stem=str(stem),
+                    choices=choices,
+                    explanation=str(explanation),
+                    bloom=BloomLevel(str(bloom)),
+                    difficulty=Difficulty(str(difficulty)),
+                    citation_paragraphs=current.citation_paragraphs,
+                    needs_human_verification=current.needs_human_verification,
                 )
-            updated = QuestionDraft(
-                concept_label=current.concept_label,
-                stem=stem,
-                choices=choices,
-                explanation=explanation,
-                bloom=BloomLevel(bloom),
-                difficulty=Difficulty(difficulty),
-                citation_paragraphs=current.citation_paragraphs,
-                needs_human_verification=current.needs_human_verification,
-            )
             repository.edit_draft(
                 draft_id,
                 updated,
                 editor=_reviewer(request),
                 notes=reviewer_notes,
             )
-        except (DraftNotFoundError, ValidationError, ValueError) as exc:
+        except (DraftNotFoundError, ValidationError, ValueError, json.JSONDecodeError) as exc:
             return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))
         return RedirectResponse(
             f"/drafts/{draft_id}?notice=Draft+saved%3B+review+checks+were+reset",
@@ -266,10 +369,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         decision: str = Form(...),
         bloom_confirmed: bool = Form(False),
         difficulty_confirmed: bool = Form(False),
+        specialist_confirmed: bool = Form(False),
         reviewer_notes: str = Form(""),
     ) -> RedirectResponse:
         _require_same_origin(request, resolved_settings)
-        _require_public_draft(request.app.state.repository, draft_id)
+        stored_draft = _require_public_draft(request.app.state.repository, draft_id)
         if decision == ReviewStatus.READY_TO_PUBLISH.value and (
             not bloom_confirmed or not difficulty_confirmed
         ):
@@ -277,6 +381,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 f"/drafts/{draft_id}",
                 "error",
                 REVIEW_CONFIRMATION_ERROR,
+            )
+        if (
+            decision == ReviewStatus.READY_TO_PUBLISH.value
+            and stored_draft.current.specialist_review_required
+            and not specialist_confirmed
+        ):
+            return _redirect_with_message(
+                f"/drafts/{draft_id}",
+                "error",
+                "A qualified specialist must confirm this item before approval.",
             )
         try:
             review_decision = ReviewDecision(
@@ -310,6 +424,89 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return RedirectResponse(
             f"/drafts/{draft_id}?notice={label}",
             status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    @app.post("/drafts/{draft_id}/hints/edit")
+    async def edit_hint_ladder(
+        request: Request,
+        draft_id: int,
+        conceptual_text: str = Form(...),
+        conceptual_citations: str = Form(...),
+        strategic_text: str = Form(...),
+        strategic_citations: str = Form(...),
+        specific_text: str = Form(...),
+        specific_citations: str = Form(...),
+        reviewer_notes: str = Form(""),
+    ) -> RedirectResponse:
+        _require_same_origin(request, resolved_settings)
+        draft = _require_public_draft(request.app.state.repository, draft_id)
+        try:
+            ladder = HintLadderDraft(
+                concept_label=draft.current.concept_label,
+                rungs=[
+                    HintRungDraft(
+                        rung=HintRungType.CONCEPTUAL,
+                        text=conceptual_text,
+                        citation_paragraphs=_parse_citations(conceptual_citations),
+                    ),
+                    HintRungDraft(
+                        rung=HintRungType.STRATEGIC,
+                        text=strategic_text,
+                        citation_paragraphs=_parse_citations(strategic_citations),
+                    ),
+                    HintRungDraft(
+                        rung=HintRungType.SPECIFIC,
+                        text=specific_text,
+                        citation_paragraphs=_parse_citations(specific_citations),
+                    ),
+                ],
+            )
+            request.app.state.repository.save_hint_ladder(
+                draft_id,
+                ladder,
+                editor=_reviewer(request),
+                notes=reviewer_notes,
+            )
+        except (ValidationError, ValueError) as exc:
+            return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))
+        return _redirect_with_message(
+            f"/drafts/{draft_id}",
+            "notice",
+            "Hint ladder saved; rung confirmations were reset",
+        )
+
+    @app.post("/drafts/{draft_id}/hints/review")
+    async def review_hint_ladder(
+        request: Request,
+        draft_id: int,
+        conceptual_confirmed: bool = Form(False),
+        strategic_confirmed: bool = Form(False),
+        specific_confirmed: bool = Form(False),
+        reviewer_notes: str = Form(""),
+    ) -> RedirectResponse:
+        _require_same_origin(request, resolved_settings)
+        _require_public_draft(request.app.state.repository, draft_id)
+        confirmed = [
+            rung
+            for rung, value in (
+                ("conceptual", conceptual_confirmed),
+                ("strategic", strategic_confirmed),
+                ("specific", specific_confirmed),
+            )
+            if value
+        ]
+        try:
+            request.app.state.repository.review_hint_ladder(
+                draft_id,
+                reviewer=_reviewer(request),
+                confirmed_rungs=confirmed,
+                approved=True,
+                notes=reviewer_notes,
+            )
+        except (DraftNotFoundError, ReviewTransitionError, ValueError) as exc:
+            return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))
+        return _redirect_with_message(
+            f"/drafts/{draft_id}", "notice", "Hint ladder approved"
         )
 
     @app.post("/drafts/{draft_id}/publish")
@@ -398,6 +595,7 @@ def _draft_summary(draft: Draft) -> dict[str, Any]:
         "source_title": draft.source.title,
         "source_type": _source_type(draft.source.backend),
         "stem": current.stem,
+        "item_type": current.item_type.value,
         "bloom": current.bloom.value,
         "difficulty": current.difficulty.value,
     }
@@ -423,6 +621,9 @@ def _draft_detail(draft: Draft) -> dict[str, Any]:
     )
     critique = draft.critique_json
     publications = sorted(draft.publications, key=lambda item: item.id, reverse=True)
+    hint_record = draft.current_hint_ladder
+    hint_ladder = hint_record.ladder if hint_record is not None else None
+    engine_validation = draft.current_engine_validation
     return {
         "id": draft.id,
         "status": draft.status.value,
@@ -439,7 +640,16 @@ def _draft_detail(draft: Draft) -> dict[str, Any]:
         "cited_paragraphs": cited,
         "concept_label": current.concept_label,
         "stem": current.stem,
+        "item_type": current.item_type.value,
+        "item_type_label": current.item_type.value.replace("_", " "),
+        "context_type": current.context_type.value,
+        "stimulus": current.stimulus,
+        "set_key": current.set_key,
         "choices": current.choices,
+        "response": current.response.model_dump(mode="json"),
+        "item_json": json.dumps(
+            current.model_dump(mode="json"), indent=2, ensure_ascii=False
+        ),
         "explanation": current.explanation,
         "bloom": current.bloom.value,
         "difficulty": current.difficulty.value,
@@ -452,6 +662,37 @@ def _draft_detail(draft: Draft) -> dict[str, Any]:
         "difficulty_confirmed": draft.difficulty_confirmed,
         "reviewer_notes": draft.reviewer_notes,
         "edit_count": draft.edit_count,
+        "specialist_review_required": current.specialist_review_required,
+        "engine_validation": {
+            "engine": engine_validation.engine,
+            "compiler_version": engine_validation.compiler_version,
+            "source_sha256": engine_validation.source_sha256,
+            "seed_count": engine_validation.seed_count,
+            "status": engine_validation.status,
+            "previews": engine_validation.previews_json[:5],
+        }
+        if engine_validation is not None
+        else None,
+        "hint_ladder": {
+            "id": hint_record.id,
+            "status": hint_record.status,
+            "confirmations": hint_record.confirmations_json,
+            "reviewer_notes": hint_record.reviewer_notes,
+            "rungs": [
+                {
+                    "rung": rung.rung.value,
+                    "text": rung.text,
+                    "citation_paragraphs": rung.citation_paragraphs,
+                    "citations_text": ", ".join(
+                        str(item) for item in rung.citation_paragraphs
+                    ),
+                    "answer_leak_detected": rung.answer_leak_detected,
+                }
+                for rung in hint_ladder.rungs
+            ],
+        }
+        if hint_record is not None and hint_ladder is not None
+        else None,
         "publications": [
             {
                 "id": publication.id,
@@ -479,6 +720,18 @@ def _status_label(status_value: str) -> str:
 
 def _source_type(backend: str) -> str:
     return "public" if backend == "libretexts_public" else "sandbox"
+
+
+def _parse_citations(value: str) -> list[int]:
+    try:
+        citations = [int(item.strip()) for item in value.split(",") if item.strip()]
+    except ValueError:
+        raise ValueError("Hint citations must be comma-separated paragraph numbers.") from None
+    if not citations or any(item < 0 for item in citations):
+        raise ValueError("Each hint requires at least one valid paragraph citation.")
+    if len(citations) != len(set(citations)):
+        raise ValueError("Hint paragraph citations must not contain duplicates.")
+    return citations
 
 
 def _require_public_draft(repository: DraftRepository, draft_id: int) -> Draft:

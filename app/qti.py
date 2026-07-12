@@ -12,10 +12,10 @@ from typing import Any
 
 from lxml import etree
 
-from app.schemas import QuestionDraft
+from app.schemas import AssessmentItemType, QuestionDraft
 
 
-QTI_EXPORTER_VERSION = "qti-3.0.1-v1"
+QTI_EXPORTER_VERSION = "qti-3.0.1-assessment-items-v2"
 QTI_NS = "http://www.imsglobal.org/xsd/imsqtiasi_v3p0"
 CP_NS = "http://www.imsglobal.org/xsd/qti/qtiv3p0/imscp_v1p1"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
@@ -30,6 +30,7 @@ MANIFEST_SCHEMA_URL = (
     "https://purl.imsglobal.org/spec/qti/v3p0/schema/xsd/imsqtiv3p0_imscpv1p2_v1p0.xsd"
 )
 MATCH_CORRECT = "https://purl.imsglobal.org/spec/qti/v3p0/rptemplates/match_correct"
+AAI_NS = "https://libretexts.dev/ns/assessment-ai/v1"
 
 
 class QTIExportError(RuntimeError):
@@ -60,7 +61,7 @@ def build_item_xml(
 ) -> bytes:
     root = etree.Element(
         _qti("qti-assessment-item"),
-        nsmap={None: QTI_NS, "xsi": XSI_NS},
+        nsmap={None: QTI_NS, "xsi": XSI_NS, "assessment-ai": AAI_NS},
         attrib={
             "identifier": f"assessment-ai-{publication_key}",
             "title": title,
@@ -71,16 +72,17 @@ def build_item_xml(
             f"{{{XSI_NS}}}schemaLocation": f"{QTI_NS} {ITEM_SCHEMA_URL}",
         },
     )
+    cardinality, base_type, correct_values = _response_declaration(draft)
     response = etree.SubElement(
         root,
         _qti("qti-response-declaration"),
         identifier="RESPONSE",
-        cardinality="single",
-        **{"base-type": "identifier"},
+        cardinality=cardinality,
+        **{"base-type": base_type},
     )
     correct_response = etree.SubElement(response, _qti("qti-correct-response"))
-    correct = next(choice for choice in draft.choices if choice.correct)
-    etree.SubElement(correct_response, _qti("qti-value")).text = correct.id
+    for value in correct_values:
+        etree.SubElement(correct_response, _qti("qti-value")).text = value
 
     outcome = etree.SubElement(
         root,
@@ -103,23 +105,7 @@ def build_item_xml(
     etree.SubElement(feedback_default, _qti("qti-value")).text = "GENERAL"
 
     body = etree.SubElement(root, _qti("qti-item-body"))
-    interaction = etree.SubElement(
-        body,
-        _qti("qti-choice-interaction"),
-        **{
-            "response-identifier": "RESPONSE",
-            "max-choices": "1",
-            "min-choices": "1",
-            "shuffle": "false",
-        },
-    )
-    etree.SubElement(interaction, _qti("qti-prompt")).text = draft.stem
-    for choice in draft.choices:
-        etree.SubElement(
-            interaction,
-            _qti("qti-simple-choice"),
-            identifier=choice.id,
-        ).text = choice.text
+    _append_interaction(body, draft)
 
     provenance = etree.SubElement(
         body,
@@ -152,6 +138,141 @@ def build_item_xml(
     etree.SubElement(feedback_body, _qti("p")).text = draft.explanation
     return etree.tostring(
         root, xml_declaration=True, encoding="UTF-8", pretty_print=True
+    )
+
+
+def _response_declaration(
+    draft: QuestionDraft,
+) -> tuple[str, str, list[str]]:
+    if draft.item_type in {
+        AssessmentItemType.MULTIPLE_CHOICE,
+        AssessmentItemType.TRUE_FALSE,
+        AssessmentItemType.SELECT_CHOICE,
+        AssessmentItemType.DROPDOWN,
+    }:
+        correct = next(choice for choice in draft.choices if choice.correct)
+        return "single", "identifier", [correct.id]
+    if draft.item_type in {
+        AssessmentItemType.MULTIPLE_RESPONSE,
+        AssessmentItemType.SELECT_ALL,
+        AssessmentItemType.SELECT_N,
+    }:
+        return (
+            "multiple",
+            "identifier",
+            [choice.id for choice in draft.choices if choice.correct],
+        )
+    if draft.item_type == AssessmentItemType.ORDERING:
+        return "ordered", "identifier", draft.response.correct_order
+    if draft.item_type == AssessmentItemType.NUMERICAL:
+        return "single", "float", [str(draft.response.numeric_answer)]
+    serialized = json.dumps(
+        draft.response.model_dump(mode="json"),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return "single", "string", [serialized]
+
+
+def _append_interaction(body: etree._Element, draft: QuestionDraft) -> None:
+    if draft.stimulus:
+        etree.SubElement(body, _qti("p"), attrib={"class": "assessment-ai-stimulus"}).text = draft.stimulus
+
+    choice_types = {
+        AssessmentItemType.MULTIPLE_CHOICE,
+        AssessmentItemType.TRUE_FALSE,
+        AssessmentItemType.MULTIPLE_RESPONSE,
+        AssessmentItemType.SELECT_ALL,
+        AssessmentItemType.SELECT_N,
+        AssessmentItemType.SELECT_CHOICE,
+        AssessmentItemType.DROPDOWN,
+    }
+    if draft.item_type in choice_types:
+        multiple = draft.item_type in {
+            AssessmentItemType.MULTIPLE_RESPONSE,
+            AssessmentItemType.SELECT_ALL,
+            AssessmentItemType.SELECT_N,
+        }
+        maximum = (
+            draft.response.select_n
+            if draft.item_type == AssessmentItemType.SELECT_N
+            else len(draft.choices)
+            if multiple
+            else 1
+        )
+        interaction = etree.SubElement(
+            body,
+            _qti("qti-choice-interaction"),
+            **{
+                "response-identifier": "RESPONSE",
+                "max-choices": str(maximum),
+                "min-choices": str(maximum if draft.item_type == AssessmentItemType.SELECT_N else 1),
+                "shuffle": "false",
+            },
+        )
+        etree.SubElement(interaction, _qti("qti-prompt")).text = draft.stem
+        for choice in draft.choices:
+            etree.SubElement(
+                interaction,
+                _qti("qti-simple-choice"),
+                identifier=choice.id,
+            ).text = choice.text
+        return
+
+    if draft.item_type == AssessmentItemType.ORDERING:
+        interaction = etree.SubElement(
+            body,
+            _qti("qti-order-interaction"),
+            **{
+                "response-identifier": "RESPONSE",
+                "shuffle": "true",
+                "orientation": "vertical",
+            },
+        )
+        etree.SubElement(interaction, _qti("qti-prompt")).text = draft.stem
+        for choice in draft.choices:
+            etree.SubElement(
+                interaction,
+                _qti("qti-simple-choice"),
+                identifier=choice.id,
+            ).text = choice.text
+        return
+
+    if draft.item_type == AssessmentItemType.NUMERICAL:
+        etree.SubElement(body, _qti("p")).text = draft.stem
+        etree.SubElement(
+            body,
+            _qti("qti-text-entry-interaction"),
+            **{"response-identifier": "RESPONSE", "expected-length": "12"},
+        )
+        return
+
+    etree.SubElement(body, _qti("p")).text = draft.stem
+    custom = etree.SubElement(
+        body,
+        _qti("qti-custom-interaction"),
+        **{
+            "response-identifier": "RESPONSE",
+            "class": f"assessment-ai-{draft.item_type.value}",
+        },
+    )
+    declaration = etree.SubElement(
+        custom,
+        f"{{{AAI_NS}}}interaction",
+        type=draft.item_type.value,
+        schema_version=draft.schema_version,
+    )
+    if draft.item_type in {AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS}:
+        declaration.set("requires-engine", draft.item_type.value)
+    declaration.text = json.dumps(
+        {
+            "response": draft.response.model_dump(mode="json"),
+            "choices": [choice.model_dump(mode="json") for choice in draft.choices],
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
     )
 
 

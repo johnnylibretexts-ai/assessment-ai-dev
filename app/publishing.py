@@ -13,10 +13,12 @@ from app.adapt import (
     AdaptDestination,
     AdaptPublishingError,
     ResolvedAlignment,
-    build_mcq_payload,
+    build_assessment_payload,
+    build_external_engine_payload,
 )
 from app.catalog import SourceLicense, source_license
 from app.config import Settings
+from app.engines import EnginePublishingError, IMathASBridgeClient
 from app.db import (
     Draft,
     DraftRepository,
@@ -30,10 +32,11 @@ from app.qti import (
     preflight_qti,
     write_qti_package,
 )
-from app.schemas import QuestionDraft, ReviewStatus
+from app.parameterized import compile_parameterized_item
+from app.schemas import AssessmentItemType, QuestionDraft, ReviewStatus
 
 
-PAYLOAD_MAPPER_VERSION = "adapt-mcq-v2"
+PAYLOAD_MAPPER_VERSION = "adapt-assessment-items-v3"
 
 
 class PublicationValidationError(ValueError):
@@ -58,6 +61,7 @@ class PublicationService:
         self._settings = settings
         self._repository = repository
         self._adapt = adapt
+        self._imathas = IMathASBridgeClient(settings)
 
     async def publish(
         self,
@@ -78,6 +82,20 @@ class PublicationService:
             raise PublicationValidationError(
                 "Approve the draft before publishing it to ADAPT."
             )
+        if draft.current.item_type in {
+            AssessmentItemType.WEBWORK,
+            AssessmentItemType.IMATHAS,
+        }:
+            validation = draft.current_engine_validation
+            if (
+                validation is None
+                or validation.status != "passed"
+                or validation.seed_count < 25
+            ):
+                raise PublicationValidationError(
+                    "The parameterized item needs a successful 25-seed engine validation."
+                )
+        hint_snapshot = self._approved_hint_snapshot(draft)
         if not alignment_confirmed:
             raise PublicationValidationError(
                 "Confirm the curated framework topic before publishing."
@@ -104,18 +122,41 @@ class PublicationService:
             destination=destination,
             license_selection=license_selection,
             alignment=alignment,
+            hint_snapshot=hint_snapshot,
         )
         publication_key = _sha256_json(key_material)
         tag = f"assessment-ai-{publication_key}"
-        payload = build_mcq_payload(
-            draft.current,
-            destination=destination,
-            source_url=draft.source.canonical_url,
-            title=title,
-            alignment=alignment.payload,
-            tags=["assessment-ai", tag],
-        )
-        payload_hash = _sha256_json(payload)
+        tags = ["assessment-ai", tag]
+        if draft.current.set_key:
+            tags.append(f"assessment-ai-set-{draft.current.set_key}")
+        compiled = None
+        if draft.current.item_type in {
+            AssessmentItemType.WEBWORK,
+            AssessmentItemType.IMATHAS,
+        }:
+            assert draft.current.response.parameterized is not None
+            compiled = compile_parameterized_item(
+                draft.current.response.parameterized, validation_seeds=25
+            )
+            payload_hash = _sha256_json(
+                {
+                    "engine": draft.current.item_type.value,
+                    "source_sha256": compiled.source_sha256,
+                    "destination": destination.model_dump(mode="json"),
+                    "alignment": alignment.payload.model_dump(mode="json"),
+                    "tags": tags,
+                }
+            )
+        else:
+            payload = build_assessment_payload(
+                draft.current,
+                destination=destination,
+                source_url=draft.source.canonical_url,
+                title=title,
+                alignment=alignment.payload,
+                tags=tags,
+            )
+            payload_hash = _sha256_json(payload)
         metadata = self._metadata(
             draft,
             license_selection=license_selection,
@@ -144,6 +185,7 @@ class PublicationService:
                     alignment.chapter_stable_id,
                     alignment.topic_stable_id,
                 ],
+                "hint_ladder_snapshot_json": hint_snapshot,
                 "publication_key": publication_key,
                 "payload_hash": payload_hash,
                 "payload_mapper_version": PAYLOAD_MAPPER_VERSION,
@@ -160,8 +202,13 @@ class PublicationService:
             )
         if publication.state == PublicationState.SUCCEEDED.value:
             return publication
-        if publication.state == PublicationState.ADAPT_CREATED.value:
-            return self._finalize_qti(publication, title=title, metadata=metadata)
+        if publication.state in {
+            PublicationState.ADAPT_CREATED.value,
+            PublicationState.HINTS_SYNCED.value,
+        }:
+            return await self._continue_after_adapt(
+                publication, title=title, metadata=metadata
+            )
         if publication.state == PublicationState.UNKNOWN.value:
             return await self._reconcile(
                 publication, tag=tag, title=title, metadata=metadata
@@ -191,6 +238,44 @@ class PublicationService:
                 error_message=str(exc),
             )
             return failed
+
+        if compiled is not None:
+            technology_id = None
+            if draft.current.item_type == AssessmentItemType.IMATHAS:
+                try:
+                    engine_question = await self._imathas.create_question(
+                        publication_key=publication_key,
+                        description=title,
+                        author=destination.author,
+                        source=compiled.source,
+                    )
+                    technology_id = engine_question.question_id
+                except EnginePublishingError as exc:
+                    failed = self._repository.update_publication(
+                        publication.id,
+                        state=PublicationState.FAILED,
+                        error_code=exc.code,
+                        error_message=str(exc),
+                    )
+                    self._repository.record_publication_attempt(
+                        publication.id,
+                        action="imathas_create",
+                        resulting_state=PublicationState.FAILED,
+                        error_code=exc.code,
+                        error_message=str(exc),
+                    )
+                    return failed
+            payload = build_external_engine_payload(
+                draft.current,
+                destination=destination,
+                source_url=draft.source.canonical_url,
+                title=title,
+                engine_source=compiled.source,
+                technology_id=technology_id,
+                alignment=alignment.payload,
+                tags=tags,
+                imathas_base_url=self._settings.imathas_base_url,
+            )
 
         try:
             created = await self._adapt.create_question(payload)
@@ -242,7 +327,9 @@ class PublicationService:
                 "page_id": created.page_id,
             },
         )
-        return self._finalize_qti(publication, title=title, metadata=metadata)
+        return await self._continue_after_adapt(
+            publication, title=title, metadata=metadata
+        )
 
     async def _reconcile(
         self,
@@ -300,7 +387,63 @@ class PublicationService:
             resulting_state=PublicationState.ADAPT_CREATED,
             response={"question_id": match.question_id, "page_id": match.page_id},
         )
-        return self._finalize_qti(reconciled, title=title, metadata=metadata)
+        return await self._continue_after_adapt(
+            reconciled, title=title, metadata=metadata
+        )
+
+    async def _continue_after_adapt(
+        self,
+        publication: Publication,
+        *,
+        title: str,
+        metadata: dict[str, Any],
+    ) -> Publication:
+        if publication.adapt_question_id is None:
+            raise PublicationValidationError(
+                "The ADAPT question ID is required before publication can continue."
+            )
+        if (
+            publication.hint_ladder_snapshot_json is not None
+            and publication.hints_synced_at is None
+        ):
+            try:
+                await self._adapt.sync_hint_rungs(
+                    publication.adapt_question_id,
+                    {
+                        "publication_key": publication.publication_key,
+                        "concept_type": "question",
+                        "concept_id": 0,
+                        "ladder": publication.hint_ladder_snapshot_json,
+                    },
+                )
+            except AdaptPublishingError as exc:
+                self._repository.record_publication_attempt(
+                    publication.id,
+                    action="adapt_hint_sync",
+                    resulting_state=PublicationState.ADAPT_CREATED,
+                    error_code=exc.code,
+                    error_message=str(exc),
+                )
+                return self._repository.update_publication(
+                    publication.id,
+                    state=PublicationState.ADAPT_CREATED,
+                    error_code=exc.code,
+                    error_message=str(exc),
+                )
+            publication = self._repository.update_publication(
+                publication.id,
+                state=PublicationState.HINTS_SYNCED,
+                hints_synced_at=utc_now(),
+                error_code=None,
+                error_message=None,
+            )
+            self._repository.record_publication_attempt(
+                publication.id,
+                action="adapt_hint_sync",
+                resulting_state=PublicationState.HINTS_SYNCED,
+                response={"synced": True},
+            )
+        return self._finalize_qti(publication, title=title, metadata=metadata)
 
     def _finalize_qti(
         self,
@@ -327,16 +470,21 @@ class PublicationService:
             )
         except (QTIExportError, OSError):
             message = "ADAPT created the question, but QTI finalization failed."
+            retained_state = (
+                PublicationState.HINTS_SYNCED
+                if publication.state == PublicationState.HINTS_SYNCED.value
+                else PublicationState.ADAPT_CREATED
+            )
             self._repository.record_publication_attempt(
                 publication.id,
                 action="qti_finalize",
-                resulting_state=PublicationState.ADAPT_CREATED,
+                resulting_state=retained_state,
                 error_code="qti_finalize_failed",
                 error_message=message,
             )
             return self._repository.update_publication(
                 publication.id,
-                state=PublicationState.ADAPT_CREATED,
+                state=retained_state,
                 error_code="qti_finalize_failed",
                 error_message=message,
             )
@@ -396,6 +544,7 @@ class PublicationService:
         destination: AdaptDestination,
         license_selection: LicenseSelection,
         alignment: ResolvedAlignment,
+        hint_snapshot: dict[str, Any] | None,
     ) -> dict[str, Any]:
         return {
             "question": draft.current.model_dump(mode="json"),
@@ -416,6 +565,7 @@ class PublicationService:
                 "chapter_stable_id": alignment.chapter_stable_id,
                 "topic_stable_id": alignment.topic_stable_id,
             },
+            "hint_ladder": hint_snapshot,
             "payload_mapper_version": PAYLOAD_MAPPER_VERSION,
             "qti_exporter_version": QTI_EXPORTER_VERSION,
         }
@@ -481,6 +631,30 @@ class PublicationService:
             "chapter": alignment.chapter.text,
             "topic": alignment.topic.text,
             "stable_topic_id": alignment.topic_stable_id,
+            "hint_ladder": (
+                draft.current_hint_ladder.ladder.model_dump(mode="json")
+                if draft.current_hint_ladder is not None
+                else None
+            ),
+        }
+
+    def _approved_hint_snapshot(self, draft: Draft) -> dict[str, Any] | None:
+        if not self._settings.hint_generation_enabled:
+            return None
+        record = draft.current_hint_ladder
+        if record is None:
+            raise PublicationValidationError(
+                "Generate and approve the three-rung hint ladder before publishing."
+            )
+        if record.status != "approved":
+            raise PublicationValidationError(
+                "Approve all three hint rungs before publishing."
+            )
+        return {
+            "version": record.version,
+            "rungs": record.ladder.model_dump(mode="json")["rungs"],
+            "reviewed_by": record.reviewed_by,
+            "reviewed_at": _iso(record.reviewed_at),
         }
 
 
