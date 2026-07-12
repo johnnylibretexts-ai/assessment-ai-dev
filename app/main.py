@@ -6,22 +6,30 @@ from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
+from .adapt import AdaptClient, AdaptPublishingError
+from .catalog import chemistry_seed, source_license, suggested_topic
 from .config import Settings, get_settings
 from .content import ContentAdapterError, build_content_adapter
 from .db import (
     Draft,
     DraftNotFoundError,
     DraftRepository,
+    PublicationState,
     ReviewTransitionError,
     init_database,
 )
 from .llm import LLMError, build_llm_client, generation_status
 from .pipeline import AssessmentPipeline, PipelineError, ReviewService
+from .publishing import (
+    LicenseSelection,
+    PublicationService,
+    PublicationValidationError,
+)
 from .schemas import (
     BloomLevel,
     Choice,
@@ -36,8 +44,7 @@ from .schemas import (
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 REVIEW_CONFIRMATION_ERROR = (
-    "Confirm both the Bloom level and difficulty before marking this draft "
-    "ready to publish."
+    "Confirm both the Bloom level and difficulty before approving this draft."
 )
 REVIEW_VALIDATION_ERROR = "Review could not be saved. Check the form and try again."
 
@@ -50,10 +57,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         database = init_database(resolved_settings.database_url)
         repository = DraftRepository(database)
+        adapt_client = AdaptClient(resolved_settings)
         app.state.settings = resolved_settings
         app.state.database = database
         app.state.repository = repository
         app.state.review = ReviewService(repository)
+        app.state.adapt_client = adapt_client
+        app.state.publisher = PublicationService(
+            resolved_settings, repository, adapt_client
+        )
         app.state.content_factory = lambda source_type: build_content_adapter(
             resolved_settings, source_type
         )
@@ -61,11 +73,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            await adapt_client.aclose()
             database.dispose()
 
     app = FastAPI(
         title=resolved_settings.app_name,
-        version="0.2.0",
+        version="0.3.0",
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
@@ -84,7 +97,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 if resolved_settings.public_sources_enabled
                 else "disabled",
                 "sandbox_sources": "disabled",
-                "adapt_publishing": "disabled",
+                "adapt_publishing": resolved_settings.adapt_publishing_status,
             }
         )
 
@@ -151,6 +164,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/drafts/{draft_id}", response_class=HTMLResponse)
     async def draft_detail(request: Request, draft_id: int) -> HTMLResponse:
         draft = _require_public_draft(request.app.state.repository, draft_id)
+        seed = chemistry_seed()
+        topics_by_chapter = [
+            {
+                "title": chapter["title"],
+                "topics": chapter["topics"],
+            }
+            for chapter in seed["chapters"]
+        ]
+        mapped_license = source_license(draft.source.canonical_url)
+        suggestion = suggested_topic(draft.source.canonical_url)
         return templates.TemplateResponse(
             request,
             "draft.html",
@@ -160,6 +183,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "error": request.query_params.get("error"),
                 "bloom_options": [item.value for item in BloomLevel],
                 "difficulty_options": [item.value for item in Difficulty],
+                "adapt_publishing_status": resolved_settings.adapt_publishing_status,
+                "adapt_folder_name": resolved_settings.adapt_folder_name,
+                "adapt_public": resolved_settings.adapt_public,
+                "mapped_license": mapped_license,
+                "topic_groups": topics_by_chapter,
+                "suggested_topic_id": suggestion.stable_id if suggestion else None,
+                "manual_license_options": [
+                    ("publicdomain", "Public domain"),
+                    ("ccby", "CC BY"),
+                    ("ccbync", "CC BY-NC"),
+                    ("ccbyncsa", "CC BY-NC-SA"),
+                    ("ccbysa", "CC BY-SA"),
+                    ("arr", "All rights reserved"),
+                ],
             },
         )
 
@@ -233,9 +270,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> RedirectResponse:
         _require_same_origin(request, resolved_settings)
         _require_public_draft(request.app.state.repository, draft_id)
-        if (
-            decision == ReviewStatus.READY_TO_PUBLISH.value
-            and (not bloom_confirmed or not difficulty_confirmed)
+        if decision == ReviewStatus.READY_TO_PUBLISH.value and (
+            not bloom_confirmed or not difficulty_confirmed
         ):
             return _redirect_with_message(
                 f"/drafts/{draft_id}",
@@ -267,13 +303,87 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ) as exc:
             return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))
         label = (
-            "Ready+to+publish+locally"
+            "Draft+approved%3B+not+yet+published"
             if decision == "ready_to_publish"
             else "Draft+rejected"
         )
         return RedirectResponse(
             f"/drafts/{draft_id}?notice={label}",
             status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    @app.post("/drafts/{draft_id}/publish")
+    async def publish_draft(
+        request: Request,
+        draft_id: int,
+        topic_stable_id: str = Form(...),
+        alignment_confirmed: bool = Form(False),
+        license_code: str | None = Form(None),
+        license_version: str | None = Form(None),
+        license_label: str | None = Form(None),
+        license_evidence_url: str | None = Form(None),
+        license_confirmed: bool = Form(False),
+    ) -> RedirectResponse:
+        _require_same_origin(request, resolved_settings)
+        reviewer = _reviewer(request)
+        _require_public_draft(request.app.state.repository, draft_id)
+        selected_license = None
+        if license_code:
+            selected_license = LicenseSelection(
+                code=license_code.strip(),
+                version=(license_version or "").strip() or None,
+                label=(license_label or "").strip(),
+                evidence_url=(license_evidence_url or "").strip(),
+            )
+        try:
+            publication = await request.app.state.publisher.publish(
+                draft_id,
+                publisher=reviewer,
+                topic_stable_id=topic_stable_id,
+                alignment_confirmed=alignment_confirmed,
+                selected_license=selected_license,
+                license_confirmed=license_confirmed,
+            )
+        except (PublicationValidationError, AdaptPublishingError, ValueError) as exc:
+            return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))
+        if publication.state == PublicationState.SUCCEEDED.value:
+            return _redirect_with_message(
+                f"/drafts/{draft_id}", "notice", "Published to ADAPT"
+            )
+        return _redirect_with_message(
+            f"/drafts/{draft_id}",
+            "error",
+            publication.error_message
+            or "Publishing did not complete. Review the publication status below.",
+        )
+
+    @app.get("/drafts/{draft_id}/publications/{publication_id}/qti")
+    async def download_qti(
+        request: Request, draft_id: int, publication_id: int
+    ) -> FileResponse:
+        _require_same_origin(request, resolved_settings)
+        _reviewer(request)
+        _require_public_draft(request.app.state.repository, draft_id)
+        publication = request.app.state.repository.get_publication(publication_id)
+        if (
+            publication is None
+            or publication.draft_id != draft_id
+            or publication.state != PublicationState.SUCCEEDED.value
+            or not publication.qti_path
+        ):
+            raise HTTPException(status_code=404, detail="QTI package not found")
+        storage_root = Path(resolved_settings.qti_storage_dir).resolve()
+        artifact = Path(publication.qti_path).resolve()
+        if (
+            artifact.parent != storage_root
+            or artifact.name != f"{publication.publication_key}.zip"
+            or not artifact.is_file()
+        ):
+            raise HTTPException(status_code=404, detail="QTI package not found")
+        return FileResponse(
+            artifact,
+            media_type="application/zip",
+            filename=f"assessment-ai-{publication.publication_key}.zip",
         )
 
     return app
@@ -284,6 +394,7 @@ def _draft_summary(draft: Draft) -> dict[str, Any]:
     return {
         "id": draft.id,
         "status": draft.status.value,
+        "status_label": _status_label(draft.status.value),
         "source_title": draft.source.title,
         "source_type": _source_type(draft.source.backend),
         "stem": current.stem,
@@ -311,9 +422,11 @@ def _draft_detail(draft: Draft) -> dict[str, Any]:
         None,
     )
     critique = draft.critique_json
+    publications = sorted(draft.publications, key=lambda item: item.id, reverse=True)
     return {
         "id": draft.id,
         "status": draft.status.value,
+        "status_label": _status_label(draft.status.value),
         "source_title": draft.source.title,
         "source_path": draft.source.canonical_path,
         "source_type": _source_type(draft.source.backend),
@@ -338,7 +451,30 @@ def _draft_detail(draft: Draft) -> dict[str, Any]:
         "bloom_confirmed": draft.bloom_confirmed,
         "difficulty_confirmed": draft.difficulty_confirmed,
         "reviewer_notes": draft.reviewer_notes,
+        "edit_count": draft.edit_count,
+        "publications": [
+            {
+                "id": publication.id,
+                "edit_count": publication.edit_count,
+                "state": publication.state,
+                "adapt_question_id": publication.adapt_question_id,
+                "adapt_page_id": publication.adapt_page_id,
+                "framework_title": publication.framework_title,
+                "topic": publication.alignment_json.get("topic", {}).get("text"),
+                "license_label": publication.license_label,
+                "finalized_at": publication.finalized_at,
+                "error_message": publication.error_message,
+                "is_current_edit": publication.edit_count == draft.edit_count,
+            }
+            for publication in publications
+        ],
     }
+
+
+def _status_label(status_value: str) -> str:
+    if status_value == ReviewStatus.READY_TO_PUBLISH.value:
+        return "Approved — not yet published"
+    return status_value.replace("_", " ")
 
 
 def _source_type(backend: str) -> str:

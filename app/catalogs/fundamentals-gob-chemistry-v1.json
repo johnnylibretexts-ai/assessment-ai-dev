@@ -1,0 +1,1759 @@
+{
+  "schema_version": 1,
+  "framework": {
+    "title": "Fundamentals of General, Organic, and Biological Chemistry (LibreTexts)",
+    "author": "LibreTexts",
+    "descriptor_type": "Learning Objective",
+    "description": "Curated chapter and page-topic alignment for the LibreTexts Fundamentals of General, Organic, and Biological Chemistry book.",
+    "license": "ccbyncsa",
+    "license_version": "3.0",
+    "source_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29"
+  },
+  "stable_id_namespace": "0db5c51e-4ba9-5da7-a79c-bd75efc4d1a4",
+  "chapters": [
+    {
+      "order": 1,
+      "title": "1: Matter and Measurements",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements",
+      "stable_id": "6a134c91-8110-51ef-b7ed-17bdbcea920a",
+      "topics": [
+        {
+          "order": 1,
+          "title": "1.1: Chemistry - The Central Science",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements/1.01%3A_Chemistry_-_The_Central_Science",
+          "stable_id": "e95d705f-b558-5fa5-8910-ec22194fb529"
+        },
+        {
+          "order": 2,
+          "title": "1.2: States of Matter",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements/1.02%3A_States_of_Matter",
+          "stable_id": "bd852c0b-1028-54a1-9cf7-ffb9fa749c15"
+        },
+        {
+          "order": 3,
+          "title": "1.3: Classification of Matter",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements/1.03%3A_Classification_of_Matter",
+          "stable_id": "1650d7ef-3d63-56d7-ae6c-b449a6da3f60"
+        },
+        {
+          "order": 4,
+          "title": "1.4: Chemical Elements and Symbols",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements/1.04%3A_Chemical_Elements_and_Symbols",
+          "stable_id": "15610925-a9b4-5106-a6e6-9d6e569c43eb"
+        },
+        {
+          "order": 5,
+          "title": "1.5: Chemical Reactions - Examples of Chemical Change",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements/1.05%3A_Chemical_Reactions-_Examples_of_Chemical_Change",
+          "stable_id": "c897f57e-526d-5e96-a86a-7e964e7c4ded"
+        },
+        {
+          "order": 6,
+          "title": "1.6: Physical Quantities - Units and Scientific Notation",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements/1.06%3A_Physical_Quantities_-_Units_and_Scientific_Notation",
+          "stable_id": "5bdf9817-dbaa-54cc-a8d3-c7207318184d"
+        },
+        {
+          "order": 7,
+          "title": "1.7: Measuring Mass, Length, and Volume",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements/1.07%3A_Measuring_Mass_Length_and_Volume",
+          "stable_id": "020931b0-4a56-5f7d-97fa-98d4a2fc8a63"
+        },
+        {
+          "order": 8,
+          "title": "1.8: Measurement and Significant Figures",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements/1.08%3A_Measurement_and_Significant_Figures",
+          "stable_id": "ef05f219-6b2f-5892-9999-79fba5ae92be"
+        },
+        {
+          "order": 9,
+          "title": "1.9: Rounding Off Numbers",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements/1.09%3A_Rounding_Off_Numbers",
+          "stable_id": "9f102c2a-fbdd-5766-8252-035a2aef4311"
+        },
+        {
+          "order": 10,
+          "title": "1.10: Problem Solving - Unit Conversions and Estimating Answers",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements/1.10%3A_Problem_Solving_-_Unit_Conversions_and_Estimating_Answers",
+          "stable_id": "bc926e7e-a107-5634-b84f-3674a5abc33b"
+        },
+        {
+          "order": 11,
+          "title": "1.11: Temperature, Heat, and Energy",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements/1.11%3A_Temperature_Heat_and_Energy",
+          "stable_id": "fd5383ae-dc15-5318-97ba-7f9e7c26edb1"
+        },
+        {
+          "order": 12,
+          "title": "1.12: Density and Specific Gravity",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/01%3A_Matter_and_Measurements/1.12%3A_Density_and_Specific_Gravity",
+          "stable_id": "f54862b2-d6c5-5eb1-882d-3122e9ade3f1"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "title": "2: Atoms and the Periodic Table",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/02%3A_Atoms_and_the_Periodic_Table",
+      "stable_id": "3ae39651-9b48-5372-8c59-036b7ac3684d",
+      "topics": [
+        {
+          "order": 1,
+          "title": "2.1: Atomic Theory and the Structure of Atoms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/02%3A_Atoms_and_the_Periodic_Table/2.01%3A_Atomic_Theory_and_the_Structure_of_Atoms",
+          "stable_id": "288623d5-c609-55d2-b64b-b842dc8e7404"
+        },
+        {
+          "order": 2,
+          "title": "2.2: Elements and Atomic Number",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/02%3A_Atoms_and_the_Periodic_Table/2.02%3A_Elements_and_Atomic_Number",
+          "stable_id": "9e0ccc2f-1961-5855-8dd2-fc50afb0003d"
+        },
+        {
+          "order": 3,
+          "title": "2.3: Isotopes and Atomic Weight",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/02%3A_Atoms_and_the_Periodic_Table/2.03%3A_Isotopes_and_Atomic_Weight",
+          "stable_id": "f429caaa-4f77-52a7-89e2-eb939b700f64"
+        },
+        {
+          "order": 4,
+          "title": "2.4: The Periodic Table",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/02%3A_Atoms_and_the_Periodic_Table/2.04%3A_The_Periodic_Table",
+          "stable_id": "037443d7-0925-5cd7-9bee-28bd701fc612"
+        },
+        {
+          "order": 5,
+          "title": "2.5: Some Characteristics of Different Groups",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/02%3A_Atoms_and_the_Periodic_Table/2.05%3A_Some_Characteristics_of_Different_Groups",
+          "stable_id": "8be6c4e8-0ab7-587b-b25f-151b3f4145fd"
+        },
+        {
+          "order": 6,
+          "title": "2.6: Electronic Structure of Atoms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/02%3A_Atoms_and_the_Periodic_Table/2.06%3A_Electronic_Structure_of_Atoms",
+          "stable_id": "bae729d3-0bdd-5b25-8063-9f349b27248c"
+        },
+        {
+          "order": 7,
+          "title": "2.7: Electron Configurations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/02%3A_Atoms_and_the_Periodic_Table/2.07%3A_Electron_Configurations",
+          "stable_id": "6dc465c0-9e9c-55f3-8225-ab382e4dc6e7"
+        },
+        {
+          "order": 8,
+          "title": "2.8: Electron Configurations and the Periodic Table",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/02%3A_Atoms_and_the_Periodic_Table/2.08%3A_Electron_Configurations_and_the_Periodic_Table",
+          "stable_id": "20dab595-9834-5198-8e6d-2ffbefa8fec4"
+        },
+        {
+          "order": 9,
+          "title": "2.9: Electron-Dot Symbols",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/02%3A_Atoms_and_the_Periodic_Table/2.09%3A_Electron-Dot_Symbols",
+          "stable_id": "2f1a81f8-201e-5aa0-b077-d936d9660c3f"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "title": "3: Ionic Compounds",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/03%3A_Ionic_Compounds",
+      "stable_id": "9e5578c8-ca10-5cc5-93bd-a00ad9d5521a",
+      "topics": [
+        {
+          "order": 1,
+          "title": "3.1: Ions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/03%3A_Ionic_Compounds/3.01%3A_Ions",
+          "stable_id": "2b843280-9e59-5cc8-988d-aa576043f664"
+        },
+        {
+          "order": 2,
+          "title": "3.2: Ions and the Octet Rule",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/03%3A_Ionic_Compounds/3.02%3A_Ions_and_the_Octet_Rule",
+          "stable_id": "65aea823-c64d-531a-b304-9ca8b9f34c81"
+        },
+        {
+          "order": 3,
+          "title": "3.3: Ions of Some Common Elements",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/03%3A_Ionic_Compounds/3.03%3A_Ions_of_Some_Common_Elements",
+          "stable_id": "4a77f1fc-776f-5985-883a-39439876006a"
+        },
+        {
+          "order": 4,
+          "title": "3.4: Periodic Properties and Ion Formation",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/03%3A_Ionic_Compounds/3.04%3A_Periodic_Properties_and_Ion_Formation",
+          "stable_id": "faaa9f76-b178-59a5-8f82-7b8e64c4b681"
+        },
+        {
+          "order": 5,
+          "title": "3.5: Naming Monoatomic Ions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/03%3A_Ionic_Compounds/3.05%3A_Naming_Monoatomic_Ions",
+          "stable_id": "a4fa6466-bd64-5f5d-988e-49e0e2d31b1f"
+        },
+        {
+          "order": 6,
+          "title": "3.6: Polyatomic Ions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/03%3A_Ionic_Compounds/3.06%3A_Polyatomic_Ions",
+          "stable_id": "a4eb4201-d2dd-5702-b73b-b81f85d99e46"
+        },
+        {
+          "order": 7,
+          "title": "3.7: Ionic Bonds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/03%3A_Ionic_Compounds/3.07%3A_Ionic_Bonds",
+          "stable_id": "822f9c8f-23ea-5ea9-a2b7-7535c5d9dd1f"
+        },
+        {
+          "order": 8,
+          "title": "3.8: Formulas of Ionic Compounds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/03%3A_Ionic_Compounds/3.08%3A_Formulas_of_Ionic_Compounds",
+          "stable_id": "961aec8b-96bc-555f-a3ac-af291b9e359a"
+        },
+        {
+          "order": 9,
+          "title": "3.9: Naming Ionic Compounds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/03%3A_Ionic_Compounds/3.09%3A_Naming_Ionic_Compounds",
+          "stable_id": "e85a6a87-d6d7-551d-89e3-8372216ffdab"
+        },
+        {
+          "order": 10,
+          "title": "3.10: Some Properties of Ionic Compounds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/03%3A_Ionic_Compounds/3.10%3A_Some_Properties_of_Ionic_Compounds",
+          "stable_id": "4d2833d8-d82f-5239-9c5e-a8e4c19000a1"
+        },
+        {
+          "order": 11,
+          "title": "3.11: H⁺ and OH⁻ Ions - An Introduction to Acids and Bases",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/03%3A_Ionic_Compounds/3.11%3A_H_and_OH_Ions_-_An_Introduction_to_Acids_and_Bases",
+          "stable_id": "3ba87451-1a0d-5845-ab5c-2997b4c10d7d"
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "title": "4: Molecular Compounds",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/04%3A_Molecular_Compounds",
+      "stable_id": "5bb43559-9d7a-5318-8687-ebdc5ec8dd5d",
+      "topics": [
+        {
+          "order": 1,
+          "title": "4.1: Covalent Bonds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/04%3A_Molecular_Compounds/4.01%3A_Covalent_Bonds",
+          "stable_id": "004054d1-559b-5c22-8feb-8d9a2f13e0c1"
+        },
+        {
+          "order": 2,
+          "title": "4.2: Covalent Bonds and the Periodic Table",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/04%3A_Molecular_Compounds/4.02%3A_Covalent_Bonds_and_the_Periodic_Table",
+          "stable_id": "efdcb2a9-074d-50de-921d-8fa846c46fae"
+        },
+        {
+          "order": 3,
+          "title": "4.3: Multiple Covalent Bonds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/04%3A_Molecular_Compounds/4.03%3A_Multiple_Covalent_Bonds",
+          "stable_id": "d91323d1-dd28-5f89-ba26-08e88dbe1f9d"
+        },
+        {
+          "order": 4,
+          "title": "4.4: Coordinate Covalent Bonds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/04%3A_Molecular_Compounds/4.04%3A_Coordinate_Covalent_Bonds",
+          "stable_id": "23f971d3-e288-539c-b4b2-3aea4b3ff595"
+        },
+        {
+          "order": 5,
+          "title": "4.5: Characteristics of Molecular Compounds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/04%3A_Molecular_Compounds/4.05%3A_Characteristics_of_Molecular_Compounds",
+          "stable_id": "338a7dc6-2ba5-50b8-b430-ede8a140873f"
+        },
+        {
+          "order": 6,
+          "title": "4.6: Molecular Formulas and Lewis Structures",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/04%3A_Molecular_Compounds/4.06%3A_Molecular_Formulas_and_Lewis_Structures",
+          "stable_id": "8a2aec58-c8b2-57d8-a7ae-ec9f49022c00"
+        },
+        {
+          "order": 7,
+          "title": "4.7: Drawing Lewis Structures",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/04%3A_Molecular_Compounds/4.07%3A_Drawing_Lewis_Structures",
+          "stable_id": "4920250d-4abc-56cd-8fec-a137db542e3b"
+        },
+        {
+          "order": 8,
+          "title": "4.8: The Shapes of Molecules",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/04%3A_Molecular_Compounds/4.08%3A_The_Shapes_of_Molecules",
+          "stable_id": "35e910d2-1f7e-5f04-9e1e-b7e17461d257"
+        },
+        {
+          "order": 9,
+          "title": "4.9: Polar Covalent Bonds and Electronegativity",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/04%3A_Molecular_Compounds/4.09%3A_Polar_Covalent_Bonds_and_Electronegativity",
+          "stable_id": "477710d2-d4be-5a0a-9724-7b267e1a14e4"
+        },
+        {
+          "order": 10,
+          "title": "4.10: Polar Molecules",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/04%3A_Molecular_Compounds/4.10%3A_Polar_Molecules",
+          "stable_id": "91a4d46f-29f9-56ef-973b-814480e8b899"
+        },
+        {
+          "order": 11,
+          "title": "4.11: Naming Binary Molecular Compounds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/04%3A_Molecular_Compounds/4.11%3A_Naming_Binary_Molecular_Compounds",
+          "stable_id": "92d2a87b-ecb3-564c-b390-726d96324498"
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "title": "5: Classification and Balancing of Chemical Reactions",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/05%3A_Classification_and_Balancing_of_Chemical_Reactions",
+      "stable_id": "d5c4983e-1af9-5cb9-851a-f4fc32ba605f",
+      "topics": [
+        {
+          "order": 1,
+          "title": "5.1: Chemical Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/05%3A_Classification_and_Balancing_of_Chemical_Reactions/5.01%3A_Chemical_Equations",
+          "stable_id": "721e1e33-4916-53e6-a9ef-c65d93067c0c"
+        },
+        {
+          "order": 2,
+          "title": "5.2: Balancing Chemical Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/05%3A_Classification_and_Balancing_of_Chemical_Reactions/5.02%3A_Balancing_Chemical_Equations",
+          "stable_id": "730d2ca9-cf0f-5dfd-9b0f-bac70bfa0a0c"
+        },
+        {
+          "order": 3,
+          "title": "5.3: Precipitation Reactions and Solubility Guidelines",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/05%3A_Classification_and_Balancing_of_Chemical_Reactions/5.03%3A_Precipitation_Reactions_and_Solubility_Guidelines",
+          "stable_id": "2138a4aa-7210-5845-867a-3582788091d9"
+        },
+        {
+          "order": 4,
+          "title": "5.4: Acids, Bases, and Neutralization Reactions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/05%3A_Classification_and_Balancing_of_Chemical_Reactions/5.04%3A_Acids_Bases_and_Neutralization_Reactions",
+          "stable_id": "c37df92a-f1c2-5146-9a56-5426ea5c606b"
+        },
+        {
+          "order": 5,
+          "title": "5.5: Redox Reactions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/05%3A_Classification_and_Balancing_of_Chemical_Reactions/5.05%3A_Redox_Reactions",
+          "stable_id": "d419f7b9-38cb-5fcb-a398-3d311d080c06"
+        },
+        {
+          "order": 6,
+          "title": "5.6: Recognizing Redox Reactions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/05%3A_Classification_and_Balancing_of_Chemical_Reactions/5.06%3A_Recognizing_Redox_Reactions",
+          "stable_id": "e655b3e5-51f5-5df7-a082-795ad4b8342b"
+        },
+        {
+          "order": 7,
+          "title": "5.7: Net Ionic Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/05%3A_Classification_and_Balancing_of_Chemical_Reactions/5.07%3A_Net_Ionic_Equations",
+          "stable_id": "97ee3ce0-7971-596b-9c4c-b2b697a20dbc"
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "title": "6: Chemical Reactions - Mole and Mass Relationships",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/06%3A_Chemical_Reactions_-_Mole_and_Mass_Relationships",
+      "stable_id": "36e5753a-48b6-5367-8dd0-b9e0701bcccd",
+      "topics": [
+        {
+          "order": 1,
+          "title": "6.1: The Mole and Avogadro’s Number",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/06%3A_Chemical_Reactions_-_Mole_and_Mass_Relationships/6.01%3A_The_Mole_and_Avogadros_Number",
+          "stable_id": "2bd8a935-33d2-59e1-a679-4337707d25f0"
+        },
+        {
+          "order": 2,
+          "title": "6.2: Gram-Mole Conversions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/06%3A_Chemical_Reactions_-_Mole_and_Mass_Relationships/6.02%3A_Gram-Mole_Conversions",
+          "stable_id": "262b8e98-ffbb-5f28-9002-2d25a90d82e8"
+        },
+        {
+          "order": 3,
+          "title": "6.3: Mole Relationships and Chemical Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/06%3A_Chemical_Reactions_-_Mole_and_Mass_Relationships/6.03%3A_Mole_Relationships_and_Chemical_Equations",
+          "stable_id": "18c10d8d-7c84-5004-a6ce-6848611ffba5"
+        },
+        {
+          "order": 4,
+          "title": "6.4: Mass Relationships and Chemical Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/06%3A_Chemical_Reactions_-_Mole_and_Mass_Relationships/6.04%3A_Mass_Relationships_and_Chemical_Equations",
+          "stable_id": "a8b354da-730b-5008-8a16-abae0481a268"
+        },
+        {
+          "order": 5,
+          "title": "6.5: Limiting Reagent and Percent Yield",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/06%3A_Chemical_Reactions_-_Mole_and_Mass_Relationships/6.05%3A_Limiting_Reagent_and_Percent_Yield",
+          "stable_id": "93ea6333-7345-58a0-b9e1-68c476c4c9ef"
+        }
+      ]
+    },
+    {
+      "order": 7,
+      "title": "7: Chemical Reactions - Energy, Rates, and Equilibrium",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/07%3A_Chemical_Reactions_-_Energy_Rates_and_Equilibrium",
+      "stable_id": "d2517f7a-359f-5cd6-8478-fa66408cfb9c",
+      "topics": [
+        {
+          "order": 1,
+          "title": "7.1: Energy and Chemical Bonds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/07%3A_Chemical_Reactions_-_Energy_Rates_and_Equilibrium/7.01%3A_Energy_and_Chemical_Bonds",
+          "stable_id": "5d999e3a-68fd-50e9-9563-3a38cd5e86f3"
+        },
+        {
+          "order": 2,
+          "title": "7.2: Heat Changes during Chemical Reactions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/07%3A_Chemical_Reactions_-_Energy_Rates_and_Equilibrium/7.02%3A_Heat_Changes_during_Chemical_Reactions",
+          "stable_id": "c1243e70-1e80-5383-b6b5-495b95499c36"
+        },
+        {
+          "order": 3,
+          "title": "7.3: Exothermic and Endothermic Reactions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/07%3A_Chemical_Reactions_-_Energy_Rates_and_Equilibrium/7.03%3A_Exothermic_and_Endothermic_Reactions",
+          "stable_id": "1db136d1-cf47-5253-8ce4-98e65d56975c"
+        },
+        {
+          "order": 4,
+          "title": "7.4: Why Do Chemical Reactions Occur? Free Energy",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/07%3A_Chemical_Reactions_-_Energy_Rates_and_Equilibrium/7.04%3A_Why_Do_Chemical_Reactions_Occur_Free_Energy",
+          "stable_id": "521700bf-556c-58f4-a8bf-e5c8fa369a67"
+        },
+        {
+          "order": 5,
+          "title": "7.5: How Do Chemical Reactions Occur? Reaction Rates",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/07%3A_Chemical_Reactions_-_Energy_Rates_and_Equilibrium/7.05%3A_How_Do_Chemical_Reactions_Occur_Reaction_Rates",
+          "stable_id": "5135eabb-8531-53c0-aa8d-2364a0c6ea7c"
+        },
+        {
+          "order": 6,
+          "title": "7.6: Effects of Temperature, Concentration, and Catalysts on Reaction Rates",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/07%3A_Chemical_Reactions_-_Energy_Rates_and_Equilibrium/7.06%3A_Effects_of_Temperature_Concentration_and_Catalysts_on_Reaction_Rates",
+          "stable_id": "483b4236-534c-5d9b-bfd4-3d62e727306a"
+        },
+        {
+          "order": 7,
+          "title": "7.7: Reversible Reactions and Chemical Equilibrium",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/07%3A_Chemical_Reactions_-_Energy_Rates_and_Equilibrium/7.07%3A_Reversible_Reactions_and_Chemical_Equilibrium",
+          "stable_id": "519a7373-1ff8-59ae-b7b6-f00d9f4df12f"
+        },
+        {
+          "order": 8,
+          "title": "7.8: Equilibrium Equations and Equilibrium Constants",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/07%3A_Chemical_Reactions_-_Energy_Rates_and_Equilibrium/7.08%3A_Equilibrium_Equations_and_Equilibrium_Constants",
+          "stable_id": "25ee07bc-1237-596c-9c08-3717971feff1"
+        },
+        {
+          "order": 9,
+          "title": "7.9: Le Chatelier’s Principle- The Effect of Changing Conditions on Equilibria",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/07%3A_Chemical_Reactions_-_Energy_Rates_and_Equilibrium/7.09%3A_Le_Chateliers_Principle-_The_Effect_of_Changing_Conditions_on_Equilibria",
+          "stable_id": "fcb54726-c5d7-5c0d-b4ec-182c2921ce1a"
+        }
+      ]
+    },
+    {
+      "order": 8,
+      "title": "8: Gases, Liquids, and Solids",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids",
+      "stable_id": "9f9a93ac-8920-56a0-b00e-ca2b1f31d675",
+      "topics": [
+        {
+          "order": 1,
+          "title": "8.1: States of Matter and Their Changes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.01%3A_States_of_Matter_and_Their_Changes",
+          "stable_id": "87ef95b8-cf50-5a11-ac4a-c23674079ba5"
+        },
+        {
+          "order": 2,
+          "title": "8.2: Intermolecular Forces",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.02%3A_Intermolecular_Forces",
+          "stable_id": "8d791762-2324-54dc-8d92-8acd15bddb84"
+        },
+        {
+          "order": 3,
+          "title": "8.3: Gases and the Kinetic-Molecular Theory",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.03%3A_Gases_and_the_Kinetic-Molecular_Theory",
+          "stable_id": "bda4490a-b7c5-5697-af6c-3198cfc44235"
+        },
+        {
+          "order": 4,
+          "title": "8.4: Pressure",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.04%3A_Pressure",
+          "stable_id": "06d33e60-d842-5552-9ca7-f7aca08becdb"
+        },
+        {
+          "order": 5,
+          "title": "8.5: Boyle’s Law - The Relation between Volume and Pressure",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.05%3A_Boyles_Law_-_The_Relation_between_Volume_and_Pressure",
+          "stable_id": "3351c9a0-8188-53ce-89a3-2a6df36cba2b"
+        },
+        {
+          "order": 6,
+          "title": "8.6: Charles’s Law- The Relation between Volume and Temperature",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.06%3A_Charless_Law-_The_Relation_between_Volume_and_Temperature",
+          "stable_id": "68d5ca4b-b282-54d0-ac83-059e067f1151"
+        },
+        {
+          "order": 7,
+          "title": "8.7: Gay-Lussac's Law- The Relationship Between Pressure and Temperature",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.07%3A_Gay-Lussac%27s_Law-_The_Relationship_Between_Pressure_and_Temperature",
+          "stable_id": "cf69e2c5-874d-5c5c-b749-690607054a68"
+        },
+        {
+          "order": 8,
+          "title": "8.8: The Combined Gas Law",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.08%3A_The_Combined_Gas_Law",
+          "stable_id": "61f4b882-204a-5ac7-9c20-32cd434c44e3"
+        },
+        {
+          "order": 9,
+          "title": "8.9: Avogadro’s Law - The Relation between Volume and Molar Amount",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.09%3A_Avogadros_Law_-_The_Relation_between_Volume_and_Molar_Amount",
+          "stable_id": "7581ce19-a51f-5f25-9c9f-a53d9e961a8d"
+        },
+        {
+          "order": 10,
+          "title": "8.10: The Ideal Gas Law",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.10%3A_The_Ideal_Gas_Law",
+          "stable_id": "14d6cffc-0b6a-5ca3-9ec8-1c61a6a9a9fa"
+        },
+        {
+          "order": 11,
+          "title": "8.11: Partial Pressure and Dalton's Law",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.11%3A_Partial_Pressure_and_Dalton%27s_Law",
+          "stable_id": "e2d6ce74-3c3d-504d-a044-1a0bcf820e44"
+        },
+        {
+          "order": 12,
+          "title": "8.12: Liquids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.12%3A_Liquids",
+          "stable_id": "149de374-691e-5e92-97f7-3d919cba0d00"
+        },
+        {
+          "order": 13,
+          "title": "8.13: Solids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.13%3A_Solids",
+          "stable_id": "171492cb-e115-57aa-8967-4dbc8279ff9f"
+        },
+        {
+          "order": 14,
+          "title": "8.14: Changes of State Calculations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/08%3A_Gases_Liquids_and_Solids/8.14%3A_Changes_of_State_Calculations",
+          "stable_id": "c007859d-bf6c-54c8-a88f-c3258af08f5b"
+        }
+      ]
+    },
+    {
+      "order": 9,
+      "title": "9: Solutions",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/09%3A_Solutions",
+      "stable_id": "6e1dd4de-ba80-5d88-b32d-438f47f75896",
+      "topics": [
+        {
+          "order": 1,
+          "title": "9.1: Mixtures and Solutions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/09%3A_Solutions/9.01%3A_Mixtures_and_Solutions",
+          "stable_id": "4e2c309d-4848-501f-9220-4888df794480"
+        },
+        {
+          "order": 2,
+          "title": "9.2: The Solution Process",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/09%3A_Solutions/9.02%3A_The_Solution_Process",
+          "stable_id": "1be590e7-a4e8-5dc9-8967-d5bd64bc5ddc"
+        },
+        {
+          "order": 3,
+          "title": "9.3: Solubility",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/09%3A_Solutions/9.03%3A_Solubility",
+          "stable_id": "eb69beaf-ad5f-57e4-be9b-053a2b0a92da"
+        },
+        {
+          "order": 4,
+          "title": "9.4: The Effect of Temperature on Solubility",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/09%3A_Solutions/9.04%3A_The_Effect_of_Temperature_on_Solubility",
+          "stable_id": "494b3a6b-c987-542c-b386-e498baad6d32"
+        },
+        {
+          "order": 5,
+          "title": "9.5: The Effect of Pressure on Solubility - Henry’s Law",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/09%3A_Solutions/9.05%3A_The_Effect_of_Pressure_on_Solubility_-_Henrys_Law",
+          "stable_id": "2ffbe186-0e56-5a9c-a1c9-c293942d0975"
+        },
+        {
+          "order": 6,
+          "title": "9.6: Units of Concentration",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/09%3A_Solutions/9.06%3A_Units_of_Concentration",
+          "stable_id": "c0826918-8ab0-5100-b352-242d91854a64"
+        },
+        {
+          "order": 7,
+          "title": "9.7: Dilution",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/09%3A_Solutions/9.07%3A_Dilution",
+          "stable_id": "81a8975d-0933-547a-818d-9cb2762ab78e"
+        },
+        {
+          "order": 8,
+          "title": "9.8: Ions in Solution - Electrolytes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/09%3A_Solutions/9.08%3A_Ions_in_Solution_-_Electrolytes",
+          "stable_id": "015940fe-5533-58dc-b7a7-a994f5961c33"
+        },
+        {
+          "order": 9,
+          "title": "9.9: Properties of Solutions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/09%3A_Solutions/9.09%3A_Properties_of_Solutions",
+          "stable_id": "e15db8f9-98ce-5006-a331-161ee3b1983e"
+        },
+        {
+          "order": 10,
+          "title": "9.10: Osmosis and Osmotic Pressure",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/09%3A_Solutions/9.10%3A_Osmosis_and_Osmotic_Pressure",
+          "stable_id": "cecd71ec-3f81-5fb7-9627-883932cc3116"
+        },
+        {
+          "order": 11,
+          "title": "9.11: Dialysis",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/09%3A_Solutions/9.11%3A_Dialysis",
+          "stable_id": "52036caf-45bf-58eb-a9af-1dd2fd29e516"
+        }
+      ]
+    },
+    {
+      "order": 10,
+      "title": "10: Acids and Bases",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/10%3A_Acids_and_Bases",
+      "stable_id": "aee5b72c-7b7a-5dd2-a377-faf36d12943d",
+      "topics": [
+        {
+          "order": 1,
+          "title": "10.1: Acids and Bases Definitions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/10%3A_Acids_and_Bases/10.01%3A_Acids_and_Bases_Definitions",
+          "stable_id": "8a8c4fc9-0b3a-5a8b-ab7f-4a3afa80333e"
+        },
+        {
+          "order": 2,
+          "title": "10.2: Acid and Base Strength",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/10%3A_Acids_and_Bases/10.02%3A_Acid_and_Base_Strength",
+          "stable_id": "fba1036f-ca82-532f-8c3d-3bdfff47e9ca"
+        },
+        {
+          "order": 3,
+          "title": "10.3: Acid Dissociation Constants",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/10%3A_Acids_and_Bases/10.03%3A_Acid_Dissociation_Constants",
+          "stable_id": "997d3079-b108-5a5e-9be1-865e4fbe63b3"
+        },
+        {
+          "order": 4,
+          "title": "10.4: Water as Both an Acid and a Base",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/10%3A_Acids_and_Bases/10.04%3A_Water_as_Both_an_Acid_and_a_Base",
+          "stable_id": "248b8b8f-f69c-5bed-bb07-b3c9c6f48175"
+        },
+        {
+          "order": 5,
+          "title": "10.5: Measuring Acidity in Aqueous Solutions- The pH Scale",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/10%3A_Acids_and_Bases/10.05%3A_Measuring_Acidity_in_Aqueous_Solutions-_The_pH_Scale",
+          "stable_id": "6a2357e5-7d08-5dea-9964-c0ba4f526cb0"
+        },
+        {
+          "order": 6,
+          "title": "10.6: Working with pH",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/10%3A_Acids_and_Bases/10.06%3A_Working_with_pH",
+          "stable_id": "898852f6-260e-567a-ad41-6c4563534271"
+        },
+        {
+          "order": 7,
+          "title": "10.7: Acid and Base Equivalents",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/10%3A_Acids_and_Bases/10.07%3A_Acid_and_Base_Equivalents",
+          "stable_id": "b94fe358-dea9-5315-b1ec-03d8daf1f56f"
+        },
+        {
+          "order": 8,
+          "title": "10.8: Some Common Acid-Base Reactions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/10%3A_Acids_and_Bases/10.08%3A_Some_Common_Acid-Base_Reactions",
+          "stable_id": "0ac79b58-5847-506c-a4d3-5497cf07a291"
+        },
+        {
+          "order": 9,
+          "title": "10.9: Acidity and Basicity of Salt Solutions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/10%3A_Acids_and_Bases/10.09%3A_Acidity_and_Basicity_of_Salt_Solutions",
+          "stable_id": "7bf83453-6cc9-53d0-8542-b1b6eedc7744"
+        },
+        {
+          "order": 10,
+          "title": "10.10: Buffer Solutions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/10%3A_Acids_and_Bases/10.10%3A_Buffer_Solutions",
+          "stable_id": "51854575-00f2-524d-b0ef-5839b0b94c3c"
+        },
+        {
+          "order": 11,
+          "title": "10.11: Titration",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/10%3A_Acids_and_Bases/10.11%3A_Titration",
+          "stable_id": "acf22048-d9c8-5d9b-a934-960c4fc8bfde"
+        }
+      ]
+    },
+    {
+      "order": 11,
+      "title": "11: Nuclear Chemistry",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/11%3A_Nuclear_Chemistry",
+      "stable_id": "5ab34707-cfc2-53b7-aa84-74828e1a7ce0",
+      "topics": [
+        {
+          "order": 1,
+          "title": "11.1: Nuclear Reactions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/11%3A_Nuclear_Chemistry/11.01%3A_Nuclear_Reactions",
+          "stable_id": "c9d111c7-55e6-58ba-9a8d-986f31087ead"
+        },
+        {
+          "order": 2,
+          "title": "11.2: The Discovery and Nature of Radioactivity",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/11%3A_Nuclear_Chemistry/11.02%3A_The_Discovery_and_Nature_of_Radioactivity",
+          "stable_id": "c801fb55-4cf3-5cc7-bbea-e76739dca191"
+        },
+        {
+          "order": 3,
+          "title": "11.3: Stable and Unstable Isotopes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/11%3A_Nuclear_Chemistry/11.03%3A_Stable_and_Unstable_Isotopes",
+          "stable_id": "eb459a37-a59d-501d-a3de-d736e92956ba"
+        },
+        {
+          "order": 4,
+          "title": "11.4: Nuclear Decay",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/11%3A_Nuclear_Chemistry/11.04%3A_Nuclear_Decay",
+          "stable_id": "f0af690b-6243-567f-8454-1a1e6ccae56e"
+        },
+        {
+          "order": 5,
+          "title": "11.5: Radioactive Half-Life",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/11%3A_Nuclear_Chemistry/11.05%3A_Radioactive_Half-Life",
+          "stable_id": "445bb7ef-a82f-574b-abfc-7467a97178db"
+        },
+        {
+          "order": 6,
+          "title": "11.6: Ionizing Radiation",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/11%3A_Nuclear_Chemistry/11.06%3A_Ionizing_Radiation",
+          "stable_id": "cae038c4-81a8-5e76-8eb0-28bbdf0f7504"
+        },
+        {
+          "order": 7,
+          "title": "11.7: Detecting and Measuring Radiation",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/11%3A_Nuclear_Chemistry/11.07%3A_Detecting_and_Measuring_Radiation",
+          "stable_id": "77e08370-c926-5f58-8613-0a98af7be5d8"
+        },
+        {
+          "order": 8,
+          "title": "11.8: Artificial Transmutation",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/11%3A_Nuclear_Chemistry/11.08%3A_Artificial_Transmutation",
+          "stable_id": "d038496b-7251-5d73-8f07-f3a0bfec840f"
+        },
+        {
+          "order": 9,
+          "title": "11.9: Nuclear Fission and Nuclear Fusion",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/11%3A_Nuclear_Chemistry/11.09%3A_Nuclear_Fission_and_Nuclear_Fusion",
+          "stable_id": "6a79f967-9238-5ab7-8edf-7df39eb060cf"
+        }
+      ]
+    },
+    {
+      "order": 12,
+      "title": "12: Introduction to Organic Chemistry - Alkanes",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/12%3A_Introduction_to_Organic_Chemistry_-_Alkanes",
+      "stable_id": "e06af8a2-93d8-5be8-bd5d-508064eae0b4",
+      "topics": [
+        {
+          "order": 1,
+          "title": "12.1: The Nature of Organic Molecules",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/12%3A_Introduction_to_Organic_Chemistry_-_Alkanes/12.01%3A_The_Nature_of_Organic_Molecules",
+          "stable_id": "20039275-c931-5545-bfe2-0b0d392a030b"
+        },
+        {
+          "order": 2,
+          "title": "12.2: Families of Organic Molecules - Functional Groups",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/12%3A_Introduction_to_Organic_Chemistry_-_Alkanes/12.02%3A_Families_of_Organic_Molecules_-_Functional_Groups",
+          "stable_id": "7f064602-ed5b-502f-a0b8-108715001d2d"
+        },
+        {
+          "order": 3,
+          "title": "12.3: The Structure of Organic Molecules - Alkanes and Their Isomers",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/12%3A_Introduction_to_Organic_Chemistry_-_Alkanes/12.03%3A_The_Structure_of_Organic_Molecules_-_Alkanes_and_Their_Isomers",
+          "stable_id": "8e4e0af1-7aff-5f76-bed9-d88168fa9354"
+        },
+        {
+          "order": 4,
+          "title": "12.4: Drawing Organic Structures",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/12%3A_Introduction_to_Organic_Chemistry_-_Alkanes/12.04%3A_Drawing_Organic_Structures",
+          "stable_id": "45310ea5-1465-58c5-b97e-1986a6fd89e4"
+        },
+        {
+          "order": 5,
+          "title": "12.5: The Shapes of Organic Molecules",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/12%3A_Introduction_to_Organic_Chemistry_-_Alkanes/12.05%3A_The_Shapes_of_Organic_Molecules",
+          "stable_id": "3ce5193c-3196-5b85-98a6-021dd939fef6"
+        },
+        {
+          "order": 6,
+          "title": "12.6: Naming Alkanes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/12%3A_Introduction_to_Organic_Chemistry_-_Alkanes/12.06%3A_Naming_Alkanes",
+          "stable_id": "43a37616-401f-5c58-a84a-8967a86101c6"
+        },
+        {
+          "order": 7,
+          "title": "12.7: Properties of Alkanes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/12%3A_Introduction_to_Organic_Chemistry_-_Alkanes/12.07%3A_Properties_of_Alkanes",
+          "stable_id": "19e5d6bd-355a-5ba2-90d5-163536baae42"
+        },
+        {
+          "order": 8,
+          "title": "12.8: Reactions of Alkanes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/12%3A_Introduction_to_Organic_Chemistry_-_Alkanes/12.08%3A_Reactions_of_Alkanes",
+          "stable_id": "d83f3805-4583-5ef6-b8f5-f6e9924262c4"
+        },
+        {
+          "order": 9,
+          "title": "12.9: Cycloalkanes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/12%3A_Introduction_to_Organic_Chemistry_-_Alkanes/12.09%3A_Cycloalkanes",
+          "stable_id": "57f6302a-2a1f-520c-a20c-768c82c097a0"
+        },
+        {
+          "order": 10,
+          "title": "12.10: Drawing and Naming Cycloalkanes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/12%3A_Introduction_to_Organic_Chemistry_-_Alkanes/12.10%3A_Drawing_and_Naming_Cycloalkanes",
+          "stable_id": "e886773c-ee2e-5b53-9d42-95aa5f0c05a8"
+        }
+      ]
+    },
+    {
+      "order": 13,
+      "title": "13: Alkenes, Alkynes, and Aromatic Compounds",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/13%3A_Alkenes_Alkynes_and_Aromatic_Compounds",
+      "stable_id": "6803699b-e05a-59ef-b154-cb6d6831e0da",
+      "topics": [
+        {
+          "order": 1,
+          "title": "13.1: Alkenes and Alkynes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/13%3A_Alkenes_Alkynes_and_Aromatic_Compounds/13.01%3A_Alkenes_and_Alkynes",
+          "stable_id": "6a0ed7d8-c10c-5239-9739-e547c0cf4539"
+        },
+        {
+          "order": 2,
+          "title": "13.2: Naming Alkenes and Alkynes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/13%3A_Alkenes_Alkynes_and_Aromatic_Compounds/13.02%3A_Naming_Alkenes_and_Alkynes",
+          "stable_id": "7d21e41f-ba9c-5c57-8641-91170f22e4ea"
+        },
+        {
+          "order": 3,
+          "title": "13.3: The Structure of Alkenes- Cis-Trans Isomerism",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/13%3A_Alkenes_Alkynes_and_Aromatic_Compounds/13.03%3A_The_Structure_of_Alkenes-_Cis-Trans_Isomerism",
+          "stable_id": "45f63972-55f1-5e3e-82bf-2e626a0e3f40"
+        },
+        {
+          "order": 4,
+          "title": "13.4: Properties of Alkenes and Alkynes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/13%3A_Alkenes_Alkynes_and_Aromatic_Compounds/13.04%3A_Properties_of_Alkenes_and_Alkynes",
+          "stable_id": "eba944fc-23a8-5f41-9333-8b256aae37ac"
+        },
+        {
+          "order": 5,
+          "title": "13.5: Types of Organic Reactions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/13%3A_Alkenes_Alkynes_and_Aromatic_Compounds/13.05%3A_Types_of_Organic_Reactions",
+          "stable_id": "9f32cbdd-1a5d-5691-a09e-d42b866a78c4"
+        },
+        {
+          "order": 6,
+          "title": "13.6: Addition Reactions of Alkenes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/13%3A_Alkenes_Alkynes_and_Aromatic_Compounds/13.06%3A_Addition_Reactions_of_Alkenes",
+          "stable_id": "5e5bc22d-eb7b-55da-807f-4dc5052c5521"
+        },
+        {
+          "order": 7,
+          "title": "13.7: Alkene Polymers",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/13%3A_Alkenes_Alkynes_and_Aromatic_Compounds/13.07%3A_Alkene_Polymers",
+          "stable_id": "b712a686-9515-5998-843c-1f2a33ef9da9"
+        },
+        {
+          "order": 8,
+          "title": "13.8: Aromatic Compounds and the Structure of Benzene",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/13%3A_Alkenes_Alkynes_and_Aromatic_Compounds/13.08%3A_Aromatic_Compounds_and_the_Structure_of_Benzene",
+          "stable_id": "120bb770-aeec-5d0b-a397-49316fd37f5e"
+        },
+        {
+          "order": 9,
+          "title": "13.9: Naming Aromatic Compounds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/13%3A_Alkenes_Alkynes_and_Aromatic_Compounds/13.09%3A_Naming_Aromatic_Compounds",
+          "stable_id": "85efbfbc-a78b-5692-9abf-57256ac61fd0"
+        },
+        {
+          "order": 10,
+          "title": "13.10: Reactions of Aromatic Compounds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/13%3A_Alkenes_Alkynes_and_Aromatic_Compounds/13.10%3A_Reactions_of_Aromatic_Compounds",
+          "stable_id": "cd608b2a-4bdf-5657-83b4-1c7f958b60a4"
+        }
+      ]
+    },
+    {
+      "order": 14,
+      "title": "14: Some Compounds with Oxygen, Sulfur, or a Halogen",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/14%3A_Some_Compounds_with_Oxygen_Sulfur_or_a_Halogen",
+      "stable_id": "c50cbb48-c844-5154-8295-a2279168787f",
+      "topics": [
+        {
+          "order": 1,
+          "title": "14.1: Alcohols, Phenols, and Ethers",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/14%3A_Some_Compounds_with_Oxygen_Sulfur_or_a_Halogen/14.01%3A_Alcohols_Phenols_and_Ethers",
+          "stable_id": "2cce07a5-871e-501c-800c-4b759ccfbcc1"
+        },
+        {
+          "order": 2,
+          "title": "14.2: Naming Alcohols",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/14%3A_Some_Compounds_with_Oxygen_Sulfur_or_a_Halogen/14.02%3A_Naming_Alcohols",
+          "stable_id": "227760ad-cc35-5aed-a845-8192ecb84112"
+        },
+        {
+          "order": 3,
+          "title": "14.3: Properties of Alcohols",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/14%3A_Some_Compounds_with_Oxygen_Sulfur_or_a_Halogen/14.03%3A_Properties_of_Alcohols",
+          "stable_id": "43b668d1-707a-523d-9a9e-8fc83df6f0d3"
+        },
+        {
+          "order": 4,
+          "title": "14.4: Reactions of Alcohols",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/14%3A_Some_Compounds_with_Oxygen_Sulfur_or_a_Halogen/14.04%3A_Reactions_of_Alcohols",
+          "stable_id": "f9085a3b-47dc-579c-8f86-d9c2d9b5c74c"
+        },
+        {
+          "order": 5,
+          "title": "14.5: Phenols",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/14%3A_Some_Compounds_with_Oxygen_Sulfur_or_a_Halogen/14.05%3A_Phenols",
+          "stable_id": "e5efb358-e5a4-5f02-a8c6-83838235578f"
+        },
+        {
+          "order": 6,
+          "title": "14.6: Acidity of Alcohols and Phenols",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/14%3A_Some_Compounds_with_Oxygen_Sulfur_or_a_Halogen/14.06%3A_Acidity_of_Alcohols_and_Phenols",
+          "stable_id": "44a2bbc8-c6ab-50db-9445-93635a8ddda1"
+        },
+        {
+          "order": 7,
+          "title": "14.7: Ethers",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/14%3A_Some_Compounds_with_Oxygen_Sulfur_or_a_Halogen/14.07%3A_Ethers",
+          "stable_id": "403b7351-7f71-50b3-98af-cda6354ee309"
+        },
+        {
+          "order": 8,
+          "title": "14.8: Thiols and Disulfides",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/14%3A_Some_Compounds_with_Oxygen_Sulfur_or_a_Halogen/14.08%3A_Thiols_and_Disulfides",
+          "stable_id": "7e48d9bf-c218-5fd8-9ead-faebc08f8855"
+        },
+        {
+          "order": 9,
+          "title": "14.9: Halogen-Containing Compounds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/14%3A_Some_Compounds_with_Oxygen_Sulfur_or_a_Halogen/14.09%3A_Halogen-Containing_Compounds",
+          "stable_id": "e670315f-b057-5f86-af41-0d4d397080fb"
+        },
+        {
+          "order": 10,
+          "title": "14.10: Stereochemistry and Chirality",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/14%3A_Some_Compounds_with_Oxygen_Sulfur_or_a_Halogen/14.10%3A_Stereochemistry_and_Chirality",
+          "stable_id": "bc80a328-1c01-5a0a-8dd4-45c1849081d3"
+        }
+      ]
+    },
+    {
+      "order": 15,
+      "title": "15: Aldehydes and Ketones",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/15%3A_Aldehydes_and_Ketones",
+      "stable_id": "f11d0dce-6854-59ce-a723-046d4266a50a",
+      "topics": [
+        {
+          "order": 1,
+          "title": "15.1: The Carbonyl Group",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/15%3A_Aldehydes_and_Ketones/15.01%3A_The_Carbonyl_Group",
+          "stable_id": "e6dd5aa3-1608-5f9e-9366-c32316991ef9"
+        },
+        {
+          "order": 2,
+          "title": "15.2: Naming Aldehydes and Ketones",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/15%3A_Aldehydes_and_Ketones/15.02%3A_Naming_Aldehydes_and_Ketones",
+          "stable_id": "bfcf59e0-f794-5462-adec-039610039865"
+        },
+        {
+          "order": 3,
+          "title": "15.3: Properties of Aldehydes and Ketones",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/15%3A_Aldehydes_and_Ketones/15.03%3A_Properties_of_Aldehydes_and_Ketones",
+          "stable_id": "bd3e7e31-6146-5f70-a12e-9a653b4f2d97"
+        },
+        {
+          "order": 4,
+          "title": "15.4: Some Common Aldehydes and Ketones",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/15%3A_Aldehydes_and_Ketones/15.04%3A_Some_Common_Aldehydes_and_Ketones",
+          "stable_id": "50cdeef5-5d43-532e-8a60-cdbb38f0a1df"
+        },
+        {
+          "order": 5,
+          "title": "15.5: Oxidation of Aldehydes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/15%3A_Aldehydes_and_Ketones/15.05%3A_Oxidation_of_Aldehydes",
+          "stable_id": "3283fec0-cf40-59c5-b786-9235ad872730"
+        },
+        {
+          "order": 6,
+          "title": "15.6: Reduction of Aldehydes and Ketones",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/15%3A_Aldehydes_and_Ketones/15.06%3A_Reduction_of_Aldehydes_and_Ketones",
+          "stable_id": "27dc76d5-b731-59d8-b141-b8cd6bcad5cd"
+        },
+        {
+          "order": 7,
+          "title": "15.7: Addition of Alcohols - Hemiacetals and Acetals",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/15%3A_Aldehydes_and_Ketones/15.07%3A_Addition_of_Alcohols_-_Hemiacetals_and_Acetals",
+          "stable_id": "6a8c9075-24e1-5a21-930c-1e45040fd9dc"
+        }
+      ]
+    },
+    {
+      "order": 16,
+      "title": "16: Amines",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/16%3A_Amines",
+      "stable_id": "55e3a662-2470-5eb7-9055-778f69c49a8d",
+      "topics": [
+        {
+          "order": 1,
+          "title": "16.1: Classifying Amines",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/16%3A_Amines/16.01%3A_Classifying_Amines",
+          "stable_id": "e7dd5335-48be-5294-b1f6-450bfc7d2dfa"
+        },
+        {
+          "order": 2,
+          "title": "16.2: Naming and Drawing Amines",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/16%3A_Amines/16.02%3A_Naming_and_Drawing_Amines",
+          "stable_id": "3b04d381-5c72-53ca-a87b-80a133f4146a"
+        },
+        {
+          "order": 3,
+          "title": "16.3: Properties of Amines",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/16%3A_Amines/16.03%3A_Properties_of_Amines",
+          "stable_id": "1f6139e0-afc7-5a86-9b34-45ce304a88d0"
+        },
+        {
+          "order": 4,
+          "title": "16.4: Heterocyclic Nitrogen Compounds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/16%3A_Amines/16.04%3A_Heterocyclic_Nitrogen_Compounds",
+          "stable_id": "ae121c34-7014-5c96-9feb-eb3768fb00b4"
+        },
+        {
+          "order": 5,
+          "title": "16.5: Basicity of Amines",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/16%3A_Amines/16.05%3A_Basicity_of_Amines",
+          "stable_id": "172f4920-b50c-536e-80cc-876a0343abda"
+        },
+        {
+          "order": 6,
+          "title": "16.6: Amine Salts",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/16%3A_Amines/16.06%3A_Amine_Salts",
+          "stable_id": "f7a0634c-8607-51f5-a75d-8cf144cb9e52"
+        },
+        {
+          "order": 7,
+          "title": "16.7: Amines in Plants- Alkaloids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/16%3A_Amines/16.07%3A_Amines_in_Plants-_Alkaloids",
+          "stable_id": "4d4b69fa-5da2-5cdd-867f-9cef83f74be4"
+        }
+      ]
+    },
+    {
+      "order": 17,
+      "title": "17: Carboxylic Acids and their Derivatives",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/17%3A_Carboxylic_Acids_and_their_Derivatives",
+      "stable_id": "e9cd32c1-7546-50c8-b525-66d6b98a19a0",
+      "topics": [
+        {
+          "order": 1,
+          "title": "17.1: Carboxylic Acids and Their Derivatives- Properties and Names",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/17%3A_Carboxylic_Acids_and_their_Derivatives/17.01%3A_Carboxylic_Acids_and_Their_Derivatives-_Properties_and_Names",
+          "stable_id": "54fa4e67-362c-5c55-adfb-8445e1efce47"
+        },
+        {
+          "order": 2,
+          "title": "17.2: Acidity of Carboxylic Acids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/17%3A_Carboxylic_Acids_and_their_Derivatives/17.02%3A_Acidity_of_Carboxylic_Acids",
+          "stable_id": "085755cd-3174-52b9-930f-069add6074bd"
+        },
+        {
+          "order": 3,
+          "title": "17.3: Reactions of Carboxylic Acids - Ester and Amide Formation",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/17%3A_Carboxylic_Acids_and_their_Derivatives/17.03%3A_Reactions_of_Carboxylic_Acids_-_Ester_and_Amide_Formation",
+          "stable_id": "8012ae7b-9df6-5ac2-bd98-a940c72bf4e0"
+        },
+        {
+          "order": 4,
+          "title": "17.4: Hydrolysis of Esters and Amides",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/17%3A_Carboxylic_Acids_and_their_Derivatives/17.04%3A_Hydrolysis_of_Esters_and_Amides",
+          "stable_id": "dbe20e45-39bd-58ea-bb04-792685a42a4d"
+        },
+        {
+          "order": 5,
+          "title": "17.5: Polyamides and Polyesters",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/17%3A_Carboxylic_Acids_and_their_Derivatives/17.05%3A_Polyamides_and_Polyesters",
+          "stable_id": "c1627b69-10af-5f52-aa5b-c20c5421349d"
+        },
+        {
+          "order": 6,
+          "title": "17.6: Phosphoric Acid Derivatives",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/17%3A_Carboxylic_Acids_and_their_Derivatives/17.06%3A_Phosphoric_Acid_Derivatives",
+          "stable_id": "971dd972-7403-5319-b885-6c09ae969be6"
+        }
+      ]
+    },
+    {
+      "order": 18,
+      "title": "18: Amino Acids and Proteins",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/18%3A_Amino_Acids_and_Proteins",
+      "stable_id": "b58f4f0a-d617-5fa2-9d36-016907e46201",
+      "topics": [
+        {
+          "order": 1,
+          "title": "18.1: An Introduction to Biochemistry",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/18%3A_Amino_Acids_and_Proteins/18.01%3A_An_Introduction_to_Biochemistry",
+          "stable_id": "99fa0ea0-cc80-5266-b474-94508b64e2e2"
+        },
+        {
+          "order": 2,
+          "title": "18.2: Proteins and Their Functions- An Overview",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/18%3A_Amino_Acids_and_Proteins/18.02%3A_Proteins_and_Their_Functions-_An_Overview",
+          "stable_id": "af1473d8-003d-5160-ade0-b3bed0776b47"
+        },
+        {
+          "order": 3,
+          "title": "18.3: Amino Acids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/18%3A_Amino_Acids_and_Proteins/18.03%3A_Amino_Acids",
+          "stable_id": "e5abfeac-6ab2-58a3-b7bc-4b61b1e7b756"
+        },
+        {
+          "order": 4,
+          "title": "18.4: Acid-Base Properties of Amino Acids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/18%3A_Amino_Acids_and_Proteins/18.04%3A_Acid-Base_Properties_of_Amino_Acids",
+          "stable_id": "845a355e-e2a8-5252-9b3a-0e81cc6b0414"
+        },
+        {
+          "order": 5,
+          "title": "18.5: Peptides",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/18%3A_Amino_Acids_and_Proteins/18.05%3A_Peptides",
+          "stable_id": "996d7b51-9c57-550b-b942-0b5fab47b9c9"
+        },
+        {
+          "order": 6,
+          "title": "18.6: Protein Structure- An Overview and Primary Protein Structure",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/18%3A_Amino_Acids_and_Proteins/18.06%3A_Protein_Structure-_An_Overview_and_Primary_Protein_Structure",
+          "stable_id": "0d23709c-ae7e-510b-b8ef-f6d9b6aa9b4b"
+        },
+        {
+          "order": 7,
+          "title": "18.7: Secondary Protein Structure",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/18%3A_Amino_Acids_and_Proteins/18.07%3A_Secondary_Protein_Structure",
+          "stable_id": "d2a121f1-9684-54c6-903e-861b36a71781"
+        },
+        {
+          "order": 8,
+          "title": "18.8: Tertiary Protein Structure",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/18%3A_Amino_Acids_and_Proteins/18.08%3A_Tertiary_Protein_Structure",
+          "stable_id": "33273bea-b78b-5bce-9504-a335a13beb44"
+        },
+        {
+          "order": 9,
+          "title": "18.9: Quaternary Protein Structure",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/18%3A_Amino_Acids_and_Proteins/18.09%3A_Quaternary_Protein_Structure",
+          "stable_id": "b129969c-3121-5b8d-930b-c3fef27f459a"
+        },
+        {
+          "order": 10,
+          "title": "18.10: Chemical Properties of Proteins",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/18%3A_Amino_Acids_and_Proteins/18.10%3A_Chemical_Properties_of_Proteins",
+          "stable_id": "0f139dea-026b-5c13-9b04-8bb322e62d1d"
+        }
+      ]
+    },
+    {
+      "order": 19,
+      "title": "19: Enzymes and Vitamins",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/19%3A_Enzymes_and_Vitamins",
+      "stable_id": "ca9f3269-71ed-5283-baf3-41f80be42546",
+      "topics": [
+        {
+          "order": 1,
+          "title": "19.1: Catalysis by Enzymes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/19%3A_Enzymes_and_Vitamins/19.01%3A_Catalysis_by_Enzymes",
+          "stable_id": "09847c06-81d0-500a-b0e2-070cc1ec3c7b"
+        },
+        {
+          "order": 2,
+          "title": "19.2: Enzyme Cofactors",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/19%3A_Enzymes_and_Vitamins/19.02%3A_Enzyme_Cofactors",
+          "stable_id": "dc0fe111-81ed-5b7b-a971-3d156823f7f1"
+        },
+        {
+          "order": 3,
+          "title": "19.3: Enzyme Classification",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/19%3A_Enzymes_and_Vitamins/19.03%3A_Enzyme_Classification",
+          "stable_id": "4ad767ee-102f-5c93-bdbf-ca3dcfb6f3e2"
+        },
+        {
+          "order": 4,
+          "title": "19.4: How Enzymes Work",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/19%3A_Enzymes_and_Vitamins/19.04%3A_How_Enzymes_Work",
+          "stable_id": "91a49b23-485f-5fb9-a0e0-9ea01726df5c"
+        },
+        {
+          "order": 5,
+          "title": "19.5: Factors Affecting Enzyme Activity",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/19%3A_Enzymes_and_Vitamins/19.05%3A_Factors_Affecting_Enzyme_Activity",
+          "stable_id": "7034d387-dd36-54ee-8742-44857bef1fe8"
+        },
+        {
+          "order": 6,
+          "title": "19.6: Enzyme Regulation - Inhibition",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/19%3A_Enzymes_and_Vitamins/19.06%3A_Enzyme_Regulation_-_Inhibition",
+          "stable_id": "fbbab4bd-179f-547d-af37-343f8aee1c05"
+        },
+        {
+          "order": 7,
+          "title": "19.7: Enzyme Regulation- Allosteric Control and Feedback Inhibition",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/19%3A_Enzymes_and_Vitamins/19.07%3A_Enzyme_Regulation-_Allosteric_Control_and_Feedback_Inhibition",
+          "stable_id": "23aef8de-432d-5f39-bc81-f2081cc1dada"
+        },
+        {
+          "order": 8,
+          "title": "19.8: Enzyme Regulation - Covalent Modification and Genetic Control",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/19%3A_Enzymes_and_Vitamins/19.08%3A_Enzyme_Regulation_-_Covalent_Modification_and_Genetic_Control",
+          "stable_id": "3295c131-0805-5891-a5d6-790e36325f16"
+        },
+        {
+          "order": 9,
+          "title": "19.9: Vitamins, Antioxidants, and Minerals",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/19%3A_Enzymes_and_Vitamins/19.09%3A_Vitamins_Antioxidants_and_Minerals",
+          "stable_id": "629b070b-264c-56eb-a77d-810c9bf2621f"
+        }
+      ]
+    },
+    {
+      "order": 20,
+      "title": "20: Carbohydrates",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/20%3A_Carbohydrates",
+      "stable_id": "3ff10b9c-3399-5b35-8596-4a8b8ee6f440",
+      "topics": [
+        {
+          "order": 1,
+          "title": "20.1: An Introduction to Carbohydrates",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/20%3A_Carbohydrates/20.01%3A_An_Introduction_to_Carbohydrates",
+          "stable_id": "9cf688a7-4183-5671-9454-ac17fc851387"
+        },
+        {
+          "order": 2,
+          "title": "20.2: Handedness of Carbohydrates",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/20%3A_Carbohydrates/20.02%3A_Handedness_of_Carbohydrates",
+          "stable_id": "aa7502d7-3a2d-5e3f-8931-362fb94eb803"
+        },
+        {
+          "order": 3,
+          "title": "20.3: Structure of Glucose and Other Monosaccharides",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/20%3A_Carbohydrates/20.03%3A_Structure_of_Glucose_and_Other_Monosaccharides",
+          "stable_id": "2921735c-0d9c-5fb6-abe4-3a77c558231d"
+        },
+        {
+          "order": 4,
+          "title": "20.4: Some Important Monosaccharides",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/20%3A_Carbohydrates/20.04%3A_Some_Important_Monosaccharides",
+          "stable_id": "96fede90-ba98-52aa-8a0a-dbe3ead047d9"
+        },
+        {
+          "order": 5,
+          "title": "20.5: Reactions of Monosaccharides",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/20%3A_Carbohydrates/20.05%3A_Reactions_of_Monosaccharides",
+          "stable_id": "988a544f-7b86-5b62-870f-51ef23120e3e"
+        },
+        {
+          "order": 6,
+          "title": "20.6: Common Disaccharides",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/20%3A_Carbohydrates/20.06%3A_Common_Disaccharides",
+          "stable_id": "631d1d79-9e7f-59a2-adaa-d039ca7a5377"
+        },
+        {
+          "order": 7,
+          "title": "20.7: Some Important Polysaccharides Based on Glucose",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/20%3A_Carbohydrates/20.07%3A_Some_Important_Polysaccharides_Based_on_Glucose",
+          "stable_id": "2feb3ed1-6864-59b8-bc18-3e5a38638143"
+        }
+      ]
+    },
+    {
+      "order": 21,
+      "title": "21: The Generation of Biochemical Energy",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/21%3A_The_Generation_of_Biochemical_Energy",
+      "stable_id": "684b8426-be4f-5978-9bdb-a35243d9a571",
+      "topics": [
+        {
+          "order": 1,
+          "title": "21.1: Energy, Life, and Biochemical Reactions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/21%3A_The_Generation_of_Biochemical_Energy/21.01%3A_Energy_Life_and_Biochemical_Reactions",
+          "stable_id": "844e58b1-e38d-5859-9b4c-d129a9bfbddf"
+        },
+        {
+          "order": 2,
+          "title": "21.2: Cells and Their Structure",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/21%3A_The_Generation_of_Biochemical_Energy/21.02%3A_Cells_and_Their_Structure",
+          "stable_id": "fb589c54-4055-5277-945f-d760adb7d0bd"
+        },
+        {
+          "order": 3,
+          "title": "21.3: An Overview of Metabolism and Energy Production",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/21%3A_The_Generation_of_Biochemical_Energy/21.03%3A_An_Overview_of_Metabolism_and_Energy_Production",
+          "stable_id": "a6f1786c-b245-5929-a9df-5b146308ebe4"
+        },
+        {
+          "order": 4,
+          "title": "21.4: Strategies of Metabolism - ATP and Energy Transfer",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/21%3A_The_Generation_of_Biochemical_Energy/21.04%3A_Strategies_of_Metabolism_-_ATP_and_Energy_Transfer",
+          "stable_id": "25452f78-d272-5099-addb-6fc92c38bdb4"
+        },
+        {
+          "order": 5,
+          "title": "21.5: Strategies of Metabolism - Metabolic Pathways and Coupled Reactions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/21%3A_The_Generation_of_Biochemical_Energy/21.05%3A_Strategies_of_Metabolism_-_Metabolic_Pathways_and_Coupled_Reactions",
+          "stable_id": "cbab22b8-74af-5ad0-8966-812864835cfd"
+        },
+        {
+          "order": 6,
+          "title": "21.6: Strategies of Metabolism- Oxidized and Reduced Coenzymes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/21%3A_The_Generation_of_Biochemical_Energy/21.06%3A_Strategies_of_Metabolism-_Oxidized_and_Reduced_Coenzymes",
+          "stable_id": "a224154d-d5fb-5ba6-a28a-af7a5407d81a"
+        },
+        {
+          "order": 7,
+          "title": "21.7: The Citric Acid Cycle",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/21%3A_The_Generation_of_Biochemical_Energy/21.07%3A_The_Citric_Acid_Cycle",
+          "stable_id": "b8ba0231-d4fb-5b3f-bbfa-aa174da13cd4"
+        },
+        {
+          "order": 8,
+          "title": "21.8: The Electron-Transport Chain and ATP Production",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/21%3A_The_Generation_of_Biochemical_Energy/21.08%3A_The_Electron-Transport_Chain_and_ATP_Production",
+          "stable_id": "3bfd5224-a09a-5dae-9334-f7dd76bdb7b3"
+        }
+      ]
+    },
+    {
+      "order": 22,
+      "title": "22: Carbohydrate Metabolism",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/22%3A_Carbohydrate_Metabolism",
+      "stable_id": "5c5d0f98-240f-5c88-a4ad-45103b576f77",
+      "topics": [
+        {
+          "order": 1,
+          "title": "22.1: Digestion of Carbohydrates",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/22%3A_Carbohydrate_Metabolism/22.01%3A_Digestion_of_Carbohydrates",
+          "stable_id": "f08b7e0e-fac0-5d54-99f0-8d4365bf5ade"
+        },
+        {
+          "order": 2,
+          "title": "22.2: Glucose Metabolism - An Overview",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/22%3A_Carbohydrate_Metabolism/22.02%3A_Glucose_Metabolism_-_An_Overview",
+          "stable_id": "d55c04de-a5d0-56b9-881b-e3e35b0a693a"
+        },
+        {
+          "order": 3,
+          "title": "22.3: Glycolysis",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/22%3A_Carbohydrate_Metabolism/22.03%3A_Glycolysis",
+          "stable_id": "33bfe1df-194a-58fa-aff0-a57b2b81e49c"
+        },
+        {
+          "order": 4,
+          "title": "22.4: Entry of Other Sugars into Glycolysis",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/22%3A_Carbohydrate_Metabolism/22.04%3A_Entry_of_Other_Sugars_into_Glycolysis",
+          "stable_id": "8464a6fe-ccb9-5899-b6b6-af6db2c805c4"
+        },
+        {
+          "order": 5,
+          "title": "22.5: The Fate of Pyruvate",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/22%3A_Carbohydrate_Metabolism/22.05%3A_The_Fate_of_Pyruvate",
+          "stable_id": "d5c8856f-84c3-553b-9a17-6b7fb36e02fd"
+        },
+        {
+          "order": 6,
+          "title": "22.6: Energy Output in Complete Glucose Catabolism",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/22%3A_Carbohydrate_Metabolism/22.06%3A_Energy_Output_in_Complete_Glucose_Catabolism",
+          "stable_id": "2eca8209-20aa-5610-8a35-c7a7d63d193d"
+        },
+        {
+          "order": 7,
+          "title": "22.7: Regulation of Glucose Metabolism and Metabolism During Stress",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/22%3A_Carbohydrate_Metabolism/22.07%3A_Regulation_of_Glucose_Metabolism_and_Metabolism_During_Stress",
+          "stable_id": "300fffee-1f42-53ad-96f6-f01afa562e6c"
+        },
+        {
+          "order": 8,
+          "title": "22.8: Glycogen Metabolism- Glycogenesis and Glycogenolysis",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/22%3A_Carbohydrate_Metabolism/22.08%3A_Glycogen_Metabolism-_Glycogenesis_and_Glycogenolysis",
+          "stable_id": "e6eb9f46-5677-5d15-9455-e566ce07a18e"
+        },
+        {
+          "order": 9,
+          "title": "22.9: Gluconeogenesis- Glucose Synthesis from Noncarbohydrates",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/22%3A_Carbohydrate_Metabolism/22.09%3A_Gluconeogenesis-_Glucose_Synthesis_from_Noncarbohydrates",
+          "stable_id": "6d7bf873-c8e8-5b97-b346-126563339dc0"
+        }
+      ]
+    },
+    {
+      "order": 23,
+      "title": "23: Lipids",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/23%3A_Lipids",
+      "stable_id": "f5ee8546-bf2b-5233-9287-61039a117e10",
+      "topics": [
+        {
+          "order": 1,
+          "title": "23.1: Structure and Classification of Lipids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/23%3A_Lipids/23.01%3A_Structure_and_Classification_of_Lipids",
+          "stable_id": "fd54a8d4-5ed8-548b-838a-86eead6881c6"
+        },
+        {
+          "order": 2,
+          "title": "23.2: Fatty Acids and Their Esters",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/23%3A_Lipids/23.02%3A_Fatty_Acids_and_Their_Esters",
+          "stable_id": "aea6ec64-4efd-5272-8ce3-4ac54fee0729"
+        },
+        {
+          "order": 3,
+          "title": "23.3: Properties of Fats and Oils",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/23%3A_Lipids/23.03%3A_Properties_of_Fats_and_Oils",
+          "stable_id": "76e4b378-0766-5ffc-8009-48e73945ad65"
+        },
+        {
+          "order": 4,
+          "title": "23.4: Chemical Reactions of Triacylglycerols",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/23%3A_Lipids/23.04%3A_Chemical_Reactions_of_Triacylglycerols",
+          "stable_id": "354e2638-6325-51d0-827f-408b783e27ed"
+        },
+        {
+          "order": 5,
+          "title": "23.5: Phospholipids and Glycolipids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/23%3A_Lipids/23.05%3A_Phospholipids_and_Glycolipids",
+          "stable_id": "df9c0bb6-8f78-55d6-b9da-eef35d2af7ec"
+        },
+        {
+          "order": 6,
+          "title": "23.6: Steroids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/23%3A_Lipids/23.06%3A_Steroids",
+          "stable_id": "fb108307-b375-5c6e-9b03-93d1dd9a69d8"
+        },
+        {
+          "order": 7,
+          "title": "23.7: Cell Membranes- Structure and Transport",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/23%3A_Lipids/23.07%3A_Cell_Membranes-_Structure_and_Transport",
+          "stable_id": "1fc60311-bdf8-5a9d-9c7a-26c94f323e1c"
+        }
+      ]
+    },
+    {
+      "order": 24,
+      "title": "24: Lipid Metabolism",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/24%3A_Lipid_Metabolism",
+      "stable_id": "2a48acf0-73da-5ff8-b8ca-7231f89e25d1",
+      "topics": [
+        {
+          "order": 1,
+          "title": "24.1: Digestion of Triacylglycerols",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/24%3A_Lipid_Metabolism/24.01%3A_Digestion_of_Triacylglycerols",
+          "stable_id": "662717dd-5a2c-5743-bce8-ac10e808398c"
+        },
+        {
+          "order": 2,
+          "title": "24.2: Lipoproteins for Lipid Transport",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/24%3A_Lipid_Metabolism/24.02%3A_Lipoproteins_for_Lipid_Transport",
+          "stable_id": "2e539d94-523d-5590-8daa-35abd024ae70"
+        },
+        {
+          "order": 3,
+          "title": "24.3: Triacylglycerol Metabolism - An Overview",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/24%3A_Lipid_Metabolism/24.03%3A_Triacylglycerol_Metabolism_-_An_Overview",
+          "stable_id": "c9a9c666-d9ad-58c6-b1bc-105a5be54720"
+        },
+        {
+          "order": 4,
+          "title": "24.4: Storage and Mobilization of Triacylglycerols",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/24%3A_Lipid_Metabolism/24.04%3A_Storage_and_Mobilization_of_Triacylglycerols",
+          "stable_id": "bd382f1f-8bbb-5537-bc2b-0fce5bc8fcae"
+        },
+        {
+          "order": 5,
+          "title": "24.5: Oxidation of Fatty Acids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/24%3A_Lipid_Metabolism/24.05%3A_Oxidation_of_Fatty_Acids",
+          "stable_id": "6418f5de-2566-5972-a27d-c98e53f6c43d"
+        },
+        {
+          "order": 6,
+          "title": "24.6: Ketone Bodies and Ketoacidosis",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/24%3A_Lipid_Metabolism/24.06%3A_Ketone_Bodies_and_Ketoacidosis",
+          "stable_id": "4002e726-efb7-53b8-872a-127fd8b8aaed"
+        },
+        {
+          "order": 7,
+          "title": "24.7: Biosynthesis of Fatty Acids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/24%3A_Lipid_Metabolism/24.07%3A_Biosynthesis_of_Fatty_Acids",
+          "stable_id": "8ee31d3b-6838-55d9-9f0f-67d2d2a05300"
+        }
+      ]
+    },
+    {
+      "order": 25,
+      "title": "25: Protein and Amino Acid Metabolism",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/25%3A_Protein_and_Amino_Acid_Metabolism",
+      "stable_id": "93ef99b1-2c88-571e-9912-89df93794e90",
+      "topics": [
+        {
+          "order": 1,
+          "title": "25.1: Digestion of Proteins",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/25%3A_Protein_and_Amino_Acid_Metabolism/25.01%3A_Digestion_of_Proteins",
+          "stable_id": "88d9d877-29ab-5974-8cd9-7883d312cd61"
+        },
+        {
+          "order": 2,
+          "title": "25.2: Amino Acid Metabolism - An Overview",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/25%3A_Protein_and_Amino_Acid_Metabolism/25.02%3A_Amino_Acid_Metabolism_-_An_Overview",
+          "stable_id": "2292ff2e-2292-5f37-a199-73b67fa48e76"
+        },
+        {
+          "order": 3,
+          "title": "25.3: Amino Acid Catabolism - The Amino Group",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/25%3A_Protein_and_Amino_Acid_Metabolism/25.03%3A_Amino_Acid_Catabolism_-_The_Amino_Group",
+          "stable_id": "f8edfdea-4d89-564d-99a9-a906b23ef4c4"
+        },
+        {
+          "order": 4,
+          "title": "25.4: The Urea Cycle",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/25%3A_Protein_and_Amino_Acid_Metabolism/25.04%3A_The_Urea_Cycle",
+          "stable_id": "2d64bb3b-5c4b-57ea-8bc5-aaaeec3896fc"
+        },
+        {
+          "order": 5,
+          "title": "25.5: Amino Acid Catabolism - The Carbon Atoms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/25%3A_Protein_and_Amino_Acid_Metabolism/25.05%3A_Amino_Acid_Catabolism_-_The_Carbon_Atoms",
+          "stable_id": "de5050ce-8924-586f-b54a-02ae6059295f"
+        },
+        {
+          "order": 6,
+          "title": "25.6: Biosynthesis of Nonessential Amino Acids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/25%3A_Protein_and_Amino_Acid_Metabolism/25.06%3A_Biosynthesis_of_Nonessential_Amino_Acids",
+          "stable_id": "84f65f37-cdfa-5ad1-b0a4-6acd74d0c75e"
+        }
+      ]
+    },
+    {
+      "order": 26,
+      "title": "26: Nucleic Acids and Protein Synthesis",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/26%3A_Nucleic_Acids_and_Protein_Synthesis",
+      "stable_id": "22f95f79-3d3a-5d55-9e6f-3670fb384a96",
+      "topics": [
+        {
+          "order": 1,
+          "title": "26.1: DNA, Chromosomes, and Genes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/26%3A_Nucleic_Acids_and_Protein_Synthesis/26.01%3A_DNA_Chromosomes_and_Genes",
+          "stable_id": "31e2354c-04a2-5937-b55d-d428f91c1390"
+        },
+        {
+          "order": 2,
+          "title": "26.2: Composition of Nucleic Acids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/26%3A_Nucleic_Acids_and_Protein_Synthesis/26.02%3A_Composition_of_Nucleic_Acids",
+          "stable_id": "622e58a4-6c5d-5566-a36f-a053bb899c81"
+        },
+        {
+          "order": 3,
+          "title": "26.3: The Structure of Nucleic Acid Chains",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/26%3A_Nucleic_Acids_and_Protein_Synthesis/26.03%3A_The_Structure_of_Nucleic_Acid_Chains",
+          "stable_id": "0c3d95d8-7481-5969-a137-44ea960b3039"
+        },
+        {
+          "order": 4,
+          "title": "26.4: Base Pairing in DNA- The Watson-Crick Model",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/26%3A_Nucleic_Acids_and_Protein_Synthesis/26.04%3A_Base_Pairing_in_DNA-_The_Watson-Crick_Model",
+          "stable_id": "dd2afd0b-e03d-51bb-aac8-1a8d54b32c5c"
+        },
+        {
+          "order": 5,
+          "title": "26.5: Nucleic Acids and Heredity",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/26%3A_Nucleic_Acids_and_Protein_Synthesis/26.05%3A_Nucleic_Acids_and_Heredity",
+          "stable_id": "69c98c38-c5d2-5ac2-9326-97d4ed7cea58"
+        },
+        {
+          "order": 6,
+          "title": "26.6: Replication of DNA",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/26%3A_Nucleic_Acids_and_Protein_Synthesis/26.06%3A_Replication_of_DNA",
+          "stable_id": "6563bf6b-7607-5d40-a819-714f85711c35"
+        },
+        {
+          "order": 7,
+          "title": "26.7: Structure and Function of RNA",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/26%3A_Nucleic_Acids_and_Protein_Synthesis/26.07%3A_Structure_and_Function_of_RNA",
+          "stable_id": "6febc5cb-3c49-5e93-b378-488e41748257"
+        },
+        {
+          "order": 8,
+          "title": "26.8: Transcription - RNA Synthesis",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/26%3A_Nucleic_Acids_and_Protein_Synthesis/26.08%3A_Transcription_-_RNA_Synthesis",
+          "stable_id": "2bcd0bdb-fd94-5fab-8fb3-54653e058de0"
+        },
+        {
+          "order": 9,
+          "title": "26.9: The Genetic Code",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/26%3A_Nucleic_Acids_and_Protein_Synthesis/26.09%3A_The_Genetic_Code",
+          "stable_id": "2f2ecad9-3d5b-535b-8d6c-6f924a6147e3"
+        },
+        {
+          "order": 10,
+          "title": "26.10: Translation- tRNA and Protein Synthesis",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/26%3A_Nucleic_Acids_and_Protein_Synthesis/26.10%3A_Translation-_tRNA_and_Protein_Synthesis",
+          "stable_id": "2668be55-3846-54d8-bee0-50c0c5004710"
+        }
+      ]
+    },
+    {
+      "order": 27,
+      "title": "27: Genomics",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/27%3A_Genomics",
+      "stable_id": "c1f7881b-a18e-58f2-b8eb-fef9797fddc7",
+      "topics": [
+        {
+          "order": 1,
+          "title": "27.1: Mapping the Human Genome",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/27%3A_Genomics/27.01%3A_Mapping_the_Human_Genome",
+          "stable_id": "3d92cb44-aec2-5a14-89b8-c91e4a961779"
+        },
+        {
+          "order": 2,
+          "title": "27.2: DNA and Chromosomes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/27%3A_Genomics/27.02%3A_DNA_and_Chromosomes",
+          "stable_id": "9da912e2-ddf1-5b1b-b198-9612ca438612"
+        },
+        {
+          "order": 3,
+          "title": "27.3: Mutations and Polymorphisms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/27%3A_Genomics/27.03%3A_Mutations_and_Polymorphisms",
+          "stable_id": "d98636aa-f0f9-5557-a7e9-b8e748bb7d15"
+        },
+        {
+          "order": 4,
+          "title": "27.4: Recombinant DNA",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/27%3A_Genomics/27.04%3A_Recombinant_DNA",
+          "stable_id": "06af73e1-aadc-5496-813f-e5abadc30fbb"
+        },
+        {
+          "order": 5,
+          "title": "27.5: Genomics- Using What We Know",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/27%3A_Genomics/27.05%3A_Genomics-_Using_What_We_Know",
+          "stable_id": "cde80e2b-afd4-5c63-84c3-56e8ffafc107"
+        }
+      ]
+    },
+    {
+      "order": 28,
+      "title": "28: Chemical Messengers- Hormones, Neurotransmitters, and Drugs",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/28%3A_Chemical_Messengers-_Hormones_Neurotransmitters_and_Drugs",
+      "stable_id": "2607e0dd-9e5d-53e8-98f1-4d2cbc5f541e",
+      "topics": [
+        {
+          "order": 1,
+          "title": "28.1: Messenger Molecules",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/28%3A_Chemical_Messengers-_Hormones_Neurotransmitters_and_Drugs/28.01%3A_Messenger_Molecules",
+          "stable_id": "cfd144a3-e611-5ad5-aeab-eea9061dadc1"
+        },
+        {
+          "order": 2,
+          "title": "28.2: Hormones and the Endocrine System",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/28%3A_Chemical_Messengers-_Hormones_Neurotransmitters_and_Drugs/28.02%3A_Hormones_and_the_Endocrine_System",
+          "stable_id": "57a6e845-417b-54dc-a4e7-894e6845dce9"
+        },
+        {
+          "order": 3,
+          "title": "28.3: How Hormones Work - Epinephrine and Fight-or-Flight",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/28%3A_Chemical_Messengers-_Hormones_Neurotransmitters_and_Drugs/28.03%3A_How_Hormones_Work_-_Epinephrine_and_Fight-or-Flight",
+          "stable_id": "82558fdc-cbe4-57e2-bef9-8ec0e31266de"
+        },
+        {
+          "order": 4,
+          "title": "28.4: Amino Acid Derivatives and Polypeptides as Hormones",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/28%3A_Chemical_Messengers-_Hormones_Neurotransmitters_and_Drugs/28.04%3A_Amino_Acid_Derivatives_and_Polypeptides_as_Hormones",
+          "stable_id": "fcddf464-4f8a-5644-9a0f-c9fc54b6b817"
+        },
+        {
+          "order": 5,
+          "title": "28.5: Neurotransmitters",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/28%3A_Chemical_Messengers-_Hormones_Neurotransmitters_and_Drugs/28.05%3A_Neurotransmitters",
+          "stable_id": "2ffc2f0b-e40f-5e07-bb33-6087db64cc51"
+        },
+        {
+          "order": 6,
+          "title": "28.6: How Neurotransmitters Work- Acetylcholine, Its Agonists and Antagonists",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/28%3A_Chemical_Messengers-_Hormones_Neurotransmitters_and_Drugs/28.06%3A_How_Neurotransmitters_Work-_Acetylcholine_Its_Agonists_and_Antagonists",
+          "stable_id": "fb7b1d0a-2983-5d66-b840-773d479de51e"
+        },
+        {
+          "order": 7,
+          "title": "28.7: Histamines, Antihistamines, and Important Neurotransmitters",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/28%3A_Chemical_Messengers-_Hormones_Neurotransmitters_and_Drugs/28.07%3A_Histamines_Antihistamines_and_Important_Neurotransmitters",
+          "stable_id": "602e570a-ccea-58f3-8a72-f749b8e75ca9"
+        }
+      ]
+    },
+    {
+      "order": 29,
+      "title": "29: Body Fluids",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/29%3A_Body_Fluids",
+      "stable_id": "c87b2b06-620c-570f-be54-f5d8a20fc993",
+      "topics": [
+        {
+          "order": 1,
+          "title": "29.1: Body Water and Its Solutes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/29%3A_Body_Fluids/29.01%3A_Body_Water_and_Its_Solutes",
+          "stable_id": "68cfb2a1-8d25-5080-881f-729ba67d3e9f"
+        },
+        {
+          "order": 2,
+          "title": "29.2: Fluid Balance",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/29%3A_Body_Fluids/29.02%3A_Fluid_Balance",
+          "stable_id": "d52b4445-1580-5854-adf5-be38dd878414"
+        },
+        {
+          "order": 3,
+          "title": "29.3: Blood",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/29%3A_Body_Fluids/29.03%3A_Blood",
+          "stable_id": "d67743e4-e726-5989-a05d-1cf538727c1d"
+        },
+        {
+          "order": 4,
+          "title": "29.4: Plasma Proteins, White Blood Cells, and Immunity",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/29%3A_Body_Fluids/29.04%3A_Plasma_Proteins_White_Blood_Cells_and_Immunity",
+          "stable_id": "5b10af53-6019-501f-97ea-1755bf829333"
+        },
+        {
+          "order": 5,
+          "title": "29.5: Blood Clotting",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/29%3A_Body_Fluids/29.05%3A_Blood_Clotting",
+          "stable_id": "8ac89172-d8c3-5cd5-9c83-d6eaa4f650e3"
+        },
+        {
+          "order": 6,
+          "title": "29.6: Red Blood Cells and Blood Gases",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/29%3A_Body_Fluids/29.06%3A_Red_Blood_Cells_and_Blood_Gases",
+          "stable_id": "5eba6991-57dc-543e-a77b-235eef8d6b54"
+        },
+        {
+          "order": 7,
+          "title": "29.7: The Kidney and Urine Formation",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/29%3A_Body_Fluids/29.07%3A_The_Kidney_and_Urine_Formation",
+          "stable_id": "a2aeb758-324a-53a9-b31b-bdf374781ea2"
+        },
+        {
+          "order": 8,
+          "title": "29.8: Urine Composition and Function",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/29%3A_Body_Fluids/29.08%3A_Urine_Composition_and_Function",
+          "stable_id": "2fcdadd4-d82a-58ac-9b85-d8abc349c6c2"
+        }
+      ]
+    }
+  ]
+}

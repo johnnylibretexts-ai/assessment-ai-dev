@@ -27,7 +27,7 @@
 
     <section class="panel review-pane">
       <div class="card-topline">
-        <span class="status status-{{ draft.status }}">{{ draft.status|replace('_', ' ') }}</span>
+        <span class="status status-{{ draft.status }}">{{ draft.status_label }}</span>
         <span class="muted">{{ draft.model_id }} · {{ draft.prompt_version }}</span>
       </div>
       <p class="eyebrow">Revised AI draft</p>
@@ -102,11 +102,108 @@
         <label for="reviewer_notes">Reviewer notes</label>
         <textarea id="reviewer_notes" name="reviewer_notes" rows="4">{{ draft.reviewer_notes }}</textarea>
         <div class="button-row">
-          <button type="submit" name="decision" value="ready_to_publish">Mark ready to publish</button>
+          <button type="submit" name="decision" value="ready_to_publish">Approve draft</button>
           <button class="secondary" type="submit" name="decision" value="rejected">Reject draft</button>
         </div>
-        <p class="help">“Ready to publish” is only a local review state. ADAPT publishing is disabled until its service identity and destination folder are provisioned.</p>
+        <p class="help">Approval records the human review decision. Publishing to ADAPT is a separate action below.</p>
       </form>
+
+      {% if draft.status == 'ready_to_publish' %}
+        <section class="publication-panel" aria-labelledby="publish-heading">
+          <p class="eyebrow">Publication</p>
+          <h3 id="publish-heading">Publish this approved revision</h3>
+          <dl class="publication-facts">
+            <div><dt>Destination</dt><dd>ADAPT shared question bank</dd></div>
+            <div><dt>Folder</dt><dd>{{ adapt_folder_name }}</dd></div>
+            <div><dt>Visibility</dt><dd>{% if adapt_public %}Public in ADAPT{% else %}Private{% endif %}</dd></div>
+          </dl>
+          <form method="post" action="/drafts/{{ draft.id }}/publish">
+            {% if mapped_license %}
+              <div class="license-evidence">
+                <strong>Source license: {{ mapped_license.label }}</strong>
+                <p>This verified book-level license is enforced and cannot be overridden.</p>
+                <a href="{{ mapped_license.evidence_url }}" target="_blank" rel="noopener noreferrer">Open license evidence</a>
+              </div>
+            {% else %}
+              <fieldset>
+                <legend>Source license</legend>
+                <label>License
+                  <select name="license_code" required>
+                    <option value="">Choose a license</option>
+                    {% for code, label in manual_license_options %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+                  </select>
+                </label>
+                <label>License version
+                  <input name="license_version" placeholder="For example, 4.0">
+                </label>
+                <label>Display label
+                  <input name="license_label" placeholder="For example, CC BY 4.0" required>
+                </label>
+                <label>Evidence URL
+                  <input name="license_evidence_url" type="url" required>
+                </label>
+                <label class="check">
+                  <input type="checkbox" name="license_confirmed" value="true" required>
+                  <span>I verified this license against the source.</span>
+                </label>
+              </fieldset>
+            {% endif %}
+            <label for="topic_stable_id">Curated Chemistry framework topic</label>
+            <select id="topic_stable_id" name="topic_stable_id" required>
+              <option value="">Choose a topic</option>
+              {% for group in topic_groups %}
+                <optgroup label="{{ group.title }}">
+                  {% for topic in group.topics %}
+                    <option value="{{ topic.stable_id }}" {% if topic.stable_id == suggested_topic_id %}selected{% endif %}>{{ topic.title }}</option>
+                  {% endfor %}
+                </optgroup>
+              {% endfor %}
+            </select>
+            <label class="check">
+              <input type="checkbox" name="alignment_confirmed" value="true" required>
+              <span>I confirmed that this framework topic accurately matches the question.</span>
+            </label>
+            <button type="submit" {% if adapt_publishing_status != 'configured' %}disabled{% endif %}>Publish to ADAPT</button>
+            {% if adapt_publishing_status == 'disabled' %}
+              <p class="help">ADAPT publishing is disabled during rollout verification.</p>
+            {% elif adapt_publishing_status == 'misconfigured' %}
+              <p class="help error-text">ADAPT publishing is enabled but its runtime configuration is incomplete.</p>
+            {% else %}
+              <p class="help">Creates one public item in the shared question bank and an immutable QTI 3.0.1 package. It does not change the textbook or any assignment.</p>
+            {% endif %}
+          </form>
+        </section>
+      {% endif %}
+
+      {% if draft.publications %}
+        <section class="publication-history" aria-labelledby="publication-history-heading">
+          <h3 id="publication-history-heading">Publication history</h3>
+          {% for publication in draft.publications %}
+            <article class="publication-record state-{{ publication.state }}">
+              <div class="card-topline">
+                <strong>
+                  {% if publication.state == 'succeeded' %}Published to ADAPT
+                  {% elif publication.state == 'adapt_created' %}ADAPT item created — QTI pending
+                  {% elif publication.state == 'unknown' %}Awaiting ADAPT reconciliation
+                  {% elif publication.state == 'failed' %}Publication failed
+                  {% else %}Publication pending{% endif %}
+                </strong>
+                <span class="muted">Revision {{ publication.edit_count }}</span>
+              </div>
+              {% if publication.adapt_question_id %}<p>ADAPT question ID: <strong>{{ publication.adapt_question_id }}</strong></p>{% endif %}
+              <p>{{ publication.topic }} · {{ publication.license_label }}</p>
+              {% if publication.finalized_at %}<p class="muted">Published {{ publication.finalized_at }}</p>{% endif %}
+              {% if publication.error_message %}<p class="error-text">{{ publication.error_message }}</p>{% endif %}
+              {% if publication.state == 'succeeded' %}
+                <div class="publication-links">
+                  <a href="https://adapt.libretexts.dev/all-questions/get" target="_blank" rel="noopener noreferrer">Open ADAPT shared question bank</a>
+                  <a href="/drafts/{{ draft.id }}/publications/{{ publication.id }}/qti">Download QTI 3.0</a>
+                </div>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </section>
+      {% endif %}
     </section>
   </div>
 {% endblock %}

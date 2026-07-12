@@ -54,7 +54,7 @@
         {% for draft in drafts %}
           <a class="card" href="/drafts/{{ draft.id }}">
             <div class="card-topline">
-              <span class="status status-{{ draft.status }}">{{ draft.status|replace('_', ' ') }}</span>
+              <span class="status status-{{ draft.status }}">{{ draft.status_label }}</span>
               <span class="muted">{{ draft.source_type }} · #{{ draft.id }}</span>
             </div>
             <h3>{{ draft.source_title }}</h3>

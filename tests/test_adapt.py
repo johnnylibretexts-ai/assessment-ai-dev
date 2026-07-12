@@ -1,11 +1,20 @@
 import json
+from pathlib import Path
+
+import httpx
+import pytest
+from pydantic import SecretStr
 
 from app.adapt import (
+    AdaptClient,
     AdaptDestination,
+    AdaptPublishingError,
     FrameworkAlignment,
     FrameworkItem,
     build_mcq_payload,
 )
+from app.catalog import chemistry_seed, suggested_topic
+from app.config import Settings
 from app.schemas import BloomLevel, Choice, Difficulty, QuestionDraft
 
 
@@ -70,3 +79,141 @@ def test_alignment_is_omitted_when_not_selected() -> None:
         title="Energy draft",
     )
     assert "framework_item_sync_question" not in payload
+
+
+def adapt_settings(tmp_path: Path) -> Settings:
+    return Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path / 'adapt.db'}",
+        adapt_publishing_enabled=True,
+        adapt_password=SecretStr("top-secret-adapt-password"),
+        adapt_folder_id=42,
+    )
+
+
+@pytest.mark.asyncio
+async def test_adapt_client_caches_jwt_and_reauthenticates_once_after_401(
+    tmp_path: Path,
+) -> None:
+    calls = {"login": 0, "questions": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/login":
+            calls["login"] += 1
+            return httpx.Response(
+                200,
+                json={
+                    "token": f"token-{calls['login']}",
+                    "expires_in": 3600,
+                },
+            )
+        if request.url.path == "/api/questions":
+            calls["questions"] += 1
+            if calls["questions"] == 1:
+                return httpx.Response(401, json={"message": "expired"})
+            assert request.headers["authorization"] == "Bearer token-2"
+            return httpx.Response(200, json={"type": "success", "my_questions": []})
+        raise AssertionError(request.url)
+
+    client = AdaptClient(
+        adapt_settings(tmp_path), transport=httpx.MockTransport(handler)
+    )
+    try:
+        assert await client.find_question_by_tag("assessment-ai-key") is None
+        assert await client.find_question_by_tag("assessment-ai-key") is None
+    finally:
+        await client.aclose()
+    assert calls == {"login": 2, "questions": 3}
+
+
+@pytest.mark.asyncio
+async def test_adapt_client_validates_owned_folder_license_framework_and_text(
+    tmp_path: Path,
+) -> None:
+    topic = suggested_topic(
+        "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/"
+        "Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/"
+        "02%3A_Atoms_and_the_Periodic_Table/2.03%3A_Isotopes_and_Atomic_Weight"
+    )
+    assert topic is not None
+    framework = chemistry_seed()["framework"]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        responses = {
+            "/api/login": {
+                "token": "jwt",
+                "expires_in": 3600,
+            },
+            "/api/saved-questions-folders/options/my-questions-folders": {
+                "type": "success",
+                "my_questions_folders": [
+                    {"id": 42, "name": "Assessment AI — Approved"}
+                ],
+            },
+            "/api/questions/valid-licenses": {"licenses": ["ccbyncsa"]},
+            "/api/frameworks": {
+                "type": "success",
+                "frameworks": [
+                    {
+                        "id": 7,
+                        "title": framework["title"],
+                        "source_url": framework["source_url"],
+                    }
+                ],
+            },
+            "/api/frameworks/7": {
+                "type": "success",
+                "framework_levels": [
+                    {
+                        "id": 20,
+                        "level": 1,
+                        "parent_id": 0,
+                        "title": topic.chapter_title,
+                    },
+                    {
+                        "id": 23,
+                        "level": 2,
+                        "parent_id": 20,
+                        "title": topic.title,
+                    },
+                ],
+            },
+        }
+        return httpx.Response(200, json=responses[request.url.path])
+
+    client = AdaptClient(
+        adapt_settings(tmp_path), transport=httpx.MockTransport(handler)
+    )
+    try:
+        resolved = await client.resolve_destination(
+            license_code="ccbyncsa", topic_stable_id=topic.stable_id
+        )
+    finally:
+        await client.aclose()
+    assert resolved.framework_id == 7
+    assert resolved.chapter.id == 20
+    assert resolved.topic.id == 23
+    assert resolved.topic_stable_id == topic.stable_id
+
+
+@pytest.mark.asyncio
+async def test_adapt_client_errors_never_expose_password_or_raw_body(
+    tmp_path: Path,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert b"top-secret-adapt-password" in request.content
+        return httpx.Response(
+            401,
+            text="top-secret-adapt-password raw provider internals",
+        )
+
+    client = AdaptClient(
+        adapt_settings(tmp_path), transport=httpx.MockTransport(handler)
+    )
+    try:
+        with pytest.raises(AdaptPublishingError) as caught:
+            await client.find_question_by_tag("tag")
+    finally:
+        await client.aclose()
+    assert "top-secret-adapt-password" not in str(caught.value)
+    assert "raw provider internals" not in str(caught.value)

@@ -1,5 +1,5 @@
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from app.config import Settings
 
@@ -55,3 +55,33 @@ def test_normalizes_provider_order_and_reads_gemini_alias(
 def test_rejects_invalid_provider_order(provider_order: str) -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, llm_provider_order=provider_order)
+
+
+def test_adapt_publishing_health_state_is_independent_and_requires_full_config() -> (
+    None
+):
+    disabled = Settings(_env_file=None)
+    assert disabled.adapt_publishing_status == "disabled"
+    incomplete = Settings(_env_file=None, adapt_publishing_enabled=True)
+    assert incomplete.adapt_publishing_status == "misconfigured"
+    configured = Settings(
+        _env_file=None,
+        adapt_publishing_enabled=True,
+        adapt_password=SecretStr("secret"),
+        adapt_folder_id=42,
+    )
+    assert configured.adapt_publishing_status == "configured"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://adapt.libretexts.org/api",
+        "http://adapt.libretexts.dev/api",
+        "https://adapt.libretexts.dev:443/api",
+        "https://adapt.libretexts.dev/not-api",
+    ],
+)
+def test_adapt_target_is_pinned_to_the_dev_api(url: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, adapt_base_url=url)
