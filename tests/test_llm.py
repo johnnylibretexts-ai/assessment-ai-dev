@@ -357,6 +357,110 @@ async def test_gemini_uses_api_key_and_native_json_schema() -> None:
 
 
 @pytest.mark.asyncio
+async def test_gemini_retries_transient_network_failure() -> None:
+    calls = 0
+    delays: list[float] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise httpx.ConnectError("temporary network failure", request=request)
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": '{"answer":"recovered","confidence":1}'}]
+                        }
+                    }
+                ]
+            },
+        )
+
+    async def record_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    client = GeminiClient(
+        settings(gemini_api_key="test-key", gemini_max_retries=1),
+        transport=httpx.MockTransport(handler),
+        sleep=record_sleep,
+    )
+    try:
+        result = await client.complete("Recover from a transient request.", Answer)
+    finally:
+        await client.aclose()
+
+    assert result.value.answer == "recovered"
+    assert calls == 2
+    assert delays == [0.5]
+
+
+@pytest.mark.asyncio
+async def test_gemini_retries_retryable_http_status() -> None:
+    calls = 0
+    delays: list[float] = []
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(503, json={"error": {"status": "UNAVAILABLE"}})
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": '{"answer":"recovered","confidence":1}'}]
+                        }
+                    }
+                ]
+            },
+        )
+
+    async def record_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    client = GeminiClient(
+        settings(gemini_api_key="test-key", gemini_max_retries=1),
+        transport=httpx.MockTransport(handler),
+        sleep=record_sleep,
+    )
+    try:
+        result = await client.complete("Recover from an unavailable response.", Answer)
+    finally:
+        await client.aclose()
+
+    assert result.value.answer == "recovered"
+    assert calls == 2
+    assert delays == [0.5]
+
+
+@pytest.mark.asyncio
+async def test_gemini_does_not_retry_non_transient_http_error() -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(400, json={"error": {"status": "INVALID_ARGUMENT"}})
+
+    client = GeminiClient(
+        settings(gemini_api_key="test-key", gemini_max_retries=2),
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(LLMTransportError, match="HTTP 400"):
+            await client.complete("Do not retry a bad request.", Answer)
+    finally:
+        await client.aclose()
+
+    assert calls == 1
+
+
+@pytest.mark.asyncio
 async def test_gemini_safety_block_is_bounded_and_safe() -> None:
     calls = 0
 
