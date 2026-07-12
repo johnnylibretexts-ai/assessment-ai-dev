@@ -13,7 +13,7 @@
   {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
 
   <section class="panel">
-    <h2>Generate a cited MCQ</h2>
+    <h2>Generate cited assessment items</h2>
     <form method="post" action="/generate" class="generate-form">
       <input type="hidden" name="source_type" value="public">
       <label for="source_locator">Public LibreTexts page URL</label>
@@ -28,13 +28,46 @@
           </span>
         </button>
       </div>
+      {% if advanced_items_enabled %}
+        <fieldset class="generation-options">
+          <legend>What should Assessment AI create?</legend>
+          <div class="two-column">
+            <label>
+              Generation mode
+              <select name="generation_mode" id="generation_mode">
+                <option value="auto">Auto mix</option>
+                <option value="selected">Choose types</option>
+              </select>
+            </label>
+            <label>
+              Number of items
+              <input type="number" name="item_count" value="4" min="1" max="8">
+            </label>
+          </div>
+          <div class="item-type-grid" id="item-type-options" aria-describedby="item-type-help">
+            {% for item_type in item_type_options %}
+              <label class="check compact">
+                <input type="checkbox" name="item_types" value="{{ item_type }}">
+                <span>{{ item_type.replace('_', ' ') }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          <p id="item-type-help" class="help">Auto mix favors different interaction types appropriate for the source. Choose types to request specific formats.</p>
+          {% if hint_generation_enabled %}
+            <label class="check">
+              <input type="checkbox" name="include_hint_ladder" value="true" checked>
+              <span>Also draft conceptual, strategic, and specific cited hints.</span>
+            </label>
+          {% endif %}
+        </fieldset>
+      {% endif %}
       <div id="generation-status" class="generation-status" role="status"
            aria-live="polite" aria-atomic="true" hidden>
-        <strong>Generating your cited question</strong>
+        <strong>Starting your generation job</strong>
         <span class="generation-status-message">
           <span id="generation-status-message">Reading the LibreTexts page</span><span class="loading-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
         </span>
-        <span class="generation-status-note">This can take about a minute. Keep this page open.</span>
+        <span class="generation-status-note">{% if advanced_items_enabled %}You will move to a live progress page. The durable job can survive a page reload.{% else %}This can take about a minute. Keep this page open.{% endif %}</span>
       </div>
       <p id="source-help" class="help">
         Assessment AI reads one public page through LibreTexts’ credential-free read proxy; no book crawl or publishing occurs.

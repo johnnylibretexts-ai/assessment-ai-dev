@@ -114,6 +114,11 @@ def test_health_and_empty_queue_work_without_cloud_key(tmp_path: Path) -> None:
             "public_sources": "disabled",
             "sandbox_sources": "disabled",
             "adapt_publishing": "disabled",
+            "advanced_items": "disabled",
+            "parameterized_items": "disabled",
+            "hint_generation": "disabled",
+            "webwork": "disabled",
+            "imathas": "disabled",
         }
         readiness = client.get("/readyz")
         assert readiness.status_code == 503

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import posixpath
+import re
 import time
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
@@ -27,7 +28,9 @@ from sqlalchemy import (
     create_engine,
     delete,
     event,
+    inspect,
     select,
+    text,
     update,
 )
 from sqlalchemy.orm import (
@@ -46,6 +49,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from .schemas import (
     Concept,
     Critique,
+    HintLadderDraft,
     NormalizedPage,
     QuestionDraft,
     ReviewDecision,
@@ -140,6 +144,45 @@ review_status_enum = SAEnum(
     validate_strings=True,
     values_callable=lambda enum_type: [item.value for item in enum_type],
 )
+
+
+class GenerationJobStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class GenerationJob(Base):
+    """Durable queue record; workers can safely resume pending jobs."""
+
+    __tablename__ = "generation_jobs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    source_locator: Mapped[str] = mapped_column(String(4_096), nullable=False)
+    request_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    reviewer_identity: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), default=GenerationJobStatus.PENDING.value, nullable=False, index=True
+    )
+    stage: Mapped[str] = mapped_column(String(80), default="queued", nullable=False)
+    progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    draft_ids_json: Mapped[list[int]] = mapped_column(JSON, default=list, nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(100))
+    error_message: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+    @property
+    def draft_ids(self) -> tuple[int, ...]:
+        return tuple(int(item) for item in self.draft_ids_json)
 
 
 class SourceSnapshot(Base):
@@ -277,10 +320,101 @@ class Draft(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    hint_ladders: Mapped[list[HintLadderRecord]] = relationship(
+        back_populates="draft",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    engine_validations: Mapped[list[EngineValidationRecord]] = relationship(
+        back_populates="draft",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     @property
     def current(self) -> QuestionDraft:
         return QuestionDraft.model_validate(self.current_json)
+
+    @property
+    def current_hint_ladder(self) -> HintLadderRecord | None:
+        candidates = [
+            ladder
+            for ladder in self.hint_ladders
+            if ladder.edit_count == self.edit_count
+        ]
+        return max(candidates, key=lambda item: item.version, default=None)
+
+    @property
+    def current_engine_validation(self) -> EngineValidationRecord | None:
+        candidates = [
+            record
+            for record in self.engine_validations
+            if record.edit_count == self.edit_count
+        ]
+        return max(candidates, key=lambda item: item.id, default=None)
+
+
+class HintLadderRecord(Base):
+    """Append-only reviewed hint ladder for one immutable draft edit."""
+
+    __tablename__ = "hint_ladders"
+    __table_args__ = (
+        UniqueConstraint(
+            "draft_id",
+            "edit_count",
+            "version",
+            name="uq_hint_ladder_draft_edit_version",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    draft_id: Mapped[int] = mapped_column(
+        ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    edit_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    ladder_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    confirmations_json: Mapped[dict[str, bool]] = mapped_column(
+        JSON, default=dict, nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(30), default="ready_for_review", nullable=False, index=True
+    )
+    reviewer_notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    reviewed_by: Mapped[str | None] = mapped_column(String(255))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+    draft: Mapped[Draft] = relationship(back_populates="hint_ladders")
+
+    @property
+    def ladder(self) -> HintLadderDraft:
+        return HintLadderDraft.model_validate(self.ladder_json)
+
+
+class EngineValidationRecord(Base):
+    """Immutable fixed-seed validation evidence for an external-engine draft."""
+
+    __tablename__ = "engine_validation_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    draft_id: Mapped[int] = mapped_column(
+        ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    edit_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    engine: Mapped[str] = mapped_column(String(20), nullable=False)
+    compiler_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    source_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    seed_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    previews_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+    draft: Mapped[Draft] = relationship(back_populates="engine_validations")
 
 
 class LLMCall(Base):
@@ -322,6 +456,7 @@ class PublicationState(StrEnum):
     PENDING = "pending"
     UNKNOWN = "unknown"
     ADAPT_CREATED = "adapt_created"
+    HINTS_SYNCED = "hints_synced"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
 
@@ -357,6 +492,7 @@ class Publication(Base):
     framework_title: Mapped[str] = mapped_column(String(1_000), nullable=False)
     alignment_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     stable_topic_ids_json: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    hint_ladder_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
     publication_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -367,6 +503,7 @@ class Publication(Base):
     )
     adapt_question_id: Mapped[int | None] = mapped_column(Integer, index=True)
     adapt_page_id: Mapped[int | None] = mapped_column(Integer)
+    hints_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     qti_path: Mapped[str | None] = mapped_column(String(4_096))
     qti_sha256: Mapped[str | None] = mapped_column(String(64))
     qti_size: Mapped[int | None] = mapped_column(Integer)
@@ -422,6 +559,8 @@ class DraftWrite:
     raw: QuestionDraft | Mapping[str, Any]
     critique: Critique | Mapping[str, Any]
     revised: QuestionDraft | Mapping[str, Any]
+    hint_ladder: HintLadderDraft | Mapping[str, Any] | None = None
+    engine_validation: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -469,6 +608,23 @@ class Database:
 
     def create_schema(self) -> None:
         Base.metadata.create_all(self.engine)
+        if self.engine.dialect.name == "sqlite":
+            self._apply_sqlite_additive_migrations()
+
+    def _apply_sqlite_additive_migrations(self) -> None:
+        existing = {
+            column["name"] for column in inspect(self.engine).get_columns("publications")
+        }
+        additions = {
+            "hint_ladder_snapshot_json": "JSON",
+            "hints_synced_at": "DATETIME",
+        }
+        with self.engine.begin() as connection:
+            for name, data_type in additions.items():
+                if name not in existing:
+                    connection.execute(
+                        text(f"ALTER TABLE publications ADD COLUMN {name} {data_type}")
+                    )
 
     def dispose(self) -> None:
         self.engine.dispose()
@@ -540,6 +696,117 @@ class DraftRepository:
         self._sessions = (
             sessions.session_factory if isinstance(sessions, Database) else sessions
         )
+
+    def create_generation_job(
+        self,
+        *,
+        source_type: str,
+        source_locator: str,
+        request: Mapping[str, Any],
+        reviewer: str,
+    ) -> GenerationJob:
+        job_id = str(uuid4())
+        with self._sessions.begin() as session:
+            session.add(
+                GenerationJob(
+                    id=job_id,
+                    source_type=source_type,
+                    source_locator=source_locator,
+                    request_json=_json_value(request),
+                    reviewer_identity=_actor(reviewer),
+                )
+            )
+        return self.require_generation_job(job_id)
+
+    def get_generation_job(self, job_id: str) -> GenerationJob | None:
+        with self._sessions() as session:
+            return session.get(GenerationJob, job_id)
+
+    def require_generation_job(self, job_id: str) -> GenerationJob:
+        job = self.get_generation_job(job_id)
+        if job is None:
+            raise DraftNotFoundError("generation job was not found")
+        return job
+
+    def claim_next_generation_job(self) -> GenerationJob | None:
+        with self._sessions.begin() as session:
+            job = session.scalar(
+                select(GenerationJob)
+                .where(GenerationJob.status == GenerationJobStatus.PENDING.value)
+                .order_by(GenerationJob.created_at, GenerationJob.id)
+            )
+            if job is None:
+                return None
+            result = session.execute(
+                update(GenerationJob)
+                .where(
+                    GenerationJob.id == job.id,
+                    GenerationJob.status == GenerationJobStatus.PENDING.value,
+                )
+                .values(
+                    status=GenerationJobStatus.RUNNING.value,
+                    stage="fetching_source",
+                    progress=5,
+                    started_at=utc_now(),
+                    updated_at=utc_now(),
+                )
+            )
+            if result.rowcount != 1:
+                return None
+            job_id = job.id
+        return self.require_generation_job(job_id)
+
+    def update_generation_job(
+        self,
+        job_id: str,
+        *,
+        status: GenerationJobStatus | None = None,
+        stage: str | None = None,
+        progress: int | None = None,
+        draft_ids: Sequence[int] | None = None,
+        error_code: str | None = None,
+        error_message: str | None = None,
+    ) -> GenerationJob:
+        if progress is not None and not 0 <= progress <= 100:
+            raise ValueError("job progress must be between 0 and 100")
+        with self._sessions.begin() as session:
+            job = session.get(GenerationJob, job_id)
+            if job is None:
+                raise DraftNotFoundError("generation job was not found")
+            if status is not None:
+                job.status = status.value
+            if stage is not None:
+                job.stage = stage[:80]
+            if progress is not None:
+                job.progress = progress
+            if draft_ids is not None:
+                job.draft_ids_json = [int(item) for item in draft_ids]
+            job.error_code = error_code
+            job.error_message = (
+                " ".join(error_message.split())[:500] if error_message else None
+            )
+            job.updated_at = utc_now()
+            if status in {
+                GenerationJobStatus.SUCCEEDED,
+                GenerationJobStatus.FAILED,
+            }:
+                job.completed_at = utc_now()
+        return self.require_generation_job(job_id)
+
+    def requeue_interrupted_generation_jobs(self) -> int:
+        with self._sessions.begin() as session:
+            result = session.execute(
+                update(GenerationJob)
+                .where(GenerationJob.status == GenerationJobStatus.RUNNING.value)
+                .values(
+                    status=GenerationJobStatus.PENDING.value,
+                    stage="queued_after_restart",
+                    progress=0,
+                    started_at=None,
+                    updated_at=utc_now(),
+                )
+            )
+            return int(result.rowcount or 0)
 
     def find_completed_generation(
         self,
@@ -733,6 +1000,42 @@ class DraftRepository:
             for stored in stored_drafts:
                 draft_ids_by_position[stored.position] = stored.id
 
+            for draft_write in drafts:
+                if draft_write.hint_ladder is None:
+                    continue
+                ladder = HintLadderDraft.model_validate(
+                    _json_value(draft_write.hint_ladder)
+                )
+                ladder = _analyze_hint_leaks(draft_write.revised, ladder)
+                session.add(
+                    HintLadderRecord(
+                        draft_id=draft_ids_by_position[draft_write.position],
+                        edit_count=0,
+                        version=1,
+                        ladder_json=ladder.model_dump(mode="json"),
+                        confirmations_json={
+                            rung.rung.value: False for rung in ladder.rungs
+                        },
+                    )
+                )
+
+            for draft_write in drafts:
+                if draft_write.engine_validation is None:
+                    continue
+                validation = dict(draft_write.engine_validation)
+                session.add(
+                    EngineValidationRecord(
+                        draft_id=draft_ids_by_position[draft_write.position],
+                        edit_count=0,
+                        engine=str(validation["engine"]),
+                        compiler_version=str(validation["compiler_version"]),
+                        source_sha256=str(validation["source_sha256"]),
+                        seed_count=int(validation["seed_count"]),
+                        previews_json=list(validation["previews"]),
+                        status="passed",
+                    )
+                )
+
             for call in llm_calls:
                 if (
                     call.draft_position is not None
@@ -798,6 +1101,8 @@ class DraftRepository:
                     selectinload(Draft.source),
                     selectinload(Draft.llm_calls),
                     selectinload(Draft.publications),
+                    selectinload(Draft.hint_ladders),
+                    selectinload(Draft.engine_validations),
                 )
                 .where(Draft.id == draft_id)
             )
@@ -817,7 +1122,12 @@ class DraftRepository:
         query = (
             select(Draft)
             .join(Draft.source)
-            .options(selectinload(Draft.source), selectinload(Draft.llm_calls))
+            .options(
+                selectinload(Draft.source),
+                selectinload(Draft.llm_calls),
+                selectinload(Draft.hint_ladders),
+                selectinload(Draft.engine_validations),
+            )
             .order_by(SourceSnapshot.updated_at.desc(), Draft.position, Draft.id)
         )
         if status is not None:
@@ -852,6 +1162,15 @@ class DraftRepository:
                 draft.reviewer_notes = notes
                 draft.status = ReviewStatus.READY_FOR_REVIEW
                 _clear_confirmations(draft)
+                validation = _engine_validation_for(validated)
+                if validation is not None:
+                    session.add(
+                        EngineValidationRecord(
+                            draft_id=draft.id,
+                            edit_count=draft.edit_count,
+                            **validation,
+                        )
+                    )
                 draft.review_history_json = [
                     *draft.review_history_json,
                     {
@@ -868,6 +1187,97 @@ class DraftRepository:
                 "the draft changed during editing; reload it before saving"
             ) from None
         return self.require_draft(draft_id)
+
+    def save_hint_ladder(
+        self,
+        draft_id: int,
+        ladder: HintLadderDraft | Mapping[str, Any],
+        *,
+        editor: str,
+        notes: str = "",
+    ) -> HintLadderRecord:
+        actor = _actor(editor)
+        validated = HintLadderDraft.model_validate(_json_value(ladder))
+        with self._sessions.begin() as session:
+            draft = session.get(Draft, draft_id)
+            if draft is None:
+                raise DraftNotFoundError(f"draft {draft_id} was not found")
+            question = QuestionDraft.model_validate(draft.current_json)
+            validated = _analyze_hint_leaks(question, validated)
+            _validate_hint_ladder(question, validated)
+            previous = session.scalars(
+                select(HintLadderRecord).where(
+                    HintLadderRecord.draft_id == draft.id,
+                    HintLadderRecord.edit_count == draft.edit_count,
+                )
+            ).all()
+            version = max((item.version for item in previous), default=0) + 1
+            record = HintLadderRecord(
+                draft_id=draft.id,
+                edit_count=draft.edit_count,
+                version=version,
+                ladder_json=validated.model_dump(mode="json"),
+                confirmations_json={rung.rung.value: False for rung in validated.rungs},
+                status="ready_for_review",
+                reviewer_notes=notes,
+                reviewed_by=actor,
+                reviewed_at=utc_now(),
+            )
+            session.add(record)
+            session.flush()
+            record_id = record.id
+        return self.require_hint_ladder(record_id)
+
+    def require_hint_ladder(self, ladder_id: int) -> HintLadderRecord:
+        with self._sessions() as session:
+            record = session.get(HintLadderRecord, ladder_id)
+            if record is None:
+                raise DraftNotFoundError(f"hint ladder {ladder_id} was not found")
+            return record
+
+    def review_hint_ladder(
+        self,
+        draft_id: int,
+        *,
+        reviewer: str,
+        confirmed_rungs: Sequence[str],
+        approved: bool,
+        notes: str = "",
+    ) -> HintLadderRecord:
+        actor = _actor(reviewer)
+        expected = {"conceptual", "strategic", "specific"}
+        confirmed = set(confirmed_rungs)
+        if not confirmed.issubset(expected):
+            raise ReviewGateError("unknown hint-rung confirmation")
+        with self._sessions.begin() as session:
+            draft = session.get(Draft, draft_id)
+            if draft is None:
+                raise DraftNotFoundError(f"draft {draft_id} was not found")
+            record = session.scalar(
+                select(HintLadderRecord)
+                .where(
+                    HintLadderRecord.draft_id == draft.id,
+                    HintLadderRecord.edit_count == draft.edit_count,
+                )
+                .order_by(HintLadderRecord.version.desc())
+            )
+            if record is None:
+                raise ReviewGateError("generate a hint ladder before reviewing it")
+            ladder = HintLadderDraft.model_validate(record.ladder_json)
+            _validate_hint_ladder(QuestionDraft.model_validate(draft.current_json), ladder)
+            if approved and confirmed != expected:
+                raise ReviewGateError("confirm all three hint rungs before approval")
+            if approved and any(rung.answer_leak_detected for rung in ladder.rungs):
+                raise ReviewGateError("resolve answer-leak flags before hint approval")
+            record.confirmations_json = {
+                rung: rung in confirmed for rung in sorted(expected)
+            }
+            record.status = "approved" if approved else "ready_for_review"
+            record.reviewer_notes = notes
+            record.reviewed_by = actor
+            record.reviewed_at = utc_now()
+            record_id = record.id
+        return self.require_hint_ladder(record_id)
 
     def create_or_get_publication(
         self, values: Mapping[str, Any]
@@ -923,6 +1333,7 @@ class DraftRepository:
         allowed = {
             "adapt_question_id",
             "adapt_page_id",
+            "hints_synced_at",
             "qti_path",
             "qti_sha256",
             "qti_size",
@@ -1217,6 +1628,88 @@ def _validate_persisted_question(draft: Draft, question: QuestionDraft) -> None:
             "draft cites paragraph(s) outside its selected concept source: "
             + ", ".join(str(index) for index in sorted(outside_concept))
         )
+
+
+def _validate_hint_ladder(
+    question: QuestionDraft, ladder: HintLadderDraft
+) -> None:
+    if ladder.concept_label.strip().casefold() != question.concept_label.strip().casefold():
+        raise DraftGroundingError("a hint ladder cannot change the selected concept")
+    allowed = set(question.citation_paragraphs)
+    for rung in ladder.rungs:
+        unavailable = set(rung.citation_paragraphs) - allowed
+        if unavailable:
+            raise DraftGroundingError(
+                f"{rung.rung.value} hint cites paragraph(s) outside the item source: "
+                + ", ".join(str(index) for index in sorted(unavailable))
+            )
+
+
+def _analyze_hint_leaks(
+    question: QuestionDraft, ladder: HintLadderDraft
+) -> HintLadderDraft:
+    analyzed = ladder.model_copy(deep=True)
+    answer_fragments = _answer_fragments(question)
+    for rung in analyzed.rungs:
+        normalized_hint = _normalized_answer_text(rung.text)
+        detected = any(
+            fragment and fragment in normalized_hint for fragment in answer_fragments
+        )
+        rung.answer_leak_detected = rung.answer_leak_detected or detected
+    return analyzed
+
+
+def _engine_validation_for(question: QuestionDraft) -> dict[str, Any] | None:
+    if question.item_type.value not in {"webwork", "imathas"}:
+        return None
+    from .parameterized import compile_parameterized_item
+
+    assert question.response.parameterized is not None
+    compiled = compile_parameterized_item(
+        question.response.parameterized, validation_seeds=25
+    )
+    return {
+        "engine": compiled.engine,
+        "compiler_version": compiled.compiler_version,
+        "source_sha256": compiled.source_sha256,
+        "seed_count": len(compiled.previews),
+        "previews_json": [
+            {
+                "seed": preview.seed,
+                "variables": preview.variables,
+                "prompt": preview.prompt,
+                "answer": preview.answer,
+                "explanation": preview.explanation,
+            }
+            for preview in compiled.previews
+        ],
+        "status": "passed",
+    }
+
+
+def _answer_fragments(question: QuestionDraft) -> set[str]:
+    fragments: set[str] = set()
+    for choice in question.choices:
+        if choice.correct:
+            normalized = _normalized_answer_text(choice.text)
+            if len(normalized) >= 8:
+                fragments.add(normalized)
+    response = question.response
+    if response.numeric_answer is not None:
+        fragments.add(_normalized_answer_text(f"{response.numeric_answer:g}"))
+    for blank in response.blanks:
+        normalized = _normalized_answer_text(blank.correct)
+        if len(normalized) >= 4:
+            fragments.add(normalized)
+    for pair in response.matching_pairs:
+        normalized = _normalized_answer_text(pair.target)
+        if len(normalized) >= 8:
+            fragments.add(normalized)
+    return fragments
+
+
+def _normalized_answer_text(value: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9.+-]+", value.casefold()))
 
 
 def _clear_confirmations(draft: Draft) -> None:

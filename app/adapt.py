@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.catalog import chemistry_seed, curated_topics
 from app.config import Settings
-from app.schemas import QuestionDraft
+from app.schemas import AssessmentItemType, BowTieGroup, Choice, QuestionDraft
 
 
 class FrameworkItem(BaseModel):
@@ -48,9 +48,33 @@ def build_mcq_payload(
     separate framework-sync POST endpoint.
     """
 
+    if draft.item_type != AssessmentItemType.MULTIPLE_CHOICE:
+        raise ValueError("build_mcq_payload accepts only multiple-choice drafts")
+    return build_assessment_payload(
+        draft,
+        destination=destination,
+        source_url=source_url,
+        title=title,
+        alignment=alignment,
+        tags=tags,
+    )
+
+
+def build_assessment_payload(
+    draft: QuestionDraft,
+    *,
+    destination: AdaptDestination,
+    source_url: str,
+    title: str,
+    alignment: FrameworkAlignment | None = None,
+    tags: list[str] | None = None,
+) -> dict[str, object]:
+    """Map a reviewed typed item to ADAPT's verified create contract."""
+
+    if draft.item_type in {AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS}:
+        raise ValueError("external-engine drafts use their dedicated publisher")
+
     prompt_html = f"<p>{escape(draft.stem)}</p>"
-    simple_choices: list[dict[str, object]] = []
-    feedback: dict[str, str] = {}
     payload: dict[str, object] = {
         "question_type": "assessment",
         "folder_id": destination.folder_id,
@@ -74,26 +98,7 @@ def build_mcq_payload(
         "qti_prompt": prompt_html,
     }
 
-    for index, choice in enumerate(draft.choices):
-        identifier = f"assessment-ai-{choice.id.lower()}"
-        simple_choices.append(
-            {
-                "identifier": identifier,
-                "value": escape(choice.text),
-                "correctResponse": choice.correct,
-            }
-        )
-        payload[f"qti_simple_choice_{index}"] = choice.text
-        if choice.feedback:
-            feedback[identifier] = escape(choice.feedback)
-
-    qti_json: dict[str, object] = {
-        "questionType": "multiple_choice",
-        "prompt": prompt_html,
-        "simpleChoice": simple_choices,
-    }
-    if feedback:
-        qti_json["feedback"] = feedback
+    qti_json = _qti_json(draft, payload, prompt_html)
     payload["qti_json"] = json.dumps(
         qti_json, separators=(",", ":"), ensure_ascii=False
     )
@@ -102,6 +107,378 @@ def build_mcq_payload(
         payload["framework_item_sync_question"] = alignment.model_dump()
 
     return payload
+
+
+def build_external_engine_payload(
+    draft: QuestionDraft,
+    *,
+    destination: AdaptDestination,
+    source_url: str,
+    title: str,
+    engine_source: str,
+    technology_id: str | int | None = None,
+    alignment: FrameworkAlignment | None = None,
+    tags: list[str] | None = None,
+    imathas_base_url: str = "https://imathas.libretexts.dev",
+) -> dict[str, object]:
+    """Map a constrained, prevalidated external-engine item to ADAPT."""
+    if draft.item_type not in {AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS}:
+        raise ValueError("an external-engine item is required")
+    technology = draft.item_type.value
+    payload: dict[str, object] = {
+        "question_type": "assessment",
+        "folder_id": destination.folder_id,
+        "public": int(destination.public),
+        "title": title,
+        "author": destination.author,
+        "tags": tags or [],
+        "technology": technology,
+        "technology_id": technology_id,
+        "non_technology_text": None,
+        "text_question": f"<p>{escape(draft.stem)}</p>",
+        "a11y_technology": None,
+        "a11y_technology_id": None,
+        "answer_html": None,
+        "solution_html": draft.explanation,
+        "notes": "Generated from a constrained parameter specification by LibreTexts Assessment AI.",
+        "hint": None,
+        "license": destination.license,
+        "license_version": destination.license_version,
+        "source_url": source_url,
+        "qti_json": None,
+    }
+    if technology == "webwork":
+        payload.update(
+            {
+                "new_auto_graded_code": "webwork",
+                "webwork_code": engine_source,
+            }
+        )
+    else:
+        if technology_id is None:
+            raise ValueError("IMathAS publication requires a local question ID")
+        payload["technology_id"] = int(technology_id)
+        payload["technology_iframe"] = (
+            f'<iframe class="imathas_problem" src="{imathas_base_url.rstrip("/")}'
+            f'/adapt/embedq2.php?id={int(technology_id)}"></iframe>'
+        )
+    if alignment is not None:
+        payload["framework_item_sync_question"] = alignment.model_dump()
+    return payload
+
+
+def _qti_json(
+    draft: QuestionDraft,
+    payload: dict[str, object],
+    prompt_html: str,
+) -> dict[str, object]:
+    item_type = draft.item_type
+    if item_type in {
+        AssessmentItemType.MULTIPLE_CHOICE,
+        AssessmentItemType.TRUE_FALSE,
+    }:
+        choices, feedback = _choice_responses(draft.choices, payload)
+        qti: dict[str, object] = {
+            "questionType": item_type.value,
+            "prompt": prompt_html,
+            "simpleChoice": choices,
+        }
+        if feedback:
+            qti["feedback"] = feedback
+        return qti
+
+    if item_type in {
+        AssessmentItemType.MULTIPLE_RESPONSE,
+        AssessmentItemType.SELECT_ALL,
+        AssessmentItemType.SELECT_N,
+    }:
+        responses = _responses(draft.choices)
+        question_type = (
+            "multiple_response_select_n"
+            if item_type == AssessmentItemType.SELECT_N
+            else "multiple_response_select_all_that_apply"
+        )
+        qti = {
+            "questionType": question_type,
+            "prompt": prompt_html,
+            "responses": responses,
+        }
+        if item_type == AssessmentItemType.SELECT_N:
+            qti["numberToSelect"] = draft.response.select_n
+        payload["responses"] = responses
+        return qti
+
+    if item_type == AssessmentItemType.MATCHING:
+        terms = []
+        possible = []
+        for index, pair in enumerate(draft.response.matching_pairs):
+            prompt_id = f"assessment-ai-{pair.prompt_id.lower()}"
+            target_id = f"assessment-ai-{pair.target_id.lower()}"
+            terms.append(
+                {
+                    "identifier": prompt_id,
+                    "termToMatch": pair.prompt,
+                    "matchingTermIdentifier": target_id,
+                    "feedback": "",
+                }
+            )
+            possible.append(
+                {"identifier": target_id, "matchingTerm": pair.target}
+            )
+            payload[f"qti_matching_term_to_match_{index}"] = pair.prompt
+            payload[f"qti_matching_matching_term_{index}"] = pair.target
+        return {
+            "questionType": "matching",
+            "prompt": prompt_html,
+            "termsToMatch": terms,
+            "possibleMatches": possible,
+        }
+
+    if item_type == AssessmentItemType.NUMERICAL:
+        payload["correct_response"] = draft.response.numeric_answer
+        payload["margin_of_error"] = draft.response.numeric_tolerance
+        return {
+            "questionType": "numerical",
+            "prompt": prompt_html,
+            "correctResponse": {
+                "value": draft.response.numeric_answer,
+                "marginOfError": draft.response.numeric_tolerance,
+            },
+            "feedback": {"any": draft.explanation, "correct": "", "incorrect": ""},
+        }
+
+    if item_type == AssessmentItemType.ORDERING:
+        responses = _responses(draft.choices)
+        correct_order = [
+            f"assessment-ai-{identifier.lower()}"
+            for identifier in draft.response.correct_order
+        ]
+        payload["responses"] = responses
+        payload["correct_order"] = correct_order
+        return {
+            "questionType": "ordering",
+            "prompt": prompt_html,
+            "responses": responses,
+            "correctOrder": correct_order,
+        }
+
+    if item_type == AssessmentItemType.IMAGE_HOTSPOT:
+        regions = [region.model_dump(mode="json") for region in draft.response.hotspot_regions]
+        payload["image_url"] = draft.response.image_url
+        payload["image_alt"] = draft.response.image_alt
+        payload["hotspot_regions"] = regions
+        return {
+            "questionType": "image_hotspot",
+            "prompt": prompt_html,
+            "imageUrl": draft.response.image_url,
+            "imageAlt": draft.response.image_alt,
+            "regions": regions,
+        }
+
+    if item_type in {
+        AssessmentItemType.HIGHLIGHT_TEXT,
+        AssessmentItemType.HIGHLIGHT_TABLE,
+    }:
+        responses = [
+            {
+                "identifier": f"assessment-ai-{segment.id.lower()}",
+                "text": segment.text,
+                "correctResponse": segment.correct,
+            }
+            for segment in draft.response.highlight_segments
+        ]
+        marked_prompt = " ".join(
+            f"[{escape(segment.text)}]" for segment in draft.response.highlight_segments
+        )
+        if item_type == AssessmentItemType.HIGHLIGHT_TABLE:
+            rows = [{"header": "Source", "prompt": marked_prompt, "responses": responses}]
+            headers = ["Section", "Text"]
+            payload["colHeaders"] = headers
+            payload["rows"] = rows
+            return {
+                "questionType": "highlight_table",
+                "prompt": prompt_html,
+                "colHeaders": headers,
+                "rows": rows,
+            }
+        payload["qti_prompt"] = marked_prompt
+        payload["responses"] = responses
+        return {
+            "questionType": "highlight_text",
+            "prompt": marked_prompt,
+            "responses": responses,
+        }
+
+    if item_type == AssessmentItemType.MATRIX:
+        columns = draft.response.matrix_columns
+        headers = ["Response", *[choice.text for choice in columns]]
+        column_index = {choice.id: index for index, choice in enumerate(columns)}
+        multiple = any(len(row.correct_column_ids) > 1 for row in draft.response.matrix_rows)
+        if multiple:
+            rows = [
+                {
+                    "header": row.text,
+                    "responses": [
+                        {
+                            "identifier": f"assessment-ai-{row.id.lower()}-{column.id.lower()}",
+                            "correctResponse": column.id in row.correct_column_ids,
+                        }
+                        for column in columns
+                    ],
+                }
+                for row in draft.response.matrix_rows
+            ]
+            qti = {
+                "questionType": "matrix_multiple_response",
+                "prompt": prompt_html,
+                "colHeaders": headers,
+                "rows": rows,
+            }
+            payload["colHeaders"] = headers
+        else:
+            rows = [
+                {
+                    "label": row.text,
+                    "correctResponse": column_index[row.correct_column_ids[0]],
+                }
+                for row in draft.response.matrix_rows
+            ]
+            qti = {
+                "questionType": "matrix_multiple_choice",
+                "prompt": prompt_html,
+                "headers": headers,
+                "rows": rows,
+            }
+            payload["headers"] = headers
+        payload["rows"] = rows
+        return qti
+
+    if item_type == AssessmentItemType.BOW_TIE:
+        actions = _bow_tie_responses(draft.response.bow_tie_actions)
+        conditions = _bow_tie_responses(draft.response.bow_tie_condition)
+        parameters = _bow_tie_responses(draft.response.bow_tie_parameters)
+        payload["actions_to_take"] = actions
+        payload["potential_conditions"] = conditions
+        payload["parameters_to_monitor"] = parameters
+        return {
+            "questionType": "bow_tie",
+            "prompt": prompt_html,
+            "actionsToTake": actions,
+            "potentialConditions": conditions,
+            "parametersToMonitor": parameters,
+        }
+
+    if item_type == AssessmentItemType.DRAG_DROP_CLOZE:
+        correct = [
+            {
+                "identifier": f"assessment-ai-{blank.id.lower()}",
+                "value": blank.correct[0],
+            }
+            for blank in draft.response.blanks
+        ]
+        correct_values = {item["value"] for item in correct}
+        distractors = [
+            {
+                "identifier": f"assessment-ai-distractor-{index}",
+                "value": value,
+            }
+            for index, value in enumerate(
+                dict.fromkeys(
+                    option
+                    for blank in draft.response.blanks
+                    for option in blank.options
+                    if option not in correct_values
+                )
+            )
+        ]
+        cloze_prompt = prompt_html + " " + " ".join(
+            "[select]" for _ in draft.response.blanks
+        )
+        payload["qti_prompt"] = cloze_prompt
+        payload["correct_responses"] = correct
+        payload["distractors"] = distractors
+        return {
+            "questionType": "drag_and_drop_cloze",
+            "prompt": cloze_prompt,
+            "correctResponses": correct,
+            "distractors": distractors,
+        }
+
+    if item_type in {
+        AssessmentItemType.FILL_IN_BLANK,
+        AssessmentItemType.SELECT_CHOICE,
+        AssessmentItemType.DROPDOWN,
+    }:
+        return _inline_interaction(draft, payload, prompt_html)
+
+    raise ValueError(f"ADAPT mapping is not implemented for {item_type.value}")
+
+
+def _choice_responses(
+    choices: list[Choice], payload: dict[str, object]
+) -> tuple[list[dict[str, object]], dict[str, str]]:
+    responses = _responses(choices)
+    feedback: dict[str, str] = {}
+    for index, (choice, response) in enumerate(zip(choices, responses, strict=True)):
+        payload[f"qti_simple_choice_{index}"] = choice.text
+        if choice.feedback:
+            feedback[str(response["identifier"])] = escape(choice.feedback)
+    return responses, feedback
+
+
+def _responses(choices: list[Choice]) -> list[dict[str, object]]:
+    return [
+        {
+            "identifier": f"assessment-ai-{choice.id.lower()}",
+            "value": escape(choice.text),
+            "correctResponse": choice.correct,
+        }
+        for choice in choices
+    ]
+
+
+def _bow_tie_responses(group: BowTieGroup | None) -> list[dict[str, object]]:
+    if group is None:
+        raise ValueError("bow-tie response group is missing")
+    return _responses(group.choices)
+
+
+def _inline_interaction(
+    draft: QuestionDraft,
+    payload: dict[str, object],
+    prompt_html: str,
+) -> dict[str, object]:
+    if draft.item_type == AssessmentItemType.FILL_IN_BLANK:
+        interactions = {
+            blank.id: {
+                "correctResponse": blank.correct,
+                "caseSensitive": blank.case_sensitive,
+            }
+            for blank in draft.response.blanks
+        }
+        item_body = {
+            "textEntryInteraction": prompt_html
+            + " "
+            + " ".join(f"<u>{blank.id}</u>" for blank in draft.response.blanks)
+        }
+        payload["qti_item_body"] = item_body
+        payload["qti_text_entry_interactions"] = interactions
+        return {
+            "questionType": "fill_in_the_blank",
+            "itemBody": item_body,
+            "responseDeclaration": {"correctResponse": interactions},
+        }
+    responses = _responses(draft.choices)
+    interaction_id = "RESPONSE"
+    inline = {interaction_id: responses}
+    item_body = {"inlineChoiceInteraction": f"{prompt_html} [select]"}
+    payload["qti_item_body"] = item_body
+    payload[f"qti_select_choice_{interaction_id}"] = responses
+    return {
+        "questionType": "select_choice",
+        "itemBody": item_body,
+        "inline_choice_interactions": inline,
+    }
 
 
 class AdaptPublishingError(RuntimeError):
@@ -362,6 +739,18 @@ class AdaptClient:
                 "ADAPT created or accepted the request but did not return question identifiers. The publication will be reconciled.",
                 code="adapt_missing_ids",
             ) from exc
+
+    async def sync_hint_rungs(
+        self, question_id: int, payload: dict[str, Any]
+    ) -> None:
+        data = await self._request(
+            "PUT", f"questions/{question_id}/hint-rungs", payload=payload
+        )
+        if data.get("type") != "success":
+            raise AdaptPublishingError(
+                "ADAPT did not confirm the hint ladder update.",
+                code="adapt_hint_sync_invalid",
+            )
 
     async def find_question_by_tag(self, tag: str) -> AdaptCreateResult | None:
         data = await self._request("GET", "questions")
