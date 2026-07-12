@@ -100,6 +100,9 @@ def test_parameter_compiler_is_deterministic_across_25_bounded_seeds() -> None:
     assert len(first.previews) == 25
     assert all(preview.answer == preview.variables["mass"] * preview.variables["speed"] for preview in first.previews)
     assert "DOCUMENT();" in first.source
+    assert "$parameters_valid" in first.source
+    assert "for (1..1000)" in first.source
+    assert "unless $parameters_valid" in first.source
 
 
 def test_parameter_compiler_rejects_calls_attributes_and_unknown_names() -> None:
