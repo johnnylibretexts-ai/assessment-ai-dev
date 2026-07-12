@@ -64,6 +64,15 @@ class Settings(BaseSettings):
     gemini_max_retries: int = Field(default=2, ge=0, le=5)
 
     adapt_publishing_enabled: bool = False
+    adapt_base_url: str = "https://adapt.libretexts.dev/api"
+    adapt_email: str = "assessment-ai@libretexts.dev"
+    adapt_password: SecretStr | None = None
+    adapt_folder_id: int | None = Field(default=None, gt=0)
+    adapt_folder_name: str = "Assessment AI — Approved"
+    adapt_author: str = "LibreTexts Assessment AI"
+    adapt_public: bool = True
+    adapt_timeout_seconds: float = Field(default=30.0, ge=5, le=120)
+    qti_storage_dir: Path = Path("/data/qti")
 
     @field_validator("sandbox_root")
     @classmethod
@@ -111,6 +120,30 @@ class Settings(BaseSettings):
             raise ValueError("llm_provider_order must not contain duplicates")
         return ",".join(providers)
 
+    @field_validator("adapt_base_url")
+    @classmethod
+    def validate_adapt_base_url(cls, value: str) -> str:
+        parsed = urlparse(value)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "adapt.libretexts.dev"
+            or parsed.port is not None
+            or parsed.path.rstrip("/") != "/api"
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError(
+                "adapt_base_url is pinned to https://adapt.libretexts.dev/api"
+            )
+        return "https://adapt.libretexts.dev/api"
+
+    @field_validator("adapt_email")
+    @classmethod
+    def validate_adapt_email(cls, value: str) -> str:
+        if value.strip().casefold() != "assessment-ai@libretexts.dev":
+            raise ValueError("adapt_email is pinned to assessment-ai@libretexts.dev")
+        return "assessment-ai@libretexts.dev"
+
     @property
     def ollama_is_cloud(self) -> bool:
         return urlparse(self.ollama_base_url).hostname == "ollama.com"
@@ -118,6 +151,25 @@ class Settings(BaseSettings):
     @property
     def llm_providers(self) -> tuple[str, ...]:
         return tuple(self.llm_provider_order.split(","))
+
+    @property
+    def adapt_publishing_status(self) -> str:
+        if not self.adapt_publishing_enabled:
+            return "disabled"
+        password = (
+            self.adapt_password.get_secret_value().strip()
+            if self.adapt_password is not None
+            else ""
+        )
+        if (
+            not password
+            or self.adapt_folder_id is None
+            or not self.adapt_folder_name.strip()
+            or not self.adapt_author.strip()
+            or not self.adapt_public
+        ):
+            return "misconfigured"
+        return "configured"
 
 
 @lru_cache

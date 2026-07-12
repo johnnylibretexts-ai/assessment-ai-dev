@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Any, Iterator
 from uuid import uuid4
@@ -271,6 +272,11 @@ class Draft(Base):
         back_populates="draft",
         passive_deletes=True,
     )
+    publications: Mapped[list[Publication]] = relationship(
+        back_populates="draft",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     @property
     def current(self) -> QuestionDraft:
@@ -310,6 +316,103 @@ class LLMCall(Base):
 
     source: Mapped[SourceSnapshot] = relationship(back_populates="llm_calls")
     draft: Mapped[Draft | None] = relationship(back_populates="llm_calls")
+
+
+class PublicationState(StrEnum):
+    PENDING = "pending"
+    UNKNOWN = "unknown"
+    ADAPT_CREATED = "adapt_created"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class Publication(Base):
+    """Immutable publication snapshot plus a small recoverable state machine."""
+
+    __tablename__ = "publications"
+    __table_args__ = (UniqueConstraint("publication_key", name="uq_publication_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    draft_id: Mapped[int] = mapped_column(
+        ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    edit_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    question_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    source_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    reviewer_identity: Mapped[str] = mapped_column(String(255), nullable=False)
+    approved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    destination_folder_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    destination_folder_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    author: Mapped[str] = mapped_column(String(500), nullable=False)
+    public: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    license: Mapped[str] = mapped_column(String(100), nullable=False)
+    license_version: Mapped[str | None] = mapped_column(String(100))
+    license_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    license_evidence_url: Mapped[str] = mapped_column(String(4_096), nullable=False)
+
+    framework_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    framework_title: Mapped[str] = mapped_column(String(1_000), nullable=False)
+    alignment_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    stable_topic_ids_json: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+
+    publication_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_mapper_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    qti_exporter_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    state: Mapped[str] = mapped_column(
+        String(30), default=PublicationState.PENDING.value, nullable=False, index=True
+    )
+    adapt_question_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    adapt_page_id: Mapped[int | None] = mapped_column(Integer)
+    qti_path: Mapped[str | None] = mapped_column(String(4_096))
+    qti_sha256: Mapped[str | None] = mapped_column(String(64))
+    qti_size: Mapped[int | None] = mapped_column(Integer)
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_code: Mapped[str | None] = mapped_column(String(100))
+    error_message: Mapped[str | None] = mapped_column(String(1_000))
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+    draft: Mapped[Draft] = relationship(back_populates="publications")
+    attempts: Mapped[list[PublicationAttempt]] = relationship(
+        back_populates="publication",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class PublicationAttempt(Base):
+    __tablename__ = "publication_attempts"
+    __table_args__ = (
+        UniqueConstraint(
+            "publication_id", "attempt_number", name="uq_publication_attempt_number"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    publication_id: Mapped[int] = mapped_column(
+        ForeignKey("publications.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    resulting_state: Mapped[str] = mapped_column(String(30), nullable=False)
+    http_status: Mapped[int | None] = mapped_column(Integer)
+    error_code: Mapped[str | None] = mapped_column(String(100))
+    error_message: Mapped[str | None] = mapped_column(String(1_000))
+    response_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+    publication: Mapped[Publication] = relationship(back_populates="attempts")
 
 
 @dataclass(frozen=True)
@@ -691,7 +794,11 @@ class DraftRepository:
         with self._sessions() as session:
             return session.scalar(
                 select(Draft)
-                .options(selectinload(Draft.source), selectinload(Draft.llm_calls))
+                .options(
+                    selectinload(Draft.source),
+                    selectinload(Draft.llm_calls),
+                    selectinload(Draft.publications),
+                )
                 .where(Draft.id == draft_id)
             )
 
@@ -761,6 +868,112 @@ class DraftRepository:
                 "the draft changed during editing; reload it before saving"
             ) from None
         return self.require_draft(draft_id)
+
+    def create_or_get_publication(
+        self, values: Mapping[str, Any]
+    ) -> tuple[Publication, bool]:
+        publication_key = str(values["publication_key"])
+        with self._sessions() as session:
+            existing = session.scalar(
+                select(Publication).where(
+                    Publication.publication_key == publication_key
+                )
+            )
+            if existing is not None:
+                return existing, False
+        try:
+            with self._sessions.begin() as session:
+                publication = Publication(**dict(values))
+                session.add(publication)
+                session.flush()
+                publication_id = publication.id
+        except IntegrityError:
+            with self._sessions() as session:
+                existing = session.scalar(
+                    select(Publication).where(
+                        Publication.publication_key == publication_key
+                    )
+                )
+                if existing is None:
+                    raise
+                return existing, False
+        return self.require_publication(publication_id), True
+
+    def get_publication(self, publication_id: int) -> Publication | None:
+        with self._sessions() as session:
+            return session.scalar(
+                select(Publication)
+                .options(selectinload(Publication.attempts))
+                .where(Publication.id == publication_id)
+            )
+
+    def require_publication(self, publication_id: int) -> Publication:
+        publication = self.get_publication(publication_id)
+        if publication is None:
+            raise DraftNotFoundError(f"publication {publication_id} was not found")
+        return publication
+
+    def update_publication(
+        self,
+        publication_id: int,
+        *,
+        state: PublicationState,
+        **values: Any,
+    ) -> Publication:
+        allowed = {
+            "adapt_question_id",
+            "adapt_page_id",
+            "qti_path",
+            "qti_sha256",
+            "qti_size",
+            "finalized_at",
+            "error_code",
+            "error_message",
+        }
+        unknown = set(values) - allowed
+        if unknown:
+            raise ValueError(f"unsupported publication update: {sorted(unknown)}")
+        with self._sessions.begin() as session:
+            publication = session.get(Publication, publication_id)
+            if publication is None:
+                raise DraftNotFoundError(f"publication {publication_id} was not found")
+            publication.state = state.value
+            for name, value in values.items():
+                setattr(publication, name, value)
+            publication.updated_at = utc_now()
+        return self.require_publication(publication_id)
+
+    def record_publication_attempt(
+        self,
+        publication_id: int,
+        *,
+        action: str,
+        resulting_state: PublicationState,
+        http_status: int | None = None,
+        error_code: str | None = None,
+        error_message: str | None = None,
+        response: Mapping[str, Any] | None = None,
+    ) -> PublicationAttempt:
+        with self._sessions.begin() as session:
+            publication = session.get(Publication, publication_id)
+            if publication is None:
+                raise DraftNotFoundError(f"publication {publication_id} was not found")
+            publication.attempt_count += 1
+            attempt = PublicationAttempt(
+                publication_id=publication.id,
+                attempt_number=publication.attempt_count,
+                action=action,
+                resulting_state=resulting_state.value,
+                http_status=http_status,
+                error_code=error_code,
+                error_message=error_message,
+                response_json=_json_value(response) if response is not None else None,
+            )
+            session.add(attempt)
+            session.flush()
+            attempt_id = attempt.id
+        with self._sessions() as session:
+            return session.get(PublicationAttempt, attempt_id)
 
     def confirm_bloom(
         self, draft_id: int, *, reviewer: str, confirmed: bool = True

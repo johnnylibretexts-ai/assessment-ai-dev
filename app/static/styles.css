@@ -88,6 +88,21 @@ fieldset { margin: 0 0 18px; border: 1px solid var(--line); border-radius: 9px; 
 .choice-edit { display: grid; grid-template-columns: 24px 24px 1fr; align-items: center; gap: 8px; margin: 10px 0; }
 .choice-edit input[type="radio"] { width: 18px; height: 18px; }
 .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+.publication-panel, .publication-history { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }
+.publication-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.publication-facts div, .license-evidence, .publication-record { padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: #f8fafc; }
+.publication-facts dt { color: var(--muted); font-size: .75rem; font-weight: 800; text-transform: uppercase; }
+.publication-facts dd { margin: 4px 0 0; font-weight: 700; }
+.publication-panel select, .publication-panel input { margin: 7px 0 14px; }
+.license-evidence { margin-bottom: 15px; background: #f0fdf4; border-color: #86c99b; }
+.license-evidence p { margin: 5px 0; }
+.publication-record { margin: 12px 0; }
+.publication-record.state-succeeded { border-color: #86c99b; background: #f0fdf4; }
+.publication-record.state-unknown, .publication-record.state-adapt_created { border-color: #e8c866; background: #fffbeb; }
+.publication-record.state-failed { border-color: #ef9a9a; background: var(--danger-bg); }
+.publication-links { display: flex; flex-wrap: wrap; gap: 16px; }
+.error-text { color: var(--danger); }
+button:disabled { cursor: not-allowed; opacity: .55; }
 
 @keyframes trailing-dot {
   0%, 60%, 100% { opacity: .25; }
@@ -103,5 +118,6 @@ fieldset { margin: 0 0 18px; border: 1px solid var(--line); border-radius: 9px; 
   .source-pane { position: static; }
   .form-row { grid-template-columns: 1fr; }
   .two-column { grid-template-columns: 1fr; }
+  .publication-facts { grid-template-columns: 1fr; }
   .site-header { align-items: flex-start; }
 }

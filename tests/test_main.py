@@ -362,15 +362,13 @@ def test_edit_and_independent_review_gates(tmp_path: Path) -> None:
         blocked_location = blocked.headers["location"]
         assert "error=" in blocked_location
         assert (
-            "Confirm+both+the+Bloom+level+and+difficulty+before+marking+this+"
-            "draft+ready+to+publish."
+            "Confirm+both+the+Bloom+level+and+difficulty+before+approving+this+draft."
         ) in blocked_location
         assert "validation" not in blocked_location.casefold()
         assert "pydantic" not in blocked_location.casefold()
         blocked_page = client.get(blocked_location)
         assert (
-            "Confirm both the Bloom level and difficulty before marking this draft "
-            "ready to publish."
+            "Confirm both the Bloom level and difficulty before approving this draft."
         ) in blocked_page.text
         assert "input_value" not in blocked_page.text
         assert "pydantic.dev" not in blocked_page.text
