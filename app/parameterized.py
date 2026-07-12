@@ -217,6 +217,25 @@ def _compile_webwork(spec: ParameterizedItemSpec) -> str:
         declarations.append(
             f"${variable.name} = random({variable.minimum:g},{variable.maximum:g},{variable.step:g});"
         )
+    parameter_block = declarations
+    if spec.constraints:
+        checks = [
+            _expression_for_engine(
+                constraint,
+                prefix="$",
+                power="**",
+                allow_comparison=True,
+            )
+            for constraint in spec.constraints
+        ]
+        parameter_block = [
+            "$parameters_valid = 0;",
+            "for (1..1000) {",
+            *[f"  {declaration}" for declaration in declarations],
+            f"  if ({' && '.join(checks)}) {{ $parameters_valid = 1; last; }}",
+            "}",
+            'die("Unable to generate safe parameters") unless $parameters_valid;',
+        ]
     answer = _expression_for_engine(spec.answer_expression, prefix="$", power="**")
     prompt = _template_for_engine(spec.prompt_template, prefix="$", wrapper="\\(", suffix="\\)")
     return "\n".join(
@@ -224,7 +243,7 @@ def _compile_webwork(spec: ParameterizedItemSpec) -> str:
             "DOCUMENT();",
             'loadMacros("PGstandard.pl","MathObjects.pl");',
             'Context("Numeric");',
-            *declarations,
+            *parameter_block,
             f"$answer = {answer};",
             "BEGIN_TEXT",
             prompt,
@@ -253,8 +272,18 @@ def _compile_imathas(spec: ParameterizedItemSpec) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def _expression_for_engine(expression: str, *, prefix: str, power: str) -> str:
-    parsed = _parse_expression(expression, sorted(set(re.findall(r"[a-z][a-z0-9_]*", expression))))
+def _expression_for_engine(
+    expression: str,
+    *,
+    prefix: str,
+    power: str,
+    allow_comparison: bool = False,
+) -> str:
+    parsed = _parse_expression(
+        expression,
+        sorted(set(re.findall(r"[a-z][a-z0-9_]*", expression))),
+        allow_comparison=allow_comparison,
+    )
 
     def render(node: ast.AST) -> str:
         if isinstance(node, ast.Constant):
@@ -274,6 +303,19 @@ def _expression_for_engine(expression: str, *, prefix: str, power: str) -> str:
                 ast.Mod: "%",
             }
             return f"({render(node.left)} {operators[type(node.op)]} {render(node.right)})"
+        if isinstance(node, ast.Compare):
+            operators = {
+                ast.Eq: "==",
+                ast.NotEq: "!=",
+                ast.Lt: "<",
+                ast.LtE: "<=",
+                ast.Gt: ">",
+                ast.GtE: ">=",
+            }
+            return (
+                f"({render(node.left)} {operators[type(node.ops[0])]} "
+                f"{render(node.comparators[0])})"
+            )
         raise ParameterizedCompileError("cannot compile expression node")
 
     return render(parsed.body)
