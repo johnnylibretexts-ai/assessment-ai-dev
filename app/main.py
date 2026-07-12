@@ -35,6 +35,11 @@ from .schemas import (
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
+REVIEW_CONFIRMATION_ERROR = (
+    "Confirm both the Bloom level and difficulty before marking this draft "
+    "ready to publish."
+)
+REVIEW_VALIDATION_ERROR = "Review could not be saved. Check the form and try again."
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -228,6 +233,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> RedirectResponse:
         _require_same_origin(request, resolved_settings)
         _require_public_draft(request.app.state.repository, draft_id)
+        if (
+            decision == ReviewStatus.READY_TO_PUBLISH.value
+            and (not bloom_confirmed or not difficulty_confirmed)
+        ):
+            return _redirect_with_message(
+                f"/drafts/{draft_id}",
+                "error",
+                REVIEW_CONFIRMATION_ERROR,
+            )
         try:
             review_decision = ReviewDecision(
                 status=ReviewStatus(decision),
@@ -240,10 +254,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 review_decision,
                 reviewer=_reviewer(request),
             )
+        except ValidationError:
+            return _redirect_with_message(
+                f"/drafts/{draft_id}",
+                "error",
+                REVIEW_VALIDATION_ERROR,
+            )
         except (
             DraftNotFoundError,
             ReviewTransitionError,
-            ValidationError,
             ValueError,
         ) as exc:
             return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))

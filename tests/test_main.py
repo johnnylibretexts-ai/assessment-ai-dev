@@ -359,7 +359,21 @@ def test_edit_and_independent_review_gates(tmp_path: Path) -> None:
             follow_redirects=False,
         )
         assert blocked.status_code == 303
-        assert "error=" in blocked.headers["location"]
+        blocked_location = blocked.headers["location"]
+        assert "error=" in blocked_location
+        assert (
+            "Confirm+both+the+Bloom+level+and+difficulty+before+marking+this+"
+            "draft+ready+to+publish."
+        ) in blocked_location
+        assert "validation" not in blocked_location.casefold()
+        assert "pydantic" not in blocked_location.casefold()
+        blocked_page = client.get(blocked_location)
+        assert (
+            "Confirm both the Bloom level and difficulty before marking this draft "
+            "ready to publish."
+        ) in blocked_page.text
+        assert "input_value" not in blocked_page.text
+        assert "pydantic.dev" not in blocked_page.text
         assert (
             app.state.repository.require_draft(draft_id).status
             == ReviewStatus.READY_FOR_REVIEW
