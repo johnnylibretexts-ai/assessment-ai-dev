@@ -27,7 +27,7 @@
 
     <section class="panel review-pane">
       <div class="card-topline">
-        <span><span class="status status-{{ draft.status }}">{{ draft.status_label }}</span> <span class="status">{{ draft.item_type_label }}</span></span>
+        <span><span class="status status-{{ draft.status }}">{{ draft.status_label }}</span> <span class="status">{{ draft.item_type_label }}</span> <span class="status">{{ draft.context_type.replace('_', ' ') }} context</span></span>
         <span class="muted">{{ draft.model_id }} · {{ draft.prompt_version }}</span>
       </div>
       <p class="eyebrow">Revised AI draft</p>
@@ -66,13 +66,15 @@
       {% elif draft.item_type == 'bow_tie' %}
         <div class="interaction-preview"><strong>Clinical bow-tie structure</strong><p>Actions, central condition, and monitored parameters require specialist review.</p></div>
       {% elif draft.item_type in ['webwork', 'imathas'] %}
-        <div class="interaction-preview"><strong>{{ draft.item_type_label }} parameter specification</strong><pre>{{ draft.response.parameterized|tojson(indent=2) }}</pre></div>
+        <div class="interaction-preview"><strong>{{ draft.item_type_label }} parameter specification</strong><pre tabindex="0" aria-label="Scrollable {{ draft.item_type_label }} parameter specification">{{ draft.response.parameterized|tojson(indent=2) }}</pre></div>
         {% if draft.engine_validation %}
           <div class="interaction-preview">
             <strong>Fixed-seed validation:</strong> {{ draft.engine_validation.seed_count }} seeds passed with {{ draft.engine_validation.compiler_version }}.
-            <table class="interaction-table"><thead><tr><th>Seed</th><th>Generated prompt</th><th>Correct answer</th><th>Explanation</th></tr></thead><tbody>
-              {% for preview in draft.engine_validation.previews %}<tr><td>{{ preview.seed }}</td><td>{{ preview.prompt }}</td><td>{{ preview.answer }}</td><td>{{ preview.explanation }}</td></tr>{% endfor %}
-            </tbody></table>
+            <div class="table-scroll" tabindex="0" aria-label="Scrollable fixed-seed validation previews">
+              <table class="interaction-table parameter-preview-table"><thead><tr><th>Seed</th><th>Generated prompt</th><th>Correct answer</th><th>Explanation</th></tr></thead><tbody>
+                {% for preview in draft.engine_validation.previews %}<tr><td>{{ preview.seed }}</td><td>{{ preview.prompt }}</td><td>{{ preview.answer }}</td><td>{{ preview.explanation }}</td></tr>{% endfor %}
+              </tbody></table>
+            </div>
           </div>
         {% endif %}
       {% endif %}

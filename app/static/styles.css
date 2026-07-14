@@ -90,9 +90,11 @@ code { padding: 2px 5px; border-radius: 5px; background: #eef3f7; }
 .choices strong { float: right; color: var(--success); font-size: .78rem; }
 .explanation { margin: 18px 0; padding: 16px; border-radius: 9px; background: #f5f7fa; }
 .stimulus, .interaction-preview { margin: 14px 0; padding: 14px; border: 1px solid var(--line); border-radius: 9px; background: #f8fafc; }
-.interaction-preview pre { max-height: 320px; overflow: auto; white-space: pre-wrap; }
+.interaction-preview pre { width: 100%; max-width: 100%; min-width: 0; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .interaction-table { width: 100%; margin: 14px 0; border-collapse: collapse; }
 .interaction-table th, .interaction-table td { padding: 9px; border: 1px solid var(--line); text-align: left; }
+.table-scroll { width: 100%; max-width: 100%; overflow-x: auto; }
+.table-scroll .parameter-preview-table { min-width: 34rem; }
 .highlight-segment { display: inline; margin-right: .25em; padding: 2px 3px; }
 .highlight-segment.correct { border-radius: 4px; background: var(--success-bg); }
 .hint-review { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }

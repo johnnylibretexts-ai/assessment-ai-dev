@@ -9,6 +9,10 @@ Stable commands:
 ```bash
 assessment-ai-evaluate write-schemas --output-dir evidence/schemas
 assessment-ai-evaluate build-fixtures --output evidence/fixtures.json
+BUILD08_ASSESSMENT_CANARY=build08-assessment-browser-canary \
+  assessment-ai-evaluate seed-browser-canary \
+  --database-url sqlite:////data/build08-browser-canary.db \
+  --output evidence/assessment-browser-canary.json
 assessment-ai-evaluate build-seed-plan --output evidence/seed-plan.jsonl
 assessment-ai-evaluate validate-corpus evidence/corpus.json
 assessment-ai-evaluate validate-reviews evidence/reviews.jsonl
@@ -48,6 +52,13 @@ The fixture bundle covers all 19 item types crossed with all five context
 variants. The seed plan contains 20 WeBWorK and 20 IMathAS items at seeds 1–100
 (4,000 planned executions). A plan is not an execution receipt and cannot pass
 the seed validator.
+
+`seed-browser-canary` persists that exact 95-case fixture matrix, its three-rung
+hint ladders, and 100-seed external-engine previews into an absolute,
+file-backed SQLite database. It refuses to run without the exact disposable
+canary marker and rejects an existing draft database unless it is already the
+same sealed matrix. The command does not enable generation, publishing,
+parameterized-item, hint, WeBWorK, or IMathAS runtime flags.
 
 Engine probes are also deliberately not final seed receipts. They capture
 runtime-observed values, semantic determinism, constraints, real expected/wrong

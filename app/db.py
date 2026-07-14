@@ -1698,9 +1698,10 @@ def _answer_fragments(question: QuestionDraft) -> set[str]:
     if response.numeric_answer is not None:
         fragments.add(_normalized_answer_text(f"{response.numeric_answer:g}"))
     for blank in response.blanks:
-        normalized = _normalized_answer_text(blank.correct)
-        if len(normalized) >= 4:
-            fragments.add(normalized)
+        for answer in blank.correct:
+            normalized = _normalized_answer_text(answer)
+            if len(normalized) >= 4:
+                fragments.add(normalized)
     for pair in response.matching_pairs:
         normalized = _normalized_answer_text(pair.target)
         if len(normalized) >= 8:

@@ -326,6 +326,7 @@ def test_edit_and_independent_review_gates(tmp_path: Path) -> None:
         detail = client.get(f"/drafts/{draft_id}")
         assert detail.status_code == 200
         assert "Which statement about energy is accurate?" in detail.text
+        assert "standard context" in detail.text
         assert "The initial stem was vague." in detail.text
 
         edited = client.post(
