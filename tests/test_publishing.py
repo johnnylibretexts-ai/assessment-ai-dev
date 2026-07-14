@@ -34,6 +34,10 @@ from app.schemas import (
     ReviewStatus,
     SourceInfo,
 )
+from evaluation.publication_canary import (
+    CANARY_MARKER,
+    seed_publication_canary,
+)
 
 
 ISOTOPES_URL = (
@@ -129,6 +133,8 @@ class FakeAdapt:
     def __init__(self) -> None:
         self.create_calls = 0
         self.question_id = 501
+        self.hint_sync_calls = 0
+        self.hint_payload: dict[str, object] | None = None
 
     async def resolve_destination(self, **_kwargs: object) -> ResolvedAlignment:
         topic = suggested_topic(ISOTOPES_URL)
@@ -153,6 +159,12 @@ class FakeAdapt:
 
     async def find_question_by_tag(self, _tag: str) -> AdaptCreateResult | None:
         return None
+
+    async def sync_hint_rungs(
+        self, _question_id: int, payload: dict[str, object]
+    ) -> None:
+        self.hint_sync_calls += 1
+        self.hint_payload = payload
 
 
 def publishing_headers() -> dict[str, str]:
@@ -222,6 +234,47 @@ def test_publish_route_is_idempotent_and_qti_download_is_protected(
         assert "Published to ADAPT" in detail.text
         assert "ADAPT question ID" in detail.text
         assert "Download QTI 3.0" in detail.text
+
+
+@pytest.mark.asyncio
+async def test_qualification_canary_publishes_approved_hints_with_flag_false(
+    tmp_path: Path,
+) -> None:
+    database_url = f"sqlite:///{tmp_path / 'qualification-canary.db'}"
+    manifest = seed_publication_canary(
+        database_url,
+        canary_marker=CANARY_MARKER,
+    )
+    config = configured_settings(tmp_path).model_copy(
+        update={
+            "database_url": database_url,
+            "qualification_canary_marker": CANARY_MARKER,
+            "hint_generation_enabled": False,
+        }
+    )
+    app = create_app(config)
+    fake = FakeAdapt()
+    with TestClient(app):
+        service = PublicationService(config, app.state.repository, fake)
+        published = await service.publish(
+            int(manifest["recovery_probe"]["draft_id"]),
+            publisher="build08-publication-reviewer",
+            topic_stable_id=str(manifest["topic_stable_id"]),
+            alignment_confirmed=True,
+        )
+        persisted = app.state.repository.require_publication(published.id)
+
+    assert config.hint_generation_enabled is False
+    assert published.state == PublicationState.SUCCEEDED.value
+    assert published.hints_synced_at is not None
+    assert fake.hint_sync_calls == 1
+    assert fake.hint_payload is not None
+    assert len(fake.hint_payload["ladder"]["rungs"]) == 3
+    assert [attempt.action for attempt in persisted.attempts] == [
+        "adapt_create",
+        "adapt_hint_sync",
+        "qti_finalize",
+    ]
 
 
 @pytest.mark.asyncio
