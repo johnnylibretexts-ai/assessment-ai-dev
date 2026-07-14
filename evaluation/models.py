@@ -192,6 +192,51 @@ class SeedReceipt(BaseModel):
     cross_owner_access_blocked: bool
 
 
+class EngineProbeReceipt(BaseModel):
+    schema_version: Literal["build08-engine-probe-v1"] = "build08-engine-probe-v1"
+    run_id: str = Field(min_length=1, max_length=100)
+    item_id: str = Field(min_length=1, max_length=200)
+    item_type: Literal[AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS]
+    seed: int = Field(ge=1, le=100)
+    compiler_version: str = Field(min_length=1, max_length=100)
+    source_sha256: str = Field(pattern=SHA256_PATTERN)
+    endpoint_host: str = Field(min_length=1, max_length=253)
+    engine_image_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    network_isolation_attestation_sha256: str = Field(pattern=SHA256_PATTERN)
+    adapter_image_sha256: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+    engine_object_sha256: str | None = Field(default=None, pattern=SHA256_PATTERN)
+    object_idempotent_observed: bool | None = None
+    runtime_values_sha256: str | None = Field(default=None, pattern=SHA256_PATTERN)
+    semantic_render_sha256: str | None = Field(default=None, pattern=SHA256_PATTERN)
+    deterministic: bool
+    constraints_satisfied: bool
+    rendered: bool
+    render_duration_ms: int = Field(ge=0, le=120_000)
+    warning_count: int = Field(ge=0)
+    error_count: int = Field(ge=0)
+    expected_answer_accepted: bool
+    wrong_answer_rejected: bool
+    expected_score: float | None = Field(default=None, ge=0, le=1)
+    wrong_score: float | None = Field(default=None, ge=0, le=1)
+    final_receipt_ready: Literal[False] = False
+    remaining_checks: list[
+        Literal["persisted_grade_match", "object_idempotent", "cross_owner_access_blocked"]
+    ] = Field(min_length=3, max_length=3)
+
+    @model_validator(mode="after")
+    def validate_remaining_checks(self) -> "EngineProbeReceipt":
+        required = {
+            "persisted_grade_match",
+            "object_idempotent",
+            "cross_owner_access_blocked",
+        }
+        if set(self.remaining_checks) != required:
+            raise ValueError("engine probes must retain all final receipt checks")
+        return self
+
+
 class ShadowMode(StrEnum):
     OFF = "off"
     OBSERVE = "observe"

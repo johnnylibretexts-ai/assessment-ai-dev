@@ -8,6 +8,7 @@ from app.schemas import AssessmentItemType
 
 from .models import (
     CorpusManifest,
+    EngineProbeReceipt,
     Publishability,
     ReviewRecord,
     ReviewRole,
@@ -16,6 +17,97 @@ from .models import (
     ShadowMode,
     ShadowReceipt,
 )
+
+
+def validate_engine_probe_receipts(
+    records: Iterable[EngineProbeReceipt],
+) -> SectionResult:
+    receipts = list(records)
+    failures: list[str] = []
+    run_ids = {receipt.run_id for receipt in receipts}
+    if len(run_ids) != 1:
+        failures.append("engine probes must contain exactly one run_id")
+
+    keys = [(receipt.item_id, receipt.seed) for receipt in receipts]
+    if len(keys) != len(set(keys)):
+        failures.append("engine probes contain duplicate item/seed pairs")
+
+    expected_hosts = {
+        AssessmentItemType.WEBWORK: "wwrenderer.libretexts.dev",
+        AssessmentItemType.IMATHAS: "imathas.libretexts.dev",
+    }
+    by_item: dict[str, list[EngineProbeReceipt]] = defaultdict(list)
+    for receipt in receipts:
+        by_item[receipt.item_id].append(receipt)
+        if receipt.endpoint_host != expected_hosts[receipt.item_type]:
+            failures.append(f"{receipt.item_id}/{receipt.seed}: unapproved engine host")
+
+    per_engine = Counter(
+        item_receipts[0].item_type.value
+        for item_receipts in by_item.values()
+        if item_receipts
+    )
+    required_seeds = set(range(1, 101))
+    for item_id, item_receipts in by_item.items():
+        if {receipt.seed for receipt in item_receipts} != required_seeds:
+            failures.append(f"{item_id}: requires exactly seeds 1 through 100")
+        if len({receipt.item_type for receipt in item_receipts}) != 1:
+            failures.append(f"{item_id}: item_type changed across probes")
+        if len({receipt.source_sha256 for receipt in item_receipts}) != 1:
+            failures.append(f"{item_id}: source hash changed across probes")
+        if len({receipt.engine_image_sha256 for receipt in item_receipts}) != 1:
+            failures.append(f"{item_id}: engine image changed across probes")
+        if len(
+            {
+                receipt.network_isolation_attestation_sha256
+                for receipt in item_receipts
+            }
+        ) != 1:
+            failures.append(f"{item_id}: network attestation changed across probes")
+
+    for engine in (AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS):
+        if per_engine[engine.value] < 20:
+            failures.append(f"{engine.value}: requires at least 20 unique items")
+
+    failed = [
+        receipt
+        for receipt in receipts
+        if not (
+            receipt.deterministic
+            and receipt.constraints_satisfied
+            and receipt.rendered
+            and receipt.warning_count == 0
+            and receipt.error_count == 0
+            and receipt.expected_answer_accepted
+            and receipt.wrong_answer_rejected
+            and receipt.expected_score == 1.0
+            and receipt.wrong_score == 0.0
+            and (
+                receipt.item_type != AssessmentItemType.IMATHAS
+                or (
+                    receipt.object_idempotent_observed is True
+                    and receipt.adapter_image_sha256 is not None
+                    and receipt.engine_object_sha256 is not None
+                )
+            )
+        )
+    ]
+    if failed:
+        failures.append(f"{len(failed)} engine probes failed one or more checks")
+    if len(receipts) < 4_000:
+        failures.append("engine probe gate requires at least 4,000 executions")
+
+    return _result(
+        "engine_probes",
+        failures,
+        {
+            "receipts": len(receipts),
+            "unique_items": len(by_item),
+            "webwork_items": per_engine[AssessmentItemType.WEBWORK.value],
+            "imathas_items": per_engine[AssessmentItemType.IMATHAS.value],
+            "failed_receipts": len(failed),
+        },
+    )
 
 
 def validate_corpus_manifest(manifest: CorpusManifest) -> SectionResult:
