@@ -177,7 +177,9 @@ def _response_declaration(
 
 def _append_interaction(body: etree._Element, draft: QuestionDraft) -> None:
     if draft.stimulus:
-        etree.SubElement(body, _qti("p"), attrib={"class": "assessment-ai-stimulus"}).text = draft.stimulus
+        etree.SubElement(
+            body, _qti("p"), attrib={"class": "assessment-ai-stimulus"}
+        ).text = draft.stimulus
 
     choice_types = {
         AssessmentItemType.MULTIPLE_CHOICE,
@@ -207,7 +209,9 @@ def _append_interaction(body: etree._Element, draft: QuestionDraft) -> None:
             **{
                 "response-identifier": "RESPONSE",
                 "max-choices": str(maximum),
-                "min-choices": str(maximum if draft.item_type == AssessmentItemType.SELECT_N else 1),
+                "min-choices": str(
+                    maximum if draft.item_type == AssessmentItemType.SELECT_N else 1
+                ),
                 "shuffle": "false",
             },
         )
@@ -240,9 +244,10 @@ def _append_interaction(body: etree._Element, draft: QuestionDraft) -> None:
         return
 
     if draft.item_type == AssessmentItemType.NUMERICAL:
-        etree.SubElement(body, _qti("p")).text = draft.stem
+        paragraph = etree.SubElement(body, _qti("p"))
+        paragraph.text = draft.stem + " "
         etree.SubElement(
-            body,
+            paragraph,
             _qti("qti-text-entry-interaction"),
             **{"response-identifier": "RESPONSE", "expected-length": "12"},
         )

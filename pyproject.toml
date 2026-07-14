@@ -30,8 +30,11 @@ dev = [
   "ruff>=0.12,<1",
 ]
 
+[project.scripts]
+assessment-ai-evaluate = "evaluation.cli:main"
+
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+packages = ["app", "evaluation"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
