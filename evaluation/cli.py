@@ -10,11 +10,18 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
+from app.config import Settings
+
 from .adapt_seed import build_adapt_seed_items, finalize_seed_receipts
 from .adapt_browser import build_adapt_browser_manifest
 from .browser_canary import seed_browser_canary
 from .engine_probe import IMathASProbeClient, run_imathas_probes, run_webwork_probes
 from .fixtures import build_fixture_bundle, build_seed_plan
+from .publication_canary import (
+    run_publication_recovery_probe,
+    seed_publication_canary,
+    validate_publication_canary,
+)
 from .models import (
     CorpusManifest,
     AdaptSeedAttestation,
@@ -54,6 +61,18 @@ def build_parser() -> argparse.ArgumentParser:
     browser_canary = commands.add_parser("seed-browser-canary")
     browser_canary.add_argument("--database-url", required=True)
     browser_canary.add_argument("--output", type=Path, required=True)
+
+    publication_canary = commands.add_parser("seed-publication-canary")
+    publication_canary.add_argument("--database-url", required=True)
+    publication_canary.add_argument("--output", type=Path, required=True)
+
+    publication_recovery = commands.add_parser("probe-publication-recovery")
+    publication_recovery.add_argument("--database-url", required=True)
+    publication_recovery.add_argument("--output", type=Path, required=True)
+
+    publication_validate = commands.add_parser("validate-publication-canary")
+    publication_validate.add_argument("--database-url", required=True)
+    publication_validate.add_argument("--output", type=Path, required=True)
 
     adapt_browser = commands.add_parser("build-adapt-browser-manifest")
     adapt_browser.add_argument("--output", type=Path, required=True)
@@ -147,6 +166,54 @@ def main(argv: list[str] | None = None) -> int:
                     "seeded": manifest["fixture_count"],
                     "item_types": manifest["item_type_count"],
                     "contexts": manifest["context_type_count"],
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "seed-publication-canary":
+        manifest = seed_publication_canary(
+            args.database_url,
+            canary_marker=os.getenv("BUILD08_ASSESSMENT_CANARY", ""),
+        )
+        _write_json(args.output, manifest)
+        print(
+            json.dumps(
+                {
+                    "seeded": manifest["fixture_count"],
+                    "item_types": manifest["item_type_count"],
+                    "recovery_probes": 1,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "probe-publication-recovery":
+        result = asyncio.run(
+            run_publication_recovery_probe(
+                args.database_url,
+                canary_marker=os.getenv("BUILD08_ASSESSMENT_CANARY", ""),
+                settings=Settings(),
+            )
+        )
+        _write_json(args.output, result)
+        print(json.dumps({"passed": result["passed"]}, sort_keys=True))
+        return 0
+    if args.command == "validate-publication-canary":
+        result = asyncio.run(
+            validate_publication_canary(
+                args.database_url,
+                canary_marker=os.getenv("BUILD08_ASSESSMENT_CANARY", ""),
+                settings=Settings(),
+            )
+        )
+        _write_json(args.output, result)
+        print(
+            json.dumps(
+                {
+                    "passed": result["passed"],
+                    "item_types": result["item_type_count"],
+                    "qti_packages": result["qti_package_count"],
                 },
                 sort_keys=True,
             )

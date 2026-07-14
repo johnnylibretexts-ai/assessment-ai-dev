@@ -17,6 +17,17 @@ def settings(tmp_path: Path) -> Settings:
     )
 
 
+def canary_settings(tmp_path: Path) -> Settings:
+    return Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path / 'engine-canary.db'}",
+        qualification_canary_marker="build08-assessment-publication-canary",
+        imathas_enabled=False,
+        imathas_bridge_api_url="http://build08-imathas-bridge-browser:8000",
+        imathas_bridge_token=SecretStr("bridge-secret"),
+    )
+
+
 @pytest.mark.asyncio
 async def test_imathas_bridge_client_uses_pinned_host_token_and_idempotency_key(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -40,7 +51,36 @@ async def test_imathas_bridge_client_uses_pinned_host_token_and_idempotency_key(
     assert seen["url"] == "https://imathas.libretexts.dev/bridge/v1/questions"
     assert seen["headers"] == {"Authorization": "Bearer bridge-secret"}
     assert seen["json"]["publication_key"] == "a" * 64  # type: ignore[index]
-    assert seen["json"]["source_url"] == "https://math.libretexts.org/Bookshelves/Validation"  # type: ignore[index]
+    assert (
+        seen["json"]["source_url"]
+        == "https://math.libretexts.org/Bookshelves/Validation"
+    )  # type: ignore[index]
+
+
+@pytest.mark.asyncio
+async def test_publication_canary_uses_internal_bridge_while_release_flag_is_false(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, object] = {}
+
+    async def fake_post(self, url, **kwargs):  # type: ignore[no-untyped-def]
+        seen.update(url=url)
+        return httpx.Response(200, json={"question_id": 19, "created": True})
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    configured = canary_settings(tmp_path)
+    assert configured.imathas_status == "disabled"
+    result = await IMathASBridgeClient(configured).create_question(
+        publication_key="d" * 64,
+        description="Canary parameterized item",
+        author="LibreTexts Assessment AI",
+        source='{"engine":"imathas"}',
+        source_url="https://math.libretexts.org/Bookshelves/Validation",
+    )
+    assert result.question_id == 19
+    assert seen["url"] == (
+        "http://build08-imathas-bridge-browser:8000/bridge/v1/questions"
+    )
 
 
 @pytest.mark.asyncio

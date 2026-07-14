@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from pydantic import AliasChoices, Field, SecretStr, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -70,6 +70,7 @@ class Settings(BaseSettings):
 
     adapt_publishing_enabled: bool = False
     adapt_base_url: str = "https://adapt.libretexts.dev/api"
+    qualification_canary_marker: str = ""
     adapt_email: str = "assessment-ai@libretexts.dev"
     adapt_password: SecretStr | None = None
     adapt_folder_id: int | None = Field(default=None, gt=0)
@@ -85,6 +86,7 @@ class Settings(BaseSettings):
     webwork_renderer_url: str = "https://wwrenderer.libretexts.dev"
     webwork_timeout_seconds: float = Field(default=30.0, ge=5, le=120)
     imathas_base_url: str = "https://imathas.libretexts.dev"
+    imathas_bridge_api_url: str | None = None
     imathas_bridge_token: SecretStr | None = None
     imathas_timeout_seconds: float = Field(default=30.0, ge=5, le=120)
 
@@ -137,6 +139,8 @@ class Settings(BaseSettings):
     @field_validator("adapt_base_url")
     @classmethod
     def validate_adapt_base_url(cls, value: str) -> str:
+        if value.rstrip("/") == "http://adapt-browser/api":
+            return "http://adapt-browser/api"
         parsed = urlparse(value)
         if (
             parsed.scheme != "https"
@@ -179,6 +183,40 @@ class Settings(BaseSettings):
     @classmethod
     def validate_imathas_base_url(cls, value: str) -> str:
         return _pinned_dev_url(value, "imathas.libretexts.dev")
+
+    @field_validator("imathas_bridge_api_url")
+    @classmethod
+    def validate_imathas_bridge_api_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        normalized = value.rstrip("/")
+        if normalized in {
+            "https://imathas.libretexts.dev",
+            "http://build08-imathas-bridge-browser:8000",
+        }:
+            return normalized
+        raise ValueError(
+            "imathas_bridge_api_url must be the pinned public bridge or the exact "
+            "BUILD-08 qualification-canary alias"
+        )
+
+    @model_validator(mode="after")
+    def validate_qualification_targets(self) -> "Settings":
+        marker = self.qualification_canary_marker.strip()
+        expected = "build08-assessment-publication-canary"
+        internal_target = (
+            self.adapt_base_url == "http://adapt-browser/api"
+            or self.imathas_bridge_api_url
+            == "http://build08-imathas-bridge-browser:8000"
+        )
+        if internal_target and marker != expected:
+            raise ValueError(
+                "internal publication targets require the exact BUILD-08 "
+                "qualification-canary marker"
+            )
+        if marker and marker != expected:
+            raise ValueError("unknown qualification-canary marker")
+        return self
 
     @field_validator("hotspot_media_public_base")
     @classmethod
@@ -240,6 +278,23 @@ class Settings(BaseSettings):
             else ""
         )
         return "configured" if token else "misconfigured"
+
+    @property
+    def imathas_publishing_status(self) -> str:
+        if self.qualification_canary_marker == (
+            "build08-assessment-publication-canary"
+        ):
+            token = (
+                self.imathas_bridge_token.get_secret_value().strip()
+                if self.imathas_bridge_token is not None
+                else ""
+            )
+            return "configured" if token else "misconfigured"
+        return self.imathas_status
+
+    @property
+    def resolved_imathas_bridge_api_url(self) -> str:
+        return self.imathas_bridge_api_url or self.imathas_base_url
 
 
 def _pinned_dev_url(value: str, hostname: str) -> str:

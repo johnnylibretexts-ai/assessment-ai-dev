@@ -32,7 +32,7 @@ class IMathASBridgeClient:
         source: str,
         source_url: str,
     ) -> IMathASQuestion:
-        if self._settings.imathas_status != "configured":
+        if self._settings.imathas_publishing_status != "configured":
             raise EnginePublishingError(
                 "imathas_not_configured", "The local IMathAS bridge is not configured."
             )
@@ -44,7 +44,7 @@ class IMathASBridgeClient:
                 follow_redirects=False,
             ) as client:
                 response = await client.post(
-                    f"{self._settings.imathas_base_url}/bridge/v1/questions",
+                    f"{self._settings.resolved_imathas_bridge_api_url}/bridge/v1/questions",
                     headers={"Authorization": f"Bearer {token.get_secret_value()}"},
                     json={
                         "publication_key": publication_key,
@@ -60,11 +60,13 @@ class IMathASBridgeClient:
             ) from exc
         if response.status_code == 401:
             raise EnginePublishingError(
-                "imathas_auth_failed", "The local IMathAS bridge rejected its service credentials."
+                "imathas_auth_failed",
+                "The local IMathAS bridge rejected its service credentials.",
             )
         if response.status_code >= 400:
             raise EnginePublishingError(
-                "imathas_create_failed", "The local IMathAS question could not be created."
+                "imathas_create_failed",
+                "The local IMathAS question could not be created.",
             )
         try:
             body = response.json()
@@ -73,5 +75,6 @@ class IMathASBridgeClient:
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise EnginePublishingError(
-                "imathas_invalid_response", "The local IMathAS bridge returned an invalid response."
+                "imathas_invalid_response",
+                "The local IMathAS bridge returned an invalid response.",
             ) from exc
