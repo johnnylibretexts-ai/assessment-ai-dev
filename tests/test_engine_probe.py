@@ -42,7 +42,9 @@ def test_runtime_value_evaluation_rejects_preview_substitution_and_bad_grid() ->
 
 
 @pytest.mark.asyncio
-async def test_webwork_probe_uses_runtime_values_not_python_preview(tmp_path: Path) -> None:
+async def test_webwork_probe_uses_runtime_values_not_python_preview(
+    tmp_path: Path,
+) -> None:
     calls = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -228,9 +230,13 @@ async def test_imathas_probe_uses_runtime_values_and_idempotent_object(
             )
         form = parse_qs(request.content.decode())
         score = 1 if float(form["qn5"][0]) == 8 else 0
-        payload = base64.urlsafe_b64encode(
-            json.dumps({"score": score, "errors": []}).encode()
-        ).rstrip(b"=").decode()
+        payload = (
+            base64.urlsafe_b64encode(
+                json.dumps({"score": score, "errors": []}).encode()
+            )
+            .rstrip(b"=")
+            .decode()
+        )
         return httpx.Response(
             200,
             # The pinned legacy PHP endpoint labels its strict JSON as HTML.

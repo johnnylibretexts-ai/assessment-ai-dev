@@ -3,7 +3,11 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from app.adapt import AdaptDestination, build_assessment_payload, build_external_engine_payload
+from app.adapt import (
+    AdaptDestination,
+    build_assessment_payload,
+    build_external_engine_payload,
+)
 from app.parameterized import ParameterizedCompileError, compile_parameterized_item
 from app.schemas import (
     AssessmentItemType,
@@ -47,14 +51,24 @@ def test_ordering_schema_and_adapt_payload_preserve_stable_identifiers() -> None
     )
     payload = build_assessment_payload(
         draft,
-        destination=AdaptDestination(folder_id=1, author="Assessment AI", license="ccby"),
+        destination=AdaptDestination(
+            folder_id=1, author="Assessment AI", license="ccby"
+        ),
         source_url="https://chem.libretexts.org/Books/Page",
         title="Energy order",
     )
     qti = json.loads(str(payload["qti_json"]))
     assert qti["questionType"] == "ordering"
-    assert qti["correctOrder"] == ["assessment-ai-a", "assessment-ai-b", "assessment-ai-c"]
-    assert payload["correct_order"] == ["assessment-ai-a", "assessment-ai-b", "assessment-ai-c"]
+    assert qti["correctOrder"] == [
+        "assessment-ai-a",
+        "assessment-ai-b",
+        "assessment-ai-c",
+    ]
+    assert payload["correct_order"] == [
+        "assessment-ai-a",
+        "assessment-ai-b",
+        "assessment-ai-c",
+    ]
 
 
 def test_hotspot_requires_accessible_image_and_a_correct_region() -> None:
@@ -69,8 +83,11 @@ def test_hotspot_requires_accessible_image_and_a_correct_region() -> None:
                 image_alt="Energy diagram",
                 hotspot_regions=[
                     HotspotRegion(
-                        id="A", label="Left region", shape="rectangle",
-                        coordinates=[0.0, 0.0, 0.5, 0.5], correct=False,
+                        id="A",
+                        label="Left region",
+                        shape="rectangle",
+                        coordinates=[0.0, 0.0, 0.5, 0.5],
+                        correct=False,
                     )
                 ],
             ),
@@ -98,7 +115,10 @@ def test_parameter_compiler_is_deterministic_across_25_bounded_seeds() -> None:
     assert first.source_sha256 == second.source_sha256
     assert first.previews == second.previews
     assert len(first.previews) == 25
-    assert all(preview.answer == preview.variables["mass"] * preview.variables["speed"] for preview in first.previews)
+    assert all(
+        preview.answer == preview.variables["mass"] * preview.variables["speed"]
+        for preview in first.previews
+    )
     assert "DOCUMENT();" in first.source
     assert "$parameters_valid" in first.source
     assert "for (1..1000)" in first.source
@@ -122,7 +142,9 @@ def test_external_webwork_payload_contains_only_compiled_pg_source() -> None:
     compiled = compile_parameterized_item(parameter_spec())
     payload = build_external_engine_payload(
         draft,
-        destination=AdaptDestination(folder_id=1, author="Assessment AI", license="ccby"),
+        destination=AdaptDestination(
+            folder_id=1, author="Assessment AI", license="ccby"
+        ),
         source_url="https://math.libretexts.org/Books/Page",
         title="Parameterized product",
         engine_source=compiled.source,
@@ -133,13 +155,27 @@ def test_external_webwork_payload_contains_only_compiled_pg_source() -> None:
     assert "system(" not in compiled.source
 
 
-def test_hint_ladder_requires_exactly_one_independently_cited_rung_of_each_type() -> None:
+def test_hint_ladder_requires_exactly_one_independently_cited_rung_of_each_type() -> (
+    None
+):
     ladder = HintLadderDraft(
         concept_label="Energy",
         rungs=[
-            HintRungDraft(rung=HintRungType.CONCEPTUAL, text="Recall conservation.", citation_paragraphs=[1]),
-            HintRungDraft(rung=HintRungType.STRATEGIC, text="Track each transfer.", citation_paragraphs=[2]),
-            HintRungDraft(rung=HintRungType.SPECIFIC, text="Compare before and after.", citation_paragraphs=[3]),
+            HintRungDraft(
+                rung=HintRungType.CONCEPTUAL,
+                text="Recall conservation.",
+                citation_paragraphs=[1],
+            ),
+            HintRungDraft(
+                rung=HintRungType.STRATEGIC,
+                text="Track each transfer.",
+                citation_paragraphs=[2],
+            ),
+            HintRungDraft(
+                rung=HintRungType.SPECIFIC,
+                text="Compare before and after.",
+                citation_paragraphs=[3],
+            ),
         ],
     )
     assert [rung.rung for rung in ladder.rungs] == list(HintRungType)
@@ -166,26 +202,55 @@ def test_hint_storage_marks_verbatim_correct_answer_as_a_leak(tmp_path) -> None:
         ],
     )
     concept = Concept(
-        label="Conservation of energy", description="Energy remains constant.", source_paragraphs=[2]
+        label="Conservation of energy",
+        description="Energy remains constant.",
+        source_paragraphs=[2],
     )
     critique = Critique(revision_required=False)
     page = NormalizedPage(
-        title="Energy", plaintext="Energy remains constant.", htmlBody="<p>Energy remains constant.</p>",
-        paragraphs=[Paragraph(index=2, text="Energy remains constant.", start=0, end=24)],
-        source=SourceInfo(canonical_url="https://chem.libretexts.org/Books/Energy", path="chem.libretexts.org/Books/Energy"),
+        title="Energy",
+        plaintext="Energy remains constant.",
+        htmlBody="<p>Energy remains constant.</p>",
+        paragraphs=[
+            Paragraph(index=2, text="Energy remains constant.", start=0, end=24)
+        ],
+        source=SourceInfo(
+            canonical_url="https://chem.libretexts.org/Books/Energy",
+            path="chem.libretexts.org/Books/Energy",
+        ),
     )
     stored = repository.replace_generated_drafts(
         page=page,
         pipeline_version="test-hints-v1",
-        drafts=[DraftWrite(position=0, concept=concept, raw=question, critique=critique, revised=question)],
+        drafts=[
+            DraftWrite(
+                position=0,
+                concept=concept,
+                raw=question,
+                critique=critique,
+                revised=question,
+            )
+        ],
         llm_calls=[],
     )
     ladder = HintLadderDraft(
         concept_label="Conservation of energy",
         rungs=[
-            HintRungDraft(rung=HintRungType.CONCEPTUAL, text="Recall conservation.", citation_paragraphs=[2]),
-            HintRungDraft(rung=HintRungType.STRATEGIC, text="Track the system boundary.", citation_paragraphs=[2]),
-            HintRungDraft(rung=HintRungType.SPECIFIC, text="Energy is conserved in the system.", citation_paragraphs=[2]),
+            HintRungDraft(
+                rung=HintRungType.CONCEPTUAL,
+                text="Recall conservation.",
+                citation_paragraphs=[2],
+            ),
+            HintRungDraft(
+                rung=HintRungType.STRATEGIC,
+                text="Track the system boundary.",
+                citation_paragraphs=[2],
+            ),
+            HintRungDraft(
+                rung=HintRungType.SPECIFIC,
+                text="Energy is conserved in the system.",
+                citation_paragraphs=[2],
+            ),
         ],
     )
     record = repository.save_hint_ladder(stored.draft_ids[0], ladder, editor="reviewer")

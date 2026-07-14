@@ -355,7 +355,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 editor=_reviewer(request),
                 notes=reviewer_notes,
             )
-        except (DraftNotFoundError, ValidationError, ValueError, json.JSONDecodeError) as exc:
+        except (
+            DraftNotFoundError,
+            ValidationError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
             return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))
         return RedirectResponse(
             f"/drafts/{draft_id}?notice=Draft+saved%3B+review+checks+were+reset",
@@ -727,7 +732,9 @@ def _parse_citations(value: str) -> list[int]:
     try:
         citations = [int(item.strip()) for item in value.split(",") if item.strip()]
     except ValueError:
-        raise ValueError("Hint citations must be comma-separated paragraph numbers.") from None
+        raise ValueError(
+            "Hint citations must be comma-separated paragraph numbers."
+        ) from None
     if not citations or any(item < 0 for item in citations):
         raise ValueError("Each hint requires at least one valid paragraph citation.")
     if len(citations) != len(set(citations)):

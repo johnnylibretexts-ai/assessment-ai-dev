@@ -190,9 +190,7 @@ class AssessmentPipeline:
         concepts = concept_result.value.concepts
         for position, item_type in enumerate(resolved_types):
             concept = concepts[position % len(concepts)]
-            focused_source = _render_selected_source(
-                excerpt, concept.source_paragraphs
-            )
+            focused_source = _render_selected_source(excerpt, concept.source_paragraphs)
             draft_prompt = _draft_prompt(
                 page, concept, focused_source, item_type=item_type
             )
@@ -635,7 +633,9 @@ def _revision_prompt(
     *,
     item_type: AssessmentItemType = AssessmentItemType.MULTIPLE_CHOICE,
 ) -> str:
-    item_label = "MCQ" if item_type == AssessmentItemType.MULTIPLE_CHOICE else item_type.value
+    item_label = (
+        "MCQ" if item_type == AssessmentItemType.MULTIPLE_CHOICE else item_type.value
+    )
     return f"""Produce the mandatory revised {item_label} assessment item. Apply the critique
 while checking every claim against the source paragraphs. Even if the critique found no blocking
 issue, independently polish the item. Keep item_type exactly {item_type.value}, keep concept_label
