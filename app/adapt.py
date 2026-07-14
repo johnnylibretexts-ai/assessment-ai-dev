@@ -476,7 +476,7 @@ def _inline_interaction(
     responses = _responses(draft.choices)
     interaction_id = "RESPONSE"
     inline = {interaction_id: responses}
-    item_body = {"inlineChoiceInteraction": f"{prompt_html} [select]"}
+    item_body = f"{prompt_html} [select]"
     payload["qti_item_body"] = item_body
     payload[f"qti_select_choice_{interaction_id}"] = responses
     return {
