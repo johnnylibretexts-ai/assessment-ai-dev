@@ -39,7 +39,13 @@ browserFailUnless(($manifest['native_qti_count'] ?? null) === 17, 'browser manif
 browserFailUnless(($manifest['external_engine_count'] ?? null) === 2, 'browser manifest does not contain two engine items');
 $items = $manifest['items'] ?? null;
 browserFailUnless(is_array($items) && count($items) === 19, 'browser manifest items are incomplete');
-$canonical = json_encode($items, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+$canonical = json_encode(
+    $items,
+    JSON_UNESCAPED_SLASHES
+        | JSON_UNESCAPED_UNICODE
+        | JSON_PRESERVE_ZERO_FRACTION
+        | JSON_THROW_ON_ERROR
+);
 browserFailUnless(hash('sha256', $canonical) === ($manifest['items_sha256'] ?? null), 'browser manifest digest changed');
 
 $instructorEmail = getenv('BUILD08_INSTRUCTOR_EMAIL') ?: 'johnny@libretexts.dev';
