@@ -304,6 +304,13 @@ class Settings(BaseSettings):
     def resolved_imathas_bridge_api_url(self) -> str:
         return self.imathas_bridge_api_url or self.imathas_base_url
 
+    @property
+    def resolved_imathas_bridge_questions_url(self) -> str:
+        base_url = self.resolved_imathas_bridge_api_url
+        if base_url == "http://build08-imathas-bridge-browser:8000":
+            return f"{base_url}/v1/questions"
+        return f"{base_url}/bridge/v1/questions"
+
 
 def _pinned_dev_url(value: str, hostname: str) -> str:
     parsed = urlparse(value)

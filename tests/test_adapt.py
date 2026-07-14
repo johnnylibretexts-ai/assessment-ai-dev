@@ -186,6 +186,10 @@ def test_internal_publication_targets_require_exact_canary_marker(
         configured.resolved_imathas_bridge_api_url
         == "http://build08-imathas-bridge-browser:8000"
     )
+    assert (
+        configured.resolved_imathas_bridge_questions_url
+        == "http://build08-imathas-bridge-browser:8000/v1/questions"
+    )
     assert configured.imathas_status == "disabled"
     assert configured.imathas_publishing_status == "misconfigured"
 
