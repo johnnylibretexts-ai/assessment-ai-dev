@@ -16,6 +16,10 @@ CANARY_MARKER = "adapt-final-seed-disposable-clone"
 SOURCE_URL = (
     "https://chem.libretexts.org/Bookshelves/BUILD08/Assessment_Browser_Qualification"
 )
+ENGINE_SOURCE_URL = (
+    "https://math.libretexts.org/Bookshelves/BUILD08/Parameterized_Engine_Qualification"
+)
+ENGINE_AUTHOR = "LibreTexts Assessment AI"
 
 
 def build_adapt_browser_manifest() -> dict[str, Any]:
@@ -34,6 +38,8 @@ def build_adapt_browser_manifest() -> dict[str, Any]:
                     "item_type": item_type.value,
                     "technology": item_type.value,
                     "existing_title": f"BUILD-08 final seed {item_type.value}-01",
+                    "source_url": ENGINE_SOURCE_URL,
+                    "author": ENGINE_AUTHOR,
                 }
             )
             continue
@@ -79,7 +85,11 @@ def build_adapt_browser_manifest() -> dict[str, Any]:
 def _expected_response(draft: QuestionDraft, qti: dict[str, Any]) -> Any:
     item_type = draft.item_type
     if item_type in {AssessmentItemType.MULTIPLE_CHOICE, AssessmentItemType.TRUE_FALSE}:
-        return next(choice["identifier"] for choice in qti["simpleChoice"] if choice["correctResponse"])
+        return next(
+            choice["identifier"]
+            for choice in qti["simpleChoice"]
+            if choice["correctResponse"]
+        )
     if item_type == AssessmentItemType.NUMERICAL:
         return qti["correctResponse"]["value"]
     if item_type in {
@@ -87,7 +97,11 @@ def _expected_response(draft: QuestionDraft, qti: dict[str, Any]) -> Any:
         AssessmentItemType.SELECT_ALL,
         AssessmentItemType.SELECT_N,
     }:
-        return [response["identifier"] for response in qti["responses"] if response["correctResponse"]]
+        return [
+            response["identifier"]
+            for response in qti["responses"]
+            if response["correctResponse"]
+        ]
     if item_type == AssessmentItemType.FILL_IN_BLANK:
         return [blank.correct[0] for blank in draft.response.blanks]
     if item_type in {AssessmentItemType.SELECT_CHOICE, AssessmentItemType.DROPDOWN}:
@@ -114,7 +128,11 @@ def _expected_response(draft: QuestionDraft, qti: dict[str, Any]) -> Any:
     if item_type == AssessmentItemType.IMAGE_HOTSPOT:
         return [region["id"] for region in qti["regions"] if region["correct"]]
     if item_type == AssessmentItemType.HIGHLIGHT_TEXT:
-        return [response["identifier"] for response in qti["responses"] if response["correctResponse"]]
+        return [
+            response["identifier"]
+            for response in qti["responses"]
+            if response["correctResponse"]
+        ]
     if item_type == AssessmentItemType.HIGHLIGHT_TABLE:
         return [
             response["identifier"]
@@ -135,9 +153,15 @@ def _expected_response(draft: QuestionDraft, qti: dict[str, Any]) -> Any:
         return {
             "actionsToTake": [item["identifier"] for item in qti["actionsToTake"]],
             "potentialConditions": [
-                next(item["identifier"] for item in qti["potentialConditions"] if item["correctResponse"])
+                next(
+                    item["identifier"]
+                    for item in qti["potentialConditions"]
+                    if item["correctResponse"]
+                )
             ],
-            "parametersToMonitor": [item["identifier"] for item in qti["parametersToMonitor"]],
+            "parametersToMonitor": [
+                item["identifier"] for item in qti["parametersToMonitor"]
+            ],
         }
     raise ValueError(f"missing browser response for {item_type.value}")
 

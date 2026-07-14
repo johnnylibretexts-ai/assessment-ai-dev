@@ -135,9 +135,23 @@ foreach ($items as $index => $item) {
         $question = browserEnsureQtiQuestion($item, (int)$service->id, (int)$serviceFolder->id);
     } else {
         browserFailUnless(in_array($technology, ['webwork', 'imathas'], true), "unknown technology {$technology}");
-        $question = Question::where('title', browserString($item, 'existing_title'))
+        $published = Question::where('technology', $technology)
+            ->where('title', browserString($item, 'existing_title'))
+            ->where('source_url', browserString($item, 'source_url'))
+            ->where('author', browserString($item, 'author'))
+            ->where('question_editor_user_id', (int)$service->id)
+            ->get();
+        browserFailUnless(
+            $published->count() === 1,
+            "{$technology} published fixture is missing or ambiguous"
+        );
+        $question = $published
             ->where('technology', $technology)
-            ->firstOrFail();
+            ->first();
+        browserFailUnless(
+            is_string($question->technology_id) && $question->technology_id !== '',
+            "{$technology} published fixture lacks a technology identifier"
+        );
     }
     DB::table('assignment_question')->updateOrInsert(
         ['assignment_id' => $assignment->id, 'question_id' => $question->id],
@@ -161,6 +175,15 @@ foreach ($items as $index => $item) {
     ];
 }
 browserFailUnless(count($records) === 19 && count($seenTypes) === 19, 'seeded browser matrix is incomplete');
+$questionIds = array_column($records, 'question_id');
+DB::table('assignment_question')
+    ->where('assignment_id', $assignment->id)
+    ->whereNotIn('question_id', $questionIds)
+    ->delete();
+browserFailUnless(
+    DB::table('assignment_question')->where('assignment_id', $assignment->id)->count() === 19,
+    'browser assignment contains stale question relationships'
+);
 
 $output = [
     'schema_version' => 'build08-adapt-browser-canary-v1',

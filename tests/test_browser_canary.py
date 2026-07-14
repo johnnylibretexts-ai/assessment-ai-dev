@@ -50,6 +50,18 @@ def test_adapt_browser_manifest_covers_all_item_types_and_safe_media() -> None:
         for item in manifest["items"]
         if item["technology"] == "qti"
     )
+    external = [
+        item
+        for item in manifest["items"]
+        if item["technology"] in {"webwork", "imathas"}
+    ]
+    assert {item["technology"] for item in external} == {"webwork", "imathas"}
+    assert all(
+        item["source_url"].startswith("https://math.libretexts.org/Bookshelves/")
+        and item["author"] == "LibreTexts Assessment AI"
+        and item["existing_title"] == f"BUILD-08 final seed {item['technology']}-01"
+        for item in external
+    )
     hotspot = next(
         item for item in manifest["items"] if item["item_type"] == "image_hotspot"
     )
