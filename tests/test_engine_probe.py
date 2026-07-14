@@ -103,6 +103,31 @@ async def test_webwork_probe_uses_runtime_values_not_python_preview(tmp_path: Pa
 
 
 @pytest.mark.asyncio
+async def test_renderer_outage_returns_a_terminal_probe_receipt() -> None:
+    def unavailable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("renderer unavailable", request=request)
+
+    case = next(
+        case
+        for case in build_seed_plan("renderer-outage")
+        if case.item_type == AssessmentItemType.WEBWORK and case.seed == 1
+    )
+    receipt = await WebWorkProbeClient(
+        transport=httpx.MockTransport(unavailable)
+    ).probe(
+        case,
+        engine_image_sha256=IMAGE,
+        network_isolation_attestation_sha256=ATTESTATION,
+    )
+
+    assert not receipt.rendered
+    assert receipt.failure_stage == "initial_render"
+    assert receipt.error_count == 1
+    assert not receipt.expected_answer_accepted
+    assert not receipt.wrong_answer_rejected
+
+
+@pytest.mark.asyncio
 async def test_webwork_probe_is_resumable(tmp_path: Path) -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(

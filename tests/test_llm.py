@@ -439,6 +439,39 @@ async def test_gemini_retries_retryable_http_status() -> None:
 
 
 @pytest.mark.asyncio
+async def test_gemini_exhausts_retryable_outage_without_leaking_response() -> None:
+    calls = 0
+    delays: list[float] = []
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            503,
+            text="provider-secret-value must not cross the client boundary",
+        )
+
+    async def record_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    client = GeminiClient(
+        settings(gemini_api_key="provider-secret-value", gemini_max_retries=1),
+        transport=httpx.MockTransport(handler),
+        sleep=record_sleep,
+    )
+    try:
+        with pytest.raises(LLMTransportError) as caught:
+            await client.complete("Fail safely after provider outage.", Answer)
+    finally:
+        await client.aclose()
+
+    assert calls == 2
+    assert delays == [0.5]
+    assert "provider-secret-value" not in str(caught.value)
+    assert str(caught.value) == "Gemini request failed with HTTP 503"
+
+
+@pytest.mark.asyncio
 async def test_gemini_does_not_retry_non_transient_http_error() -> None:
     calls = 0
 

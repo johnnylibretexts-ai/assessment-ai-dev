@@ -17,6 +17,9 @@ from evaluation.models import (
     CorpusPage,
     DomainStratum,
     EngineProbeReceipt,
+    OutageBoundary,
+    OutageOutcome,
+    OutageReceipt,
     Publishability,
     ReviewRecord,
     ReviewRole,
@@ -28,6 +31,7 @@ from evaluation.validators import (
     compare_shadow_receipts,
     validate_corpus_manifest,
     validate_engine_probe_receipts,
+    validate_outage_receipts,
     validate_review_ledger,
     validate_seed_receipts,
 )
@@ -173,6 +177,61 @@ def test_engine_probe_validator_requires_both_complete_runtime_matrices() -> Non
     assert not result.passed
     assert result.counts["failed_receipts"] == 0
     assert any("imathas" in failure for failure in result.failures)
+
+
+def test_outage_validator_requires_every_independent_boundary() -> None:
+    receipts = [
+        OutageReceipt(
+            run_id="outage-run",
+            boundary=boundary,
+            injection_method="isolated_failure_injection",
+            failure_code=f"{boundary.value}_unavailable",
+            outcome=(
+                OutageOutcome.TERMINAL
+                if boundary == OutageBoundary.PROVIDER
+                else OutageOutcome.RETRYABLE
+            ),
+            retry_safe=boundary != OutageBoundary.PROVIDER,
+            terminal_safe=boundary == OutageBoundary.PROVIDER,
+            no_partial_publication=True,
+            adapt_core_ready=True,
+            recovered=True,
+            secrets_redacted=True,
+            advanced_flags_false=True,
+            evidence_sha256=_sha(boundary.value),
+            platform_state_sha256=_sha("platform-state"),
+        )
+        for boundary in OutageBoundary
+    ]
+
+    passing = validate_outage_receipts(receipts)
+    assert passing.passed
+    assert passing.counts == {
+        "receipts": 7,
+        "boundaries": 7,
+        "retryable": 6,
+        "terminal": 1,
+    }
+
+    failing = validate_outage_receipts(receipts[:-1])
+    assert not failing.passed
+    assert any("qti_storage" in failure for failure in failing.failures)
+
+    duplicated = receipts.copy()
+    duplicated[-1] = duplicated[-1].model_copy(
+        update={"evidence_sha256": duplicated[0].evidence_sha256}
+    )
+    duplicate_evidence = validate_outage_receipts(duplicated)
+    assert not duplicate_evidence.passed
+    assert any("independent evidence" in failure for failure in duplicate_evidence.failures)
+
+    mixed_state = receipts.copy()
+    mixed_state[-1] = mixed_state[-1].model_copy(
+        update={"platform_state_sha256": _sha("different-platform-state")}
+    )
+    mixed_state_result = validate_outage_receipts(mixed_state)
+    assert not mixed_state_result.passed
+    assert any("platform-state" in failure for failure in mixed_state_result.failures)
 
 
 def test_shadow_comparator_requires_event_completeness_and_exact_parity() -> None:

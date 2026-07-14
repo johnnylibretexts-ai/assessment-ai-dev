@@ -11,6 +11,7 @@ from pydantic import SecretStr
 from app.adapt import (
     AdaptAmbiguousError,
     AdaptCreateResult,
+    AdaptPublishingError,
     FrameworkItem,
     ResolvedAlignment,
 )
@@ -263,6 +264,92 @@ async def test_unknown_create_is_reconciled_without_a_second_post(
         assert second.state == PublicationState.SUCCEEDED.value
         assert second.adapt_question_id == 901
         assert fake.create_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_adapt_outage_is_retryable_without_partial_publication(
+    tmp_path: Path,
+) -> None:
+    config = configured_settings(tmp_path)
+    app = create_app(config)
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_approved(repository)
+
+        class FailingOnceAdapt(FakeAdapt):
+            async def create_question(
+                self, payload: dict[str, object]
+            ) -> AdaptCreateResult:
+                self.create_calls += 1
+                if self.create_calls == 1:
+                    raise AdaptPublishingError(
+                        "ADAPT is temporarily unavailable.",
+                        code="adapt_unavailable",
+                    )
+                return AdaptCreateResult(question_id=711, page_id=711)
+
+        fake = FailingOnceAdapt()
+        service = PublicationService(config, repository, fake)
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+        arguments = {
+            "publisher": "reviewer@example.org",
+            "topic_stable_id": topic.stable_id,
+            "alignment_confirmed": True,
+        }
+
+        failed = await service.publish(draft_id, **arguments)
+        assert failed.state == PublicationState.FAILED.value
+        assert failed.error_code == "adapt_unavailable"
+        assert failed.adapt_question_id is None
+        assert failed.qti_path is None
+        assert len(repository.require_draft(draft_id).publications) == 1
+
+        recovered = await service.publish(draft_id, **arguments)
+        assert recovered.state == PublicationState.SUCCEEDED.value
+        assert recovered.adapt_question_id == 711
+        assert recovered.qti_path is not None
+        assert fake.create_calls == 2
+        assert len(repository.require_draft(draft_id).publications) == 1
+
+
+@pytest.mark.asyncio
+async def test_qti_storage_outage_resumes_without_duplicate_adapt_create(
+    tmp_path: Path,
+) -> None:
+    blocked_storage = tmp_path / "blocked-qti-storage"
+    blocked_storage.write_text("not a directory", encoding="utf-8")
+    config = configured_settings(tmp_path).model_copy(
+        update={"qti_storage_dir": blocked_storage}
+    )
+    app = create_app(config)
+    fake = FakeAdapt()
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_approved(repository)
+        service = PublicationService(config, repository, fake)
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+        arguments = {
+            "publisher": "reviewer@example.org",
+            "topic_stable_id": topic.stable_id,
+            "alignment_confirmed": True,
+        }
+
+        retained = await service.publish(draft_id, **arguments)
+        assert retained.state == PublicationState.ADAPT_CREATED.value
+        assert retained.error_code == "qti_finalize_failed"
+        assert retained.adapt_question_id == 501
+        assert retained.qti_path is None
+        assert fake.create_calls == 1
+
+        blocked_storage.unlink()
+        completed = await service.publish(draft_id, **arguments)
+        assert completed.state == PublicationState.SUCCEEDED.value
+        assert completed.adapt_question_id == 501
+        assert completed.qti_path is not None
+        assert fake.create_calls == 1
+        assert len(repository.require_draft(draft_id).publications) == 1
 
 
 @pytest.mark.asyncio
