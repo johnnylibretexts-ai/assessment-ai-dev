@@ -89,6 +89,49 @@ def compile_parameterized_item(
     )
 
 
+def evaluate_parameterized_answer(
+    spec: ParameterizedItemSpec, values: dict[str, float | int]
+) -> float:
+    """Evaluate a compiled item's answer against engine-observed values."""
+    _validate_runtime_values(spec, values)
+    answer = float(_evaluate(spec.answer_expression, values))
+    if not (-1e15 < answer < 1e15):
+        raise ParameterizedCompileError("generated answer is outside safe bounds")
+    return answer
+
+
+def parameterized_constraints_satisfied(
+    spec: ParameterizedItemSpec, values: dict[str, float | int]
+) -> bool:
+    """Check constraints against engine-observed values, never preview RNG state."""
+    _validate_runtime_values(spec, values)
+    return all(
+        bool(_evaluate(constraint, values, allow_comparison=True))
+        for constraint in spec.constraints
+    )
+
+
+def _validate_runtime_values(
+    spec: ParameterizedItemSpec, values: dict[str, float | int]
+) -> None:
+    expected = {variable.name for variable in spec.variables}
+    if set(values) != expected:
+        raise ParameterizedCompileError(
+            "runtime values do not match the parameter specification"
+        )
+    for variable in spec.variables:
+        value = values[variable.name]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ParameterizedCompileError("runtime parameter is not numeric")
+        if not variable.minimum <= value <= variable.maximum:
+            raise ParameterizedCompileError("runtime parameter is outside its range")
+        offset = (float(value) - variable.minimum) / variable.step
+        if abs(offset - round(offset)) > 1e-8:
+            raise ParameterizedCompileError("runtime parameter is off its step grid")
+        if variable.integer and float(value) != int(value):
+            raise ParameterizedCompileError("runtime integer parameter is fractional")
+
+
 def _preview_for_seed(spec: ParameterizedItemSpec, seed: int) -> SeedPreview:
     generator = random.Random(seed)
     for _attempt in range(1_000):

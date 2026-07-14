@@ -16,6 +16,7 @@ from evaluation.models import (
     CorpusManifest,
     CorpusPage,
     DomainStratum,
+    EngineProbeReceipt,
     Publishability,
     ReviewRecord,
     ReviewRole,
@@ -26,6 +27,7 @@ from evaluation.models import (
 from evaluation.validators import (
     compare_shadow_receipts,
     validate_corpus_manifest,
+    validate_engine_probe_receipts,
     validate_review_ledger,
     validate_seed_receipts,
 )
@@ -134,6 +136,43 @@ def test_seed_validator_requires_every_execution_check() -> None:
     failing = validate_seed_receipts(receipts)
     assert not failing.passed
     assert failing.counts["failed_receipts"] == 1
+
+
+def test_engine_probe_validator_requires_both_complete_runtime_matrices() -> None:
+    receipt = EngineProbeReceipt(
+        run_id="probe-run",
+        item_id="webwork-01",
+        item_type=AssessmentItemType.WEBWORK,
+        seed=1,
+        compiler_version="parameterized-dsl-v1",
+        source_sha256=_sha("source"),
+        endpoint_host="wwrenderer.libretexts.dev",
+        engine_image_sha256="sha256:" + "a" * 64,
+        network_isolation_attestation_sha256=_sha("network"),
+        runtime_values_sha256=_sha("values"),
+        semantic_render_sha256=_sha("render"),
+        deterministic=True,
+        constraints_satisfied=True,
+        rendered=True,
+        render_duration_ms=10,
+        warning_count=0,
+        error_count=0,
+        expected_answer_accepted=True,
+        wrong_answer_rejected=True,
+        expected_score=1,
+        wrong_score=0,
+        remaining_checks=[
+            "persisted_grade_match",
+            "object_idempotent",
+            "cross_owner_access_blocked",
+        ],
+    )
+
+    result = validate_engine_probe_receipts([receipt])
+
+    assert not result.passed
+    assert result.counts["failed_receipts"] == 0
+    assert any("imathas" in failure for failure in result.failures)
 
 
 def test_shadow_comparator_requires_event_completeness_and_exact_parity() -> None:
