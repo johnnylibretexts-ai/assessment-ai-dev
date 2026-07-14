@@ -44,7 +44,7 @@ class IMathASBridgeClient:
                 follow_redirects=False,
             ) as client:
                 response = await client.post(
-                    f"{self._settings.resolved_imathas_bridge_api_url}/bridge/v1/questions",
+                    self._settings.resolved_imathas_bridge_questions_url,
                     headers={"Authorization": f"Bearer {token.get_secret_value()}"},
                     json={
                         "publication_key": publication_key,

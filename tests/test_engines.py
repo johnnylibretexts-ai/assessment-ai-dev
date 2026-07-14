@@ -78,9 +78,7 @@ async def test_publication_canary_uses_internal_bridge_while_release_flag_is_fal
         source_url="https://math.libretexts.org/Bookshelves/Validation",
     )
     assert result.question_id == 19
-    assert seen["url"] == (
-        "http://build08-imathas-bridge-browser:8000/bridge/v1/questions"
-    )
+    assert seen["url"] == ("http://build08-imathas-bridge-browser:8000/v1/questions")
 
 
 @pytest.mark.asyncio
