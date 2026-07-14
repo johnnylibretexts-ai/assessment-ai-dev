@@ -21,6 +21,7 @@ from .models import (
     AdaptSeedItem,
     EngineProbeReceipt,
     FixtureBundle,
+    OutageReceipt,
     QualificationReport,
     ReviewRecord,
     SeedPlanCase,
@@ -31,6 +32,7 @@ from .validators import (
     compare_shadow_receipts,
     validate_corpus_manifest,
     validate_engine_probe_receipts,
+    validate_outage_receipts,
     validate_review_ledger,
     validate_seed_receipts,
 )
@@ -79,6 +81,10 @@ def build_parser() -> argparse.ArgumentParser:
     engine_probes.add_argument("receipts", type=Path)
     engine_probes.add_argument("--output", type=Path)
 
+    outages = commands.add_parser("validate-outages")
+    outages.add_argument("receipts", type=Path)
+    outages.add_argument("--output", type=Path)
+
     merge_probes = commands.add_parser("merge-engine-probes")
     merge_probes.add_argument("receipts", type=Path, nargs="+")
     merge_probes.add_argument("--output", type=Path, required=True)
@@ -118,6 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--corpus", type=Path, required=True)
     report.add_argument("--reviews", type=Path, required=True)
     report.add_argument("--seeds", type=Path, required=True)
+    report.add_argument("--outages", type=Path, required=True)
     report.add_argument("--shadow", type=Path, required=True)
     report.add_argument("--output", type=Path, required=True)
     return parser
@@ -183,6 +190,10 @@ def main(argv: list[str] | None = None) -> int:
         result = validate_engine_probe_receipts(
             _read_jsonl(args.receipts, EngineProbeReceipt)
         )
+        _emit(result, args.output)
+        return 0 if result.passed else 2
+    if args.command == "validate-outages":
+        result = validate_outage_receipts(_read_jsonl(args.receipts, OutageReceipt))
         _emit(result, args.output)
         return 0 if result.passed else 2
     if args.command == "merge-engine-probes":
@@ -287,6 +298,7 @@ def main(argv: list[str] | None = None) -> int:
             ),
             validate_review_ledger(_read_jsonl(args.reviews, ReviewRecord)),
             validate_seed_receipts(_read_jsonl(args.seeds, SeedReceipt)),
+            validate_outage_receipts(_read_jsonl(args.outages, OutageReceipt)),
             compare_shadow_receipts(_read_jsonl(args.shadow, ShadowReceipt)),
         ]
         report = QualificationReport(
@@ -363,6 +375,7 @@ def _write_schemas(output_dir: Path) -> None:
         "adapt-seed-attestation.schema.json": AdaptSeedAttestation,
         "adapt-seed-item.schema.json": AdaptSeedItem,
         "engine-probe-receipt.schema.json": EngineProbeReceipt,
+        "outage-receipt.schema.json": OutageReceipt,
         "shadow-receipt.schema.json": ShadowReceipt,
     }
     for filename, model in schemas.items():

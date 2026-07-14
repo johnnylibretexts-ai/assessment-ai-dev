@@ -27,6 +27,7 @@ assessment-ai-evaluate probe-imathas evidence/seed-plan.jsonl \
   --adapter-image-sha256 sha256:<full-bridge-image-digest> \
   --network-attestation-sha256 <sealed-network-evidence-digest>
 assessment-ai-evaluate validate-engine-probes evidence/engine-probes.jsonl
+assessment-ai-evaluate validate-outages evidence/outage-receipts.jsonl
 assessment-ai-evaluate merge-engine-probes \
   evidence/webwork-engine-probes.jsonl \
   evidence/imathas-engine-probes.jsonl \
@@ -44,6 +45,7 @@ assessment-ai-evaluate report \
   --corpus evidence/corpus.json \
   --reviews evidence/reviews.jsonl \
   --seeds evidence/seed-receipts.jsonl \
+  --outages evidence/outage-receipts.jsonl \
   --shadow evidence/shadow-receipts.jsonl \
   --output evidence/qualification-report.json
 ```
@@ -77,4 +79,5 @@ cannot be promoted into final receipts.
 Validators exit `0` only when the corresponding release threshold passes and
 exit `2` for valid but insufficient or failing evidence. Invalid JSON/schema
 input fails closed. The aggregate report passes only when corpus, human review,
-seed execution, and off-versus-observe shadow parity all pass.
+seed execution, the seven-boundary outage matrix, and off-versus-observe shadow
+parity all pass.

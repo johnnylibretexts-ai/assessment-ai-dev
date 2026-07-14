@@ -9,6 +9,8 @@ from app.schemas import AssessmentItemType
 from .models import (
     CorpusManifest,
     EngineProbeReceipt,
+    OutageBoundary,
+    OutageReceipt,
     Publishability,
     ReviewRecord,
     ReviewRole,
@@ -17,6 +19,57 @@ from .models import (
     ShadowMode,
     ShadowReceipt,
 )
+
+
+def validate_outage_receipts(records: Iterable[OutageReceipt]) -> SectionResult:
+    receipts = list(records)
+    failures: list[str] = []
+    run_ids = {receipt.run_id for receipt in receipts}
+    if len(run_ids) != 1:
+        failures.append("outage receipts must contain exactly one run_id")
+
+    boundary_counts = Counter(receipt.boundary for receipt in receipts)
+    for boundary in OutageBoundary:
+        if boundary_counts[boundary] != 1:
+            failures.append(
+                f"{boundary.value}: requires exactly one independent outage receipt"
+            )
+
+    evidence_hashes = [receipt.evidence_sha256 for receipt in receipts]
+    if len(evidence_hashes) != len(set(evidence_hashes)):
+        failures.append("outage receipts must reference independent evidence artifacts")
+    platform_states = {receipt.platform_state_sha256 for receipt in receipts}
+    if len(platform_states) != 1:
+        failures.append("outage receipts must share one sealed platform-state attestation")
+
+    for receipt in receipts:
+        failed_checks = [
+            name
+            for name, passed in {
+                "safe outcome": receipt.retry_safe or receipt.terminal_safe,
+                "no partial publication": receipt.no_partial_publication,
+                "ADAPT core readiness": receipt.adapt_core_ready,
+                "recovery": receipt.recovered,
+                "secret redaction": receipt.secrets_redacted,
+                "advanced flags disabled": receipt.advanced_flags_false,
+            }.items()
+            if not passed
+        ]
+        if failed_checks:
+            failures.append(
+                f"{receipt.boundary.value}: failed {', '.join(failed_checks)}"
+            )
+
+    return _result(
+        "outages",
+        failures,
+        {
+            "receipts": len(receipts),
+            "boundaries": len(boundary_counts),
+            "retryable": sum(receipt.retry_safe for receipt in receipts),
+            "terminal": sum(receipt.terminal_safe for receipt in receipts),
+        },
+    )
 
 
 def validate_engine_probe_receipts(

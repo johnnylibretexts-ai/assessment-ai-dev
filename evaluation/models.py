@@ -26,6 +26,21 @@ class DomainStratum(StrEnum):
     SPANISH_FRENCH = "spanish_french"
 
 
+class OutageBoundary(StrEnum):
+    PROVIDER = "provider"
+    ASSESSMENT_AI = "assessment_ai"
+    ADAPT_PUBLICATION = "adapt_publication"
+    WEBWORK = "webwork"
+    RENDERER = "renderer"
+    IMATHAS_BRIDGE = "imathas_bridge"
+    QTI_STORAGE = "qti_storage"
+
+
+class OutageOutcome(StrEnum):
+    RETRYABLE = "retryable"
+    TERMINAL = "terminal"
+
+
 class CorpusPage(BaseModel):
     page_key: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{2,63}$")
     stratum: DomainStratum
@@ -283,6 +298,35 @@ class EngineProbeReceipt(BaseModel):
         }
         if set(self.remaining_checks) != required:
             raise ValueError("engine probes must retain all final receipt checks")
+        return self
+
+
+class OutageReceipt(BaseModel):
+    schema_version: Literal["build08-outage-v1"] = "build08-outage-v1"
+    run_id: str = Field(min_length=1, max_length=100)
+    boundary: OutageBoundary
+    injection_method: str = Field(pattern=r"^[a-z0-9_]{3,80}$")
+    failure_code: str = Field(pattern=r"^[a-z0-9_]{3,100}$")
+    outcome: OutageOutcome
+    retry_safe: bool
+    terminal_safe: bool
+    no_partial_publication: bool
+    adapt_core_ready: bool
+    recovered: bool
+    secrets_redacted: bool
+    advanced_flags_false: bool
+    evidence_sha256: str = Field(pattern=SHA256_PATTERN)
+    platform_state_sha256: str = Field(pattern=SHA256_PATTERN)
+
+    @model_validator(mode="after")
+    def validate_outcome(self) -> "OutageReceipt":
+        if self.retry_safe == self.terminal_safe:
+            raise ValueError("exactly one safe outage outcome must be selected")
+        expected = (
+            OutageOutcome.RETRYABLE if self.retry_safe else OutageOutcome.TERMINAL
+        )
+        if self.outcome != expected:
+            raise ValueError("outage outcome does not match its safety attestation")
         return self
 
 

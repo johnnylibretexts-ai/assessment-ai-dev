@@ -60,3 +60,24 @@ async def test_imathas_bridge_client_redacts_remote_failure_body(
             source_url="https://math.libretexts.org/Bookshelves/Validation",
         )
     assert "password" not in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_imathas_bridge_network_outage_is_retryable_and_redacted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def unavailable(self, url, **kwargs):  # type: ignore[no-untyped-def]
+        request = httpx.Request("POST", url)
+        raise httpx.ConnectError("bridge-secret must stay private", request=request)
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", unavailable)
+    with pytest.raises(EnginePublishingError) as caught:
+        await IMathASBridgeClient(settings(tmp_path)).create_question(
+            publication_key="c" * 64,
+            description="Parameterized item",
+            author="LibreTexts Assessment AI",
+            source='{"engine":"imathas"}',
+            source_url="https://math.libretexts.org/Bookshelves/Validation",
+        )
+    assert caught.value.code == "imathas_unavailable"
+    assert "bridge-secret" not in str(caught.value)
