@@ -192,6 +192,54 @@ class SeedReceipt(BaseModel):
     cross_owner_access_blocked: bool
 
 
+class AdaptSeedAttestation(BaseModel):
+    schema_version: Literal["build08-adapt-seed-attestation-v1"] = (
+        "build08-adapt-seed-attestation-v1"
+    )
+    run_id: str = Field(min_length=1, max_length=100)
+    item_id: str = Field(min_length=1, max_length=200)
+    item_type: Literal[AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS]
+    seed: int = Field(ge=1, le=100)
+    compiler_version: str = Field(min_length=1, max_length=100)
+    source_sha256: str = Field(pattern=SHA256_PATTERN)
+    adapt_image_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    clone_backup_sha256: str = Field(pattern=SHA256_PATTERN)
+    adapt_question_id: int = Field(gt=0)
+    adapt_assignment_id: int = Field(gt=0)
+    adapt_submission_id: int = Field(gt=0)
+    expected_score: float = Field(ge=0, le=1)
+    persisted_score: float = Field(ge=0)
+    submission_count: int = Field(ge=1, le=100)
+    grade_refreshed: bool
+    object_idempotent: bool
+    cross_owner_access_blocked: bool
+    canary_network_internal: bool
+    hint_mode_off: bool
+
+
+class AdaptSeedItem(BaseModel):
+    schema_version: Literal["build08-adapt-seed-item-v1"] = (
+        "build08-adapt-seed-item-v1"
+    )
+    run_id: str = Field(min_length=1, max_length=100)
+    item_id: str = Field(min_length=1, max_length=200)
+    item_type: Literal[AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS]
+    compiler_version: str = Field(min_length=1, max_length=100)
+    source_sha256: str = Field(pattern=SHA256_PATTERN)
+    engine_source: str = Field(min_length=1, max_length=100_000)
+    technology_id: int | None = Field(default=None, gt=0)
+    engine_object_sha256: str | None = Field(default=None, pattern=SHA256_PATTERN)
+
+    @model_validator(mode="after")
+    def validate_engine_object(self) -> "AdaptSeedItem":
+        if self.item_type == AssessmentItemType.IMATHAS:
+            if self.technology_id is None or self.engine_object_sha256 is None:
+                raise ValueError("IMathAS seed items require the linked engine object")
+        elif self.technology_id is not None or self.engine_object_sha256 is not None:
+            raise ValueError("WeBWorK seed items do not use an engine object ID")
+        return self
+
+
 class EngineProbeReceipt(BaseModel):
     schema_version: Literal["build08-engine-probe-v1"] = "build08-engine-probe-v1"
     run_id: str = Field(min_length=1, max_length=100)
