@@ -473,8 +473,15 @@ def _inline_interaction(
             "itemBody": item_body,
             "responseDeclaration": {"correctResponse": interactions},
         }
-    responses = _responses(draft.choices)
-    interaction_id = "RESPONSE"
+    responses = [
+        {
+            "value": response["identifier"],
+            "text": response["value"],
+            "correctResponse": response["correctResponse"],
+        }
+        for response in _responses(draft.choices)
+    ]
+    interaction_id = "select"
     inline = {interaction_id: responses}
     item_body = f"{prompt_html} [select]"
     payload["qti_item_body"] = item_body

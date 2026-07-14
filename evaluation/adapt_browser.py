@@ -93,7 +93,7 @@ def _expected_response(draft: QuestionDraft, qti: dict[str, Any]) -> Any:
     if item_type in {AssessmentItemType.SELECT_CHOICE, AssessmentItemType.DROPDOWN}:
         return [
             next(
-                response["identifier"]
+                response["value"]
                 for response in qti["inline_choice_interactions"][interaction]
                 if response["correctResponse"]
             )
