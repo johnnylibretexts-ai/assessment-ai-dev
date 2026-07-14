@@ -53,6 +53,12 @@ def test_adapt_browser_manifest_covers_all_item_types_and_safe_media() -> None:
     assert hotspot["qti_json"]["imageUrl"].startswith(
         "data:image/svg+xml;base64,"
     )
+    for item_type in ("select_choice", "dropdown"):
+        choice = next(
+            item for item in manifest["items"] if item["item_type"] == item_type
+        )
+        assert isinstance(choice["qti_json"]["itemBody"], str)
+        assert choice["qti_json"]["itemBody"].endswith("[select]")
 
 
 def test_browser_canary_requires_absolute_file_backed_sqlite() -> None:
