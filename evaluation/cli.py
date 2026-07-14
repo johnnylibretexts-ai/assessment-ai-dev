@@ -67,6 +67,10 @@ def build_parser() -> argparse.ArgumentParser:
     engine_probes.add_argument("receipts", type=Path)
     engine_probes.add_argument("--output", type=Path)
 
+    merge_probes = commands.add_parser("merge-engine-probes")
+    merge_probes.add_argument("receipts", type=Path, nargs="+")
+    merge_probes.add_argument("--output", type=Path, required=True)
+
     webwork_probes = commands.add_parser("probe-webwork")
     webwork_probes.add_argument("seed_plan", type=Path)
     webwork_probes.add_argument("--output", type=Path, required=True)
@@ -128,6 +132,19 @@ def main(argv: list[str] | None = None) -> int:
         )
         _emit(result, args.output)
         return 0 if result.passed else 2
+    if args.command == "merge-engine-probes":
+        records = [
+            record
+            for path in args.receipts
+            for record in _read_jsonl(path, EngineProbeReceipt)
+        ]
+        keys = [(record.item_id, record.seed) for record in records]
+        if len(keys) != len(set(keys)):
+            raise ValueError("engine probe inputs contain duplicate item/seed pairs")
+        records.sort(key=lambda record: (record.item_type.value, record.item_id, record.seed))
+        _write_jsonl(args.output, records)
+        print(json.dumps({"merged": len(records)}, sort_keys=True))
+        return 0
     if args.command == "probe-webwork":
         image = args.engine_image_sha256
         if not image.startswith("sha256:") or len(image) != 71:

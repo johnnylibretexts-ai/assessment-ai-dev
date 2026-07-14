@@ -23,6 +23,10 @@ assessment-ai-evaluate probe-imathas evidence/seed-plan.jsonl \
   --adapter-image-sha256 sha256:<full-bridge-image-digest> \
   --network-attestation-sha256 <sealed-network-evidence-digest>
 assessment-ai-evaluate validate-engine-probes evidence/engine-probes.jsonl
+assessment-ai-evaluate merge-engine-probes \
+  evidence/webwork-engine-probes.jsonl \
+  evidence/imathas-engine-probes.jsonl \
+  --output evidence/engine-probes.jsonl
 assessment-ai-evaluate compare-shadow evidence/shadow-receipts.jsonl
 assessment-ai-evaluate report \
   --corpus evidence/corpus.json \
