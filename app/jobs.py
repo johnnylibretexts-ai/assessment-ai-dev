@@ -117,18 +117,28 @@ class GenerationWorker:
 def _validated_item_types(
     settings: Settings, request: GenerateRequest
 ) -> list[AssessmentItemType] | None:
-    selected = list(request.item_types) if request.generation_mode == "selected" else None
+    selected = (
+        list(request.item_types) if request.generation_mode == "selected" else None
+    )
     parameterized = {AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS}
     requested = set(selected or ())
     if requested & parameterized and not settings.parameterized_items_enabled:
         raise ValueError("Parameterized item generation is disabled.")
-    if AssessmentItemType.WEBWORK in requested and settings.webwork_status != "configured":
+    if (
+        AssessmentItemType.WEBWORK in requested
+        and settings.webwork_status != "configured"
+    ):
         raise ValueError("The local WeBWorK engine is not configured.")
-    if AssessmentItemType.IMATHAS in requested and settings.imathas_status != "configured":
+    if (
+        AssessmentItemType.IMATHAS in requested
+        and settings.imathas_status != "configured"
+    ):
         raise ValueError("The local IMathAS engine is not configured.")
     return selected
 
 
 def _safe_error_code(exc: Exception) -> str:
     name = type(exc).__name__.casefold()
-    return "".join(character for character in name if character.isalnum() or character == "_")[:100]
+    return "".join(
+        character for character in name if character.isalnum() or character == "_"
+    )[:100]

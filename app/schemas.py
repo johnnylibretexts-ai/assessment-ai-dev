@@ -296,18 +296,27 @@ class QuestionDraft(BaseModel):
                 if self.response.select_n is None:
                     raise ValueError("select-N drafts require select_n")
                 if self.response.select_n != correct_count:
-                    raise ValueError("select_n must equal the number of correct choices")
+                    raise ValueError(
+                        "select_n must equal the number of correct choices"
+                    )
         if self.item_type == AssessmentItemType.ORDERING:
             if len(ids) < 3 or set(self.response.correct_order) != set(ids):
-                raise ValueError("ordering drafts require an order containing every choice")
-        if self.item_type == AssessmentItemType.MATCHING and len(
-            self.response.matching_pairs
-        ) < 2:
+                raise ValueError(
+                    "ordering drafts require an order containing every choice"
+                )
+        if (
+            self.item_type == AssessmentItemType.MATCHING
+            and len(self.response.matching_pairs) < 2
+        ):
             raise ValueError("matching drafts require at least two pairs")
-        if self.item_type in {
-            AssessmentItemType.FILL_IN_BLANK,
-            AssessmentItemType.DRAG_DROP_CLOZE,
-        } and not self.response.blanks:
+        if (
+            self.item_type
+            in {
+                AssessmentItemType.FILL_IN_BLANK,
+                AssessmentItemType.DRAG_DROP_CLOZE,
+            }
+            and not self.response.blanks
+        ):
             raise ValueError("blank and cloze drafts require response blanks")
         if (
             self.item_type == AssessmentItemType.NUMERICAL
@@ -322,9 +331,7 @@ class QuestionDraft(BaseModel):
         if self.item_type in {
             AssessmentItemType.HIGHLIGHT_TEXT,
             AssessmentItemType.HIGHLIGHT_TABLE,
-        } and not any(
-            segment.correct for segment in self.response.highlight_segments
-        ):
+        } and not any(segment.correct for segment in self.response.highlight_segments):
             raise ValueError("highlight drafts require at least one correct segment")
         if self.item_type == AssessmentItemType.MATRIX:
             column_ids = {choice.id for choice in self.response.matrix_columns}
@@ -342,7 +349,9 @@ class QuestionDraft(BaseModel):
                 self.response.bow_tie_parameters,
             )
         ):
-            raise ValueError("bow-tie drafts require actions, condition, and parameters")
+            raise ValueError(
+                "bow-tie drafts require actions, condition, and parameters"
+            )
         if self.item_type in {
             AssessmentItemType.WEBWORK,
             AssessmentItemType.IMATHAS,
@@ -350,11 +359,15 @@ class QuestionDraft(BaseModel):
             parameterized = self.response.parameterized
             if parameterized is None or parameterized.engine != self.item_type.value:
                 raise ValueError("parameterized drafts require a matching engine spec")
-        if self.context_type in {
-            ItemContextType.SCENARIO,
-            ItemContextType.CASE,
-            ItemContextType.SHARED_STIMULUS,
-        } and not self.stimulus:
+        if (
+            self.context_type
+            in {
+                ItemContextType.SCENARIO,
+                ItemContextType.CASE,
+                ItemContextType.SHARED_STIMULUS,
+            }
+            and not self.stimulus
+        ):
             raise ValueError("scenario and shared-stimulus items require stimulus text")
         if self.context_type == ItemContextType.SHARED_STIMULUS and not self.set_key:
             raise ValueError("shared-stimulus items require a set key")

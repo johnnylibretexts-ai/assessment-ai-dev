@@ -223,7 +223,9 @@ def test_outage_validator_requires_every_independent_boundary() -> None:
     )
     duplicate_evidence = validate_outage_receipts(duplicated)
     assert not duplicate_evidence.passed
-    assert any("independent evidence" in failure for failure in duplicate_evidence.failures)
+    assert any(
+        "independent evidence" in failure for failure in duplicate_evidence.failures
+    )
 
     mixed_state = receipts.copy()
     mixed_state[-1] = mixed_state[-1].model_copy(

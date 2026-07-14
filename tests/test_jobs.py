@@ -7,12 +7,17 @@ def repository(tmp_path) -> DraftRepository:
     return DraftRepository(init_database(f"sqlite:///{tmp_path / 'jobs.db'}"))
 
 
-def test_generation_jobs_are_durable_claimed_once_and_requeued_after_restart(tmp_path) -> None:
+def test_generation_jobs_are_durable_claimed_once_and_requeued_after_restart(
+    tmp_path,
+) -> None:
     repo = repository(tmp_path)
     job = repo.create_generation_job(
         source_type="public",
         source_locator="https://chem.libretexts.org/Books/Page",
-        request={"source_type": "public", "source_locator": "https://chem.libretexts.org/Books/Page"},
+        request={
+            "source_type": "public",
+            "source_locator": "https://chem.libretexts.org/Books/Page",
+        },
         reviewer="reviewer",
     )
     claimed = repo.claim_next_generation_job()
@@ -40,7 +45,10 @@ def test_only_one_worker_can_claim_a_pending_job(tmp_path) -> None:
     repo.create_generation_job(
         source_type="public",
         source_locator="https://math.libretexts.org/Books/Page",
-        request={"source_type": "public", "source_locator": "https://math.libretexts.org/Books/Page"},
+        request={
+            "source_type": "public",
+            "source_locator": "https://math.libretexts.org/Books/Page",
+        },
         reviewer="reviewer",
     )
     with ThreadPoolExecutor(max_workers=4) as pool:

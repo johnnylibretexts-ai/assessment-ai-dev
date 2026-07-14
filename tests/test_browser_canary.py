@@ -34,14 +34,17 @@ def test_adapt_browser_manifest_covers_all_item_types_and_safe_media() -> None:
     assert manifest["native_qti_count"] == 17
     assert manifest["external_engine_count"] == 2
     assert len({item["item_type"] for item in manifest["items"]}) == 19
-    assert manifest["items_sha256"] == hashlib.sha256(
-        json.dumps(
-            manifest["items"],
-            separators=(",", ":"),
-            ensure_ascii=False,
-            sort_keys=True,
-        ).encode()
-    ).hexdigest()
+    assert (
+        manifest["items_sha256"]
+        == hashlib.sha256(
+            json.dumps(
+                manifest["items"],
+                separators=(",", ":"),
+                ensure_ascii=False,
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+    )
     assert all(
         item["expected_response"] is not None
         for item in manifest["items"]
@@ -50,9 +53,7 @@ def test_adapt_browser_manifest_covers_all_item_types_and_safe_media() -> None:
     hotspot = next(
         item for item in manifest["items"] if item["item_type"] == "image_hotspot"
     )
-    assert hotspot["qti_json"]["imageUrl"].startswith(
-        "data:image/svg+xml;base64,"
-    )
+    assert hotspot["qti_json"]["imageUrl"].startswith("data:image/svg+xml;base64,")
     for item_type in ("select_choice", "dropdown"):
         choice = next(
             item for item in manifest["items"] if item["item_type"] == item_type

@@ -164,11 +164,16 @@ class GenerationJob(Base):
     request_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     reviewer_identity: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(
-        String(20), default=GenerationJobStatus.PENDING.value, nullable=False, index=True
+        String(20),
+        default=GenerationJobStatus.PENDING.value,
+        nullable=False,
+        index=True,
     )
     stage: Mapped[str] = mapped_column(String(80), default="queued", nullable=False)
     progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    draft_ids_json: Mapped[list[int]] = mapped_column(JSON, default=list, nullable=False)
+    draft_ids_json: Mapped[list[int]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
     error_code: Mapped[str | None] = mapped_column(String(100))
     error_message: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(
@@ -613,7 +618,8 @@ class Database:
 
     def _apply_sqlite_additive_migrations(self) -> None:
         existing = {
-            column["name"] for column in inspect(self.engine).get_columns("publications")
+            column["name"]
+            for column in inspect(self.engine).get_columns("publications")
         }
         additions = {
             "hint_ladder_snapshot_json": "JSON",
@@ -1289,7 +1295,9 @@ class DraftRepository:
             if record is None:
                 raise ReviewGateError("generate a hint ladder before reviewing it")
             ladder = HintLadderDraft.model_validate(record.ladder_json)
-            _validate_hint_ladder(QuestionDraft.model_validate(draft.current_json), ladder)
+            _validate_hint_ladder(
+                QuestionDraft.model_validate(draft.current_json), ladder
+            )
             if approved and confirmed != expected:
                 raise ReviewGateError("confirm all three hint rungs before approval")
             if approved and any(rung.answer_leak_detected for rung in ladder.rungs):
@@ -1655,10 +1663,11 @@ def _validate_persisted_question(draft: Draft, question: QuestionDraft) -> None:
         )
 
 
-def _validate_hint_ladder(
-    question: QuestionDraft, ladder: HintLadderDraft
-) -> None:
-    if ladder.concept_label.strip().casefold() != question.concept_label.strip().casefold():
+def _validate_hint_ladder(question: QuestionDraft, ladder: HintLadderDraft) -> None:
+    if (
+        ladder.concept_label.strip().casefold()
+        != question.concept_label.strip().casefold()
+    ):
         raise DraftGroundingError("a hint ladder cannot change the selected concept")
     allowed = set(question.citation_paragraphs)
     for rung in ladder.rungs:

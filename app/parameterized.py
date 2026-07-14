@@ -76,9 +76,7 @@ def compile_parameterized_item(
         _preview_for_seed(spec, seed) for seed in range(1, validation_seeds + 1)
     )
     source = (
-        _compile_webwork(spec)
-        if spec.engine == "webwork"
-        else _compile_imathas(spec)
+        _compile_webwork(spec) if spec.engine == "webwork" else _compile_imathas(spec)
     )
     return CompiledParameterizedItem(
         engine=spec.engine,
@@ -136,8 +134,7 @@ def _preview_for_seed(spec: ParameterizedItemSpec, seed: int) -> SeedPreview:
     generator = random.Random(seed)
     for _attempt in range(1_000):
         values = {
-            variable.name: _sample(variable, generator)
-            for variable in spec.variables
+            variable.name: _sample(variable, generator) for variable in spec.variables
         }
         if all(
             bool(_evaluate(constraint, values, allow_comparison=True))
@@ -145,7 +142,9 @@ def _preview_for_seed(spec: ParameterizedItemSpec, seed: int) -> SeedPreview:
         ):
             answer = float(_evaluate(spec.answer_expression, values))
             if not (-1e15 < answer < 1e15):
-                raise ParameterizedCompileError("generated answer is outside safe bounds")
+                raise ParameterizedCompileError(
+                    "generated answer is outside safe bounds"
+                )
             return SeedPreview(
                 seed=seed,
                 variables=values,
@@ -202,7 +201,9 @@ def _validate_node(node: ast.AST, names: set[str], *, allow_comparison: bool) ->
         return
     if isinstance(node, ast.Name):
         if node.id not in names:
-            raise ParameterizedCompileError(f"unknown variable in expression: {node.id}")
+            raise ParameterizedCompileError(
+                f"unknown variable in expression: {node.id}"
+            )
         return
     if isinstance(node, ast.BinOp) and type(node.op) in _ALLOWED_BINARY:
         _validate_node(node.left, names, allow_comparison=allow_comparison)
@@ -280,7 +281,9 @@ def _compile_webwork(spec: ParameterizedItemSpec) -> str:
             'die("Unable to generate safe parameters") unless $parameters_valid;',
         ]
     answer = _expression_for_engine(spec.answer_expression, prefix="$", power="**")
-    prompt = _template_for_engine(spec.prompt_template, prefix="$", wrapper="\\(", suffix="\\)")
+    prompt = _template_for_engine(
+        spec.prompt_template, prefix="$", wrapper="\\(", suffix="\\)"
+    )
     return "\n".join(
         [
             "DOCUMENT();",
@@ -312,7 +315,9 @@ def _compile_imathas(spec: ParameterizedItemSpec) -> str:
         "units": spec.units,
         "seed_policy": spec.seed_policy,
     }
-    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
 
 
 def _expression_for_engine(
@@ -345,7 +350,9 @@ def _expression_for_engine(
                 ast.Pow: power,
                 ast.Mod: "%",
             }
-            return f"({render(node.left)} {operators[type(node.op)]} {render(node.right)})"
+            return (
+                f"({render(node.left)} {operators[type(node.op)]} {render(node.right)})"
+            )
         if isinstance(node, ast.Compare):
             operators = {
                 ast.Eq: "==",
