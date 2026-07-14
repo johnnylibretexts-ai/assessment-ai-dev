@@ -220,6 +220,7 @@ class EngineProbeReceipt(BaseModel):
     wrong_answer_rejected: bool
     expected_score: float | None = Field(default=None, ge=0, le=1)
     wrong_score: float | None = Field(default=None, ge=0, le=1)
+    failure_stage: str | None = Field(default=None, pattern=r"^[a-z0-9_]{1,64}$")
     final_receipt_ready: Literal[False] = False
     remaining_checks: list[
         Literal["persisted_grade_match", "object_idempotent", "cross_owner_access_blocked"]

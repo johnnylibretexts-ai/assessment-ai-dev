@@ -115,6 +115,7 @@ class WebWorkProbeClient:
         started = time.monotonic()
         warning_count = 0
         error_count = 0
+        failure_stage = "initial_render"
         try:
             async with httpx.AsyncClient(
                 transport=self.transport,
@@ -122,17 +123,22 @@ class WebWorkProbeClient:
                 follow_redirects=False,
             ) as client:
                 first = await self._render(client, source, case.seed)
+                failure_stage = "repeat_render"
                 second = await self._render(client, source, case.seed)
+                failure_stage = "parse_runtime_values"
                 first_values = _runtime_values(first, spec)
                 second_values = _runtime_values(second, spec)
+                failure_stage = "evaluate_runtime_answer"
                 expected_answer = evaluate_parameterized_answer(spec, first_values)
                 constraints_satisfied = parameterized_constraints_satisfied(
                     spec, first_values
                 )
                 wrong_answer = expected_answer + max(1.0, abs(expected_answer) * 0.1)
+                failure_stage = "submit_expected"
                 accepted = await self._render(
                     client, source, case.seed, answer=expected_answer
                 )
+                failure_stage = "submit_wrong"
                 rejected = await self._render(
                     client, source, case.seed, answer=wrong_answer
                 )
@@ -210,6 +216,7 @@ class WebWorkProbeClient:
                 error_count=max(1, error_count),
                 expected_answer_accepted=False,
                 wrong_answer_rejected=False,
+                failure_stage=failure_stage,
                 remaining_checks=REMAINING_CHECKS,
             )
 
@@ -343,6 +350,7 @@ class IMathASProbeClient:
     ) -> EngineProbeReceipt:
         started = time.monotonic()
         object_sha = _sha256(f"imathas-question:{question_id}")
+        failure_stage = "source_integrity"
         try:
             if hashlib.sha256(source.encode()).hexdigest() != case.source_sha256:
                 raise EngineProbeError("IMathAS source changed after question creation")
@@ -351,20 +359,26 @@ class IMathASProbeClient:
                 timeout=self.timeout_seconds,
                 follow_redirects=False,
             ) as client:
+                failure_stage = "initial_render"
                 first_page = await self._initial_page(client, question_id, case.seed)
+                failure_stage = "repeat_render"
                 second_page = await self._initial_page(client, question_id, case.seed)
+                failure_stage = "parse_runtime_values"
                 first_state, first_ref, first_values = _imathas_state(first_page, spec)
                 second_state, second_ref, second_values = _imathas_state(
                     second_page, spec
                 )
+                failure_stage = "evaluate_runtime_answer"
                 expected_answer = evaluate_parameterized_answer(spec, first_values)
                 constraints_satisfied = parameterized_constraints_satisfied(
                     spec, first_values
                 )
                 wrong_answer = expected_answer + max(1.0, abs(expected_answer) * 0.1)
+                failure_stage = "submit_expected"
                 expected_score, expected_errors = await self._submit(
                     client, first_state, first_ref, expected_answer
                 )
+                failure_stage = "submit_wrong"
                 wrong_score, wrong_errors = await self._submit(
                     client, second_state, second_ref, wrong_answer
                 )
@@ -441,6 +455,7 @@ class IMathASProbeClient:
                 error_count=1,
                 expected_answer_accepted=False,
                 wrong_answer_rejected=False,
+                failure_stage=failure_stage,
                 remaining_checks=REMAINING_CHECKS,
             )
 
