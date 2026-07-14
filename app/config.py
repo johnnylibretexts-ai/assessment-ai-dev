@@ -293,6 +293,14 @@ class Settings(BaseSettings):
         return self.imathas_status
 
     @property
+    def hint_publication_enabled(self) -> bool:
+        """Allow sealed approved hints through the exact qualification canary."""
+
+        return self.hint_generation_enabled or self.qualification_canary_marker == (
+            "build08-assessment-publication-canary"
+        )
+
+    @property
     def resolved_imathas_bridge_api_url(self) -> str:
         return self.imathas_bridge_api_url or self.imathas_base_url
 

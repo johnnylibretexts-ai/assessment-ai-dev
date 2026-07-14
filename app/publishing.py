@@ -640,7 +640,7 @@ class PublicationService:
         }
 
     def _approved_hint_snapshot(self, draft: Draft) -> dict[str, Any] | None:
-        if not self._settings.hint_generation_enabled:
+        if not self._settings.hint_publication_enabled:
             return None
         record = draft.current_hint_ladder
         if record is None:

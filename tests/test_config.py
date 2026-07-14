@@ -73,6 +73,21 @@ def test_adapt_publishing_health_state_is_independent_and_requires_full_config()
     assert configured.adapt_publishing_status == "configured"
 
 
+def test_only_exact_qualification_canary_can_publish_hints_while_flag_is_false() -> (
+    None
+):
+    disabled = Settings(_env_file=None, hint_generation_enabled=False)
+    assert disabled.hint_publication_enabled is False
+
+    canary = Settings(
+        _env_file=None,
+        hint_generation_enabled=False,
+        qualification_canary_marker="build08-assessment-publication-canary",
+    )
+    assert canary.hint_generation_enabled is False
+    assert canary.hint_publication_enabled is True
+
+
 @pytest.mark.parametrize(
     "url",
     [
