@@ -449,17 +449,22 @@ def _inline_interaction(
     prompt_html: str,
 ) -> dict[str, object]:
     if draft.item_type == AssessmentItemType.FILL_IN_BLANK:
-        interactions = {
-            blank.id: {
-                "correctResponse": blank.correct,
-                "caseSensitive": blank.case_sensitive,
+        if any(len(blank.correct) != 1 for blank in draft.response.blanks):
+            raise ValueError(
+                "ADAPT fill-in-the-blank publication requires exactly one accepted value per blank"
+            )
+        interactions = [
+            {
+                "value": blank.correct[0],
+                "matchingType": "exact",
+                "caseSensitive": "yes" if blank.case_sensitive else "no",
             }
             for blank in draft.response.blanks
-        }
+        ]
         item_body = {
             "textEntryInteraction": prompt_html
             + " "
-            + " ".join(f"<u>{blank.id}</u>" for blank in draft.response.blanks)
+            + " ".join("<u></u>" for _blank in draft.response.blanks)
         }
         payload["qti_item_body"] = item_body
         payload["qti_text_entry_interactions"] = interactions

@@ -11,11 +11,20 @@ from app.adapt import (
     AdaptPublishingError,
     FrameworkAlignment,
     FrameworkItem,
+    build_assessment_payload,
     build_mcq_payload,
 )
 from app.catalog import chemistry_seed, suggested_topic
 from app.config import Settings
-from app.schemas import BloomLevel, Choice, Difficulty, QuestionDraft
+from app.schemas import (
+    AssessmentItemType,
+    BloomLevel,
+    Choice,
+    ClozeBlank,
+    Difficulty,
+    ItemResponse,
+    QuestionDraft,
+)
 
 
 def draft() -> QuestionDraft:
@@ -79,6 +88,64 @@ def test_alignment_is_omitted_when_not_selected() -> None:
         title="Energy draft",
     )
     assert "framework_item_sync_question" not in payload
+
+
+def test_fill_in_blank_payload_matches_adapt_positional_contract() -> None:
+    fill = QuestionDraft(
+        item_type=AssessmentItemType.FILL_IN_BLANK,
+        concept_label="Conservation of energy",
+        stem="Complete both statements.",
+        explanation="The values are source-supported.",
+        bloom=BloomLevel.UNDERSTAND,
+        difficulty=Difficulty.EASY,
+        citation_paragraphs=[0],
+        response=ItemResponse(
+            blanks=[
+                ClozeBlank(id="BLANK1", correct=["conserved"]),
+                ClozeBlank(id="BLANK2", correct=["transformed"], case_sensitive=True),
+            ]
+        ),
+    )
+    payload = build_assessment_payload(
+        fill,
+        destination=AdaptDestination(
+            folder_id=42, author="Assessment Reviewer", license="ccby"
+        ),
+        source_url="https://chem.libretexts.org/Bookshelves/example",
+        title="Fill-in contract",
+    )
+    qti = json.loads(payload["qti_json"])
+
+    assert qti["itemBody"]["textEntryInteraction"].endswith("<u></u> <u></u>")
+    assert qti["responseDeclaration"]["correctResponse"] == [
+        {"value": "conserved", "matchingType": "exact", "caseSensitive": "no"},
+        {"value": "transformed", "matchingType": "exact", "caseSensitive": "yes"},
+    ]
+
+
+def test_fill_in_blank_payload_rejects_lossy_multiple_answers() -> None:
+    fill = QuestionDraft(
+        item_type=AssessmentItemType.FILL_IN_BLANK,
+        concept_label="Conservation of energy",
+        stem="Complete the statement.",
+        explanation="The value is source-supported.",
+        bloom=BloomLevel.UNDERSTAND,
+        difficulty=Difficulty.EASY,
+        citation_paragraphs=[0],
+        response=ItemResponse(
+            blanks=[ClozeBlank(id="BLANK1", correct=["conserved", "preserved"])]
+        ),
+    )
+
+    with pytest.raises(ValueError, match="exactly one accepted value"):
+        build_assessment_payload(
+            fill,
+            destination=AdaptDestination(
+                folder_id=42, author="Assessment Reviewer", license="ccby"
+            ),
+            source_url="https://chem.libretexts.org/Bookshelves/example",
+            title="Fill-in contract",
+        )
 
 
 def adapt_settings(tmp_path: Path) -> Settings:
