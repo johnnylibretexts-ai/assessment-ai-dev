@@ -75,13 +75,89 @@ async def test_hotspot_rejects_undiscovered_redirect_svg_and_hostile_hosts(
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal calls
         calls += 1
-        return httpx.Response(302, headers={"location": "https://evil.example/image.png"})
+        return httpx.Response(
+            302, headers={"location": "https://evil.example/image.png"}
+        )
 
-    store = HotspotMediaStore(settings(tmp_path), transport=httpx.MockTransport(handler))
+    store = HotspotMediaStore(
+        settings(tmp_path), transport=httpx.MockTransport(handler)
+    )
     with pytest.raises(HotspotMediaError):
         await store.copy_from_page("https://evil.example/image.png", page(approved))
     with pytest.raises(HotspotMediaError):
-        await store.copy_from_page("https://chem.libretexts.org/media/other.png", page(approved))
+        await store.copy_from_page(
+            "https://chem.libretexts.org/media/other.png", page(approved)
+        )
     with pytest.raises(HotspotMediaError):
         await store.copy_from_page(approved, page(approved))
     assert calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source",
+    [
+        "https://assess-ai.libretexts.dev/media/internal.png",
+        "https://files.libretexts.net/private/internal.png",
+        "https://chem.libretexts.org.evil.example/media/diagram.png",
+    ],
+)
+async def test_hotspot_rejects_non_library_hosts_before_network(
+    tmp_path: Path, source: str
+) -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, content=png(), headers={"content-type": "image/png"})
+
+    store = HotspotMediaStore(
+        settings(tmp_path), transport=httpx.MockTransport(handler)
+    )
+    with pytest.raises(HotspotMediaError, match="host is not approved"):
+        await store.copy_from_page(source, page(source))
+    assert calls == 0
+
+
+@pytest.mark.asyncio
+async def test_hotspot_streaming_limit_rejects_oversized_body(
+    tmp_path: Path,
+) -> None:
+    source = "https://chem.libretexts.org/media/diagram.png"
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=b"x" * (HotspotMediaStore.MAX_BYTES + 1),
+            headers={"content-type": "image/png"},
+        )
+
+    store = HotspotMediaStore(
+        settings(tmp_path), transport=httpx.MockTransport(handler)
+    )
+    with pytest.raises(HotspotMediaError, match="too large"):
+        await store.copy_from_page(source, page(source))
+
+
+@pytest.mark.asyncio
+async def test_hotspot_rejects_oversized_declared_length_without_reading_body(
+    tmp_path: Path,
+) -> None:
+    source = "https://chem.libretexts.org/media/diagram.png"
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=png(),
+            headers={
+                "content-type": "image/png",
+                "content-length": str(HotspotMediaStore.MAX_BYTES + 1),
+            },
+        )
+
+    store = HotspotMediaStore(
+        settings(tmp_path), transport=httpx.MockTransport(handler)
+    )
+    with pytest.raises(HotspotMediaError, match="too large"):
+        await store.copy_from_page(source, page(source))

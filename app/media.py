@@ -13,6 +13,7 @@ from PIL import Image, UnidentifiedImageError
 
 from .config import Settings
 from .schemas import NormalizedPage
+from .source_policy import PUBLIC_LIBRETEXTS_HOSTS
 
 
 class HotspotMediaError(ValueError):
@@ -45,21 +46,58 @@ class HotspotMediaStore:
             headers={"User-Agent": "LibreTexts-Assessment-AI/0.3"},
         ) as client:
             try:
-                response = await client.get(canonical)
+                response_context = client.stream("GET", canonical)
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
-                raise HotspotMediaError("The source image could not be retrieved.") from exc
-        if response.status_code != 200:
-            raise HotspotMediaError("The source image could not be retrieved.")
-        content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
-        if content_type not in self.ALLOWED_CONTENT_TYPES:
-            raise HotspotMediaError("Only PNG, JPEG, and WebP source images are supported.")
-        body = response.content
+                raise HotspotMediaError(
+                    "The source image could not be retrieved."
+                ) from exc
+            try:
+                async with response_context as response:
+                    if response.status_code != 200:
+                        raise HotspotMediaError(
+                            "The source image could not be retrieved."
+                        )
+                    content_type = (
+                        response.headers.get("content-type", "")
+                        .split(";", 1)[0]
+                        .lower()
+                    )
+                    if content_type not in self.ALLOWED_CONTENT_TYPES:
+                        raise HotspotMediaError(
+                            "Only PNG, JPEG, and WebP source images are supported."
+                        )
+                    content_length = response.headers.get("content-length")
+                    if content_length is not None:
+                        try:
+                            declared_length = int(content_length)
+                        except ValueError as exc:
+                            raise HotspotMediaError(
+                                "The source image length is invalid."
+                            ) from exc
+                        if declared_length < 1 or declared_length > self.MAX_BYTES:
+                            raise HotspotMediaError(
+                                "The source image is empty or too large."
+                            )
+                    chunks = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        chunks.extend(chunk)
+                        if len(chunks) > self.MAX_BYTES:
+                            raise HotspotMediaError(
+                                "The source image is empty or too large."
+                            )
+                    body = bytes(chunks)
+            except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                raise HotspotMediaError(
+                    "The source image could not be retrieved."
+                ) from exc
         if not body or len(body) > self.MAX_BYTES:
             raise HotspotMediaError("The source image is empty or too large.")
         try:
             with Image.open(io.BytesIO(body)) as source:
                 if source.width * source.height > self.MAX_PIXELS:
-                    raise HotspotMediaError("The source image dimensions are too large.")
+                    raise HotspotMediaError(
+                        "The source image dimensions are too large."
+                    )
                 source.load()
                 cleaned = source.convert("RGBA" if "A" in source.getbands() else "RGB")
                 output = io.BytesIO()
@@ -104,14 +142,9 @@ def _canonical_media_url(value: str, source_url: str) -> str:
     except ValueError as exc:
         raise HotspotMediaError("The source image URL is invalid.") from exc
     host = (parsed.hostname or "").lower()
-    approved = (
-        host.endswith(".libretexts.org")
-        or host.endswith(".libretexts.net")
-        or host.endswith(".libretexts.dev")
-    )
     if (
         parsed.scheme != "https"
-        or not approved
+        or host not in PUBLIC_LIBRETEXTS_HOSTS
         or parsed.port is not None
         or parsed.username
         or parsed.password
