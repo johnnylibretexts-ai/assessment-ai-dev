@@ -208,7 +208,8 @@ async def test_imathas_probe_uses_runtime_values_and_idempotent_object(
         ).rstrip(b"=").decode()
         return httpx.Response(
             200,
-            headers={"content-type": "application/json"},
+            # The pinned legacy PHP endpoint labels its strict JSON as HTML.
+            headers={"content-type": "text/html; charset=UTF-8"},
             json={"jwt": f"header.{payload}.signature"},
         )
 
