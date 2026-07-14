@@ -596,6 +596,7 @@ def _draft_summary(draft: Draft) -> dict[str, Any]:
         "source_type": _source_type(draft.source.backend),
         "stem": current.stem,
         "item_type": current.item_type.value,
+        "context_type": current.context_type.value,
         "bloom": current.bloom.value,
         "difficulty": current.difficulty.value,
     }

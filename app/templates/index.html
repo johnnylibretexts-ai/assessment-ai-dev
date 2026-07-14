@@ -93,6 +93,8 @@
             <h3>{{ draft.source_title }}</h3>
             <p>{{ draft.stem }}</p>
             <div class="meta">
+              <span>Type: {{ draft.item_type.replace('_', ' ') }}</span>
+              <span>Context: {{ draft.context_type.replace('_', ' ') }}</span>
               <span>Bloom: {{ draft.bloom }}</span>
               <span>Difficulty: {{ draft.difficulty }}</span>
             </div>

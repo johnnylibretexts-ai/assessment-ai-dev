@@ -13,6 +13,7 @@ RUN groupadd --gid 10001 assessment-ai \
 
 COPY pyproject.toml README.md ./
 COPY app ./app
+COPY evaluation ./evaluation
 RUN pip install .
 
 FROM base AS test

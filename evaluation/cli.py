@@ -11,6 +11,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from .adapt_seed import build_adapt_seed_items, finalize_seed_receipts
+from .browser_canary import seed_browser_canary
 from .engine_probe import IMathASProbeClient, run_imathas_probes, run_webwork_probes
 from .fixtures import build_fixture_bundle, build_seed_plan
 from .models import (
@@ -46,6 +47,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     fixtures = commands.add_parser("build-fixtures")
     fixtures.add_argument("--output", type=Path, required=True)
+
+    browser_canary = commands.add_parser("seed-browser-canary")
+    browser_canary.add_argument("--database-url", required=True)
+    browser_canary.add_argument("--output", type=Path, required=True)
 
     seed_plan = commands.add_parser("build-seed-plan")
     seed_plan.add_argument("--output", type=Path, required=True)
@@ -119,6 +124,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build-fixtures":
         _write_json(args.output, build_fixture_bundle())
         return 0
+    if args.command == "seed-browser-canary":
+        manifest = seed_browser_canary(
+            args.database_url,
+            canary_marker=os.getenv("BUILD08_ASSESSMENT_CANARY", ""),
+        )
+        _write_json(args.output, manifest)
+        print(
+            json.dumps(
+                {
+                    "seeded": manifest["fixture_count"],
+                    "item_types": manifest["item_type_count"],
+                    "contexts": manifest["context_type_count"],
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
     if args.command == "build-seed-plan":
         _write_jsonl(args.output, build_seed_plan(args.run_id))
         return 0
@@ -154,7 +176,9 @@ def main(argv: list[str] | None = None) -> int:
         keys = [(record.item_id, record.seed) for record in records]
         if len(keys) != len(set(keys)):
             raise ValueError("engine probe inputs contain duplicate item/seed pairs")
-        records.sort(key=lambda record: (record.item_type.value, record.item_id, record.seed))
+        records.sort(
+            key=lambda record: (record.item_type.value, record.item_id, record.seed)
+        )
         _write_jsonl(args.output, records)
         print(json.dumps({"merged": len(records)}, sort_keys=True))
         return 0
@@ -178,7 +202,9 @@ def main(argv: list[str] | None = None) -> int:
             isinstance(key, str) and isinstance(value, int)
             for key, value in raw_mapping.items()
         ):
-            raise ValueError("IMathAS object mapping must be a string-to-integer object")
+            raise ValueError(
+                "IMathAS object mapping must be a string-to-integer object"
+            )
         items = build_adapt_seed_items(
             _read_jsonl(args.engine_probes, EngineProbeReceipt),
             imathas_ids=raw_mapping,
@@ -221,9 +247,7 @@ def main(argv: list[str] | None = None) -> int:
                 output=args.output,
                 engine_image_sha256=args.engine_image_sha256,
                 adapter_image_sha256=args.adapter_image_sha256,
-                network_isolation_attestation_sha256=(
-                    args.network_attestation_sha256
-                ),
+                network_isolation_attestation_sha256=(args.network_attestation_sha256),
                 concurrency=args.concurrency,
                 max_cases=args.max_cases,
                 client=IMathASProbeClient(
