@@ -158,6 +158,38 @@ def adapt_settings(tmp_path: Path) -> Settings:
     )
 
 
+def test_internal_publication_targets_require_exact_canary_marker(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="qualification-canary marker"):
+        Settings(
+            _env_file=None,
+            database_url=f"sqlite:///{tmp_path / 'canary.db'}",
+            adapt_base_url="http://adapt-browser/api",
+        )
+    with pytest.raises(ValueError, match="qualification-canary marker"):
+        Settings(
+            _env_file=None,
+            database_url=f"sqlite:///{tmp_path / 'canary.db'}",
+            imathas_bridge_api_url="http://build08-imathas-bridge-browser:8000",
+        )
+
+    configured = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path / 'canary.db'}",
+        qualification_canary_marker="build08-assessment-publication-canary",
+        adapt_base_url="http://adapt-browser/api",
+        imathas_bridge_api_url="http://build08-imathas-bridge-browser:8000",
+    )
+    assert configured.adapt_base_url == "http://adapt-browser/api"
+    assert (
+        configured.resolved_imathas_bridge_api_url
+        == "http://build08-imathas-bridge-browser:8000"
+    )
+    assert configured.imathas_status == "disabled"
+    assert configured.imathas_publishing_status == "misconfigured"
+
+
 @pytest.mark.asyncio
 async def test_adapt_client_caches_jwt_and_reauthenticates_once_after_401(
     tmp_path: Path,

@@ -222,9 +222,7 @@ def _qti_json(
                     "feedback": "",
                 }
             )
-            possible.append(
-                {"identifier": target_id, "matchingTerm": pair.target}
-            )
+            possible.append({"identifier": target_id, "matchingTerm": pair.target})
             payload[f"qti_matching_term_to_match_{index}"] = pair.prompt
             payload[f"qti_matching_matching_term_{index}"] = pair.target
         return {
@@ -263,7 +261,9 @@ def _qti_json(
         }
 
     if item_type == AssessmentItemType.IMAGE_HOTSPOT:
-        regions = [region.model_dump(mode="json") for region in draft.response.hotspot_regions]
+        regions = [
+            region.model_dump(mode="json") for region in draft.response.hotspot_regions
+        ]
         payload["image_url"] = draft.response.image_url
         payload["image_alt"] = draft.response.image_alt
         payload["hotspot_regions"] = regions
@@ -291,7 +291,9 @@ def _qti_json(
             f"[{escape(segment.text)}]" for segment in draft.response.highlight_segments
         )
         if item_type == AssessmentItemType.HIGHLIGHT_TABLE:
-            rows = [{"header": "Source", "prompt": marked_prompt, "responses": responses}]
+            rows = [
+                {"header": "Source", "prompt": marked_prompt, "responses": responses}
+            ]
             headers = ["Section", "Text"]
             payload["colHeaders"] = headers
             payload["rows"] = rows
@@ -313,7 +315,9 @@ def _qti_json(
         columns = draft.response.matrix_columns
         headers = ["Response", *[choice.text for choice in columns]]
         column_index = {choice.id: index for index, choice in enumerate(columns)}
-        multiple = any(len(row.correct_column_ids) > 1 for row in draft.response.matrix_rows)
+        multiple = any(
+            len(row.correct_column_ids) > 1 for row in draft.response.matrix_rows
+        )
         if multiple:
             rows = [
                 {
@@ -391,8 +395,8 @@ def _qti_json(
                 )
             )
         ]
-        cloze_prompt = prompt_html + " " + " ".join(
-            "[select]" for _ in draft.response.blanks
+        cloze_prompt = (
+            prompt_html + " " + " ".join("[select]" for _ in draft.response.blanks)
         )
         payload["qti_prompt"] = cloze_prompt
         payload["correct_responses"] = correct
@@ -752,9 +756,7 @@ class AdaptClient:
                 code="adapt_missing_ids",
             ) from exc
 
-    async def sync_hint_rungs(
-        self, question_id: int, payload: dict[str, Any]
-    ) -> None:
+    async def sync_hint_rungs(self, question_id: int, payload: dict[str, Any]) -> None:
         data = await self._request(
             "PUT", f"questions/{question_id}/hint-rungs", payload=payload
         )
@@ -765,12 +767,12 @@ class AdaptClient:
             )
 
     async def find_question_by_tag(self, tag: str) -> AdaptCreateResult | None:
-        data = await self._request("GET", "questions")
         matches = [
             item
-            for item in data.get("my_questions", [])
-            if isinstance(item, dict) and tag in item.get("tags", [])
+            for item in await self.list_owned_questions()
+            if tag in item.get("tags", [])
         ]
+
         if len(matches) > 1:
             raise AdaptPublishingError(
                 "ADAPT contains duplicate questions for the publication key.",
@@ -783,6 +785,16 @@ class AdaptClient:
             question_id=int(item["id"]),
             page_id=int(item["page_id"]),
         )
+
+    async def list_owned_questions(self) -> list[dict[str, Any]]:
+        data = await self._request("GET", "questions")
+        raw = data.get("my_questions")
+        if not isinstance(raw, list) or any(not isinstance(item, dict) for item in raw):
+            raise AdaptPublishingError(
+                "ADAPT returned an invalid owned-question list.",
+                code="adapt_invalid_response",
+            )
+        return raw
 
     @staticmethod
     def _json_object(
