@@ -59,6 +59,15 @@ def test_adapt_browser_manifest_covers_all_item_types_and_safe_media() -> None:
         )
         assert isinstance(choice["qti_json"]["itemBody"], str)
         assert choice["qti_json"]["itemBody"].endswith("[select]")
+        assert set(choice["qti_json"]["inline_choice_interactions"]) == {"select"}
+        responses = choice["qti_json"]["inline_choice_interactions"]["select"]
+        assert all(
+            set(response) == {"value", "text", "correctResponse"}
+            for response in responses
+        )
+        assert choice["expected_response"] == [
+            response["value"] for response in responses if response["correctResponse"]
+        ]
 
 
 def test_browser_canary_requires_absolute_file_backed_sqlite() -> None:
