@@ -36,7 +36,10 @@ def test_adapt_browser_manifest_covers_all_item_types_and_safe_media() -> None:
     assert len({item["item_type"] for item in manifest["items"]}) == 19
     assert manifest["items_sha256"] == hashlib.sha256(
         json.dumps(
-            manifest["items"], separators=(",", ":"), ensure_ascii=False
+            manifest["items"],
+            separators=(",", ":"),
+            ensure_ascii=False,
+            sort_keys=True,
         ).encode()
     ).hexdigest()
     assert all(

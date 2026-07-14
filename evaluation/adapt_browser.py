@@ -61,7 +61,7 @@ def build_adapt_browser_manifest() -> dict[str, Any]:
         )
 
     canonical = json.dumps(
-        records, separators=(",", ":"), ensure_ascii=False
+        records, separators=(",", ":"), ensure_ascii=False, sort_keys=True
     ).encode()
     return {
         "schema_version": SCHEMA_VERSION,
