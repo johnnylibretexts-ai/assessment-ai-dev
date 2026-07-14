@@ -121,6 +121,7 @@ DB::transaction(static function () use ($assignment, $student, $courseId): void 
 DB::table('submissions')->where('assignment_id', $assignment->id)->delete();
 DB::table('scores')->where('assignment_id', $assignment->id)->delete();
 DB::table('data_shops')->where('assignment_id', $assignment->id)->delete();
+DB::table('seeds')->where('assignment_id', $assignment->id)->delete();
 
 $records = [];
 $seenTypes = [];
