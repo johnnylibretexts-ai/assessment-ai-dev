@@ -504,7 +504,9 @@ class IMathASProbeClient:
                 f"{name}-val": format(answer, ".15g"),
                 "toscoreqn": json.dumps({str(question_ref): [0]}),
             },
-            expected_content_type="application/json",
+            # IMathAS's signed JSON response is served with text/html by its
+            # legacy PHP endpoint. The body is still parsed strictly as JSON.
+            expected_content_type=("application/json", "text/html"),
         )
         try:
             response = json.loads(body)
@@ -530,7 +532,7 @@ class IMathASProbeClient:
         method: str,
         url: str,
         *,
-        expected_content_type: str = "text/html",
+        expected_content_type: str | tuple[str, ...] = "text/html",
         **kwargs: object,
     ) -> str:
         try:
@@ -538,7 +540,14 @@ class IMathASProbeClient:
                 if response.status_code != 200:
                     raise EngineProbeError("IMathAS returned a non-success status")
                 content_type = response.headers.get("content-type", "").lower()
-                if not content_type.startswith(expected_content_type):
+                expected_types = (
+                    (expected_content_type,)
+                    if isinstance(expected_content_type, str)
+                    else expected_content_type
+                )
+                if not any(
+                    content_type.startswith(expected) for expected in expected_types
+                ):
                     raise EngineProbeError("IMathAS returned an unexpected content type")
                 declared = response.headers.get("content-length")
                 if declared is not None and int(declared) > MAX_RENDER_BYTES:
