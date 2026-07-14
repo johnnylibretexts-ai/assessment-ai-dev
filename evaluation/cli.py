@@ -10,10 +10,13 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
+from .adapt_seed import build_adapt_seed_items, finalize_seed_receipts
 from .engine_probe import IMathASProbeClient, run_imathas_probes, run_webwork_probes
 from .fixtures import build_fixture_bundle, build_seed_plan
 from .models import (
     CorpusManifest,
+    AdaptSeedAttestation,
+    AdaptSeedItem,
     EngineProbeReceipt,
     FixtureBundle,
     QualificationReport,
@@ -70,6 +73,16 @@ def build_parser() -> argparse.ArgumentParser:
     merge_probes = commands.add_parser("merge-engine-probes")
     merge_probes.add_argument("receipts", type=Path, nargs="+")
     merge_probes.add_argument("--output", type=Path, required=True)
+
+    finalize_seeds = commands.add_parser("finalize-seeds")
+    finalize_seeds.add_argument("engine_probes", type=Path)
+    finalize_seeds.add_argument("adapt_attestations", type=Path)
+    finalize_seeds.add_argument("--output", type=Path, required=True)
+
+    seed_items = commands.add_parser("build-adapt-seed-items")
+    seed_items.add_argument("engine_probes", type=Path)
+    seed_items.add_argument("imathas_ids", type=Path)
+    seed_items.add_argument("--output", type=Path, required=True)
 
     webwork_probes = commands.add_parser("probe-webwork")
     webwork_probes.add_argument("seed_plan", type=Path)
@@ -144,6 +157,34 @@ def main(argv: list[str] | None = None) -> int:
         records.sort(key=lambda record: (record.item_type.value, record.item_id, record.seed))
         _write_jsonl(args.output, records)
         print(json.dumps({"merged": len(records)}, sort_keys=True))
+        return 0
+    if args.command == "finalize-seeds":
+        receipts = finalize_seed_receipts(
+            _read_jsonl(args.engine_probes, EngineProbeReceipt),
+            _read_jsonl(args.adapt_attestations, AdaptSeedAttestation),
+        )
+        result = validate_seed_receipts(receipts)
+        if not result.passed:
+            raise ValueError(
+                "finalized seed receipts did not satisfy the release validator: "
+                + "; ".join(result.failures)
+            )
+        _write_jsonl(args.output, receipts)
+        print(json.dumps({"finalized": len(receipts), "passed": True}, sort_keys=True))
+        return 0
+    if args.command == "build-adapt-seed-items":
+        raw_mapping = _read_json(args.imathas_ids)
+        if not isinstance(raw_mapping, dict) or not all(
+            isinstance(key, str) and isinstance(value, int)
+            for key, value in raw_mapping.items()
+        ):
+            raise ValueError("IMathAS object mapping must be a string-to-integer object")
+        items = build_adapt_seed_items(
+            _read_jsonl(args.engine_probes, EngineProbeReceipt),
+            imathas_ids=raw_mapping,
+        )
+        _write_jsonl(args.output, items)
+        print(json.dumps({"items": len(items)}, sort_keys=True))
         return 0
     if args.command == "probe-webwork":
         image = args.engine_image_sha256
@@ -277,6 +318,8 @@ def _write_schemas(output_dir: Path) -> None:
         "review-record.schema.json": ReviewRecord,
         "seed-plan.schema.json": SeedPlanCase,
         "seed-receipt.schema.json": SeedReceipt,
+        "adapt-seed-attestation.schema.json": AdaptSeedAttestation,
+        "adapt-seed-item.schema.json": AdaptSeedItem,
         "engine-probe-receipt.schema.json": EngineProbeReceipt,
         "shadow-receipt.schema.json": ShadowReceipt,
     }

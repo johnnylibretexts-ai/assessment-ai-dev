@@ -27,6 +27,14 @@ assessment-ai-evaluate merge-engine-probes \
   evidence/webwork-engine-probes.jsonl \
   evidence/imathas-engine-probes.jsonl \
   --output evidence/engine-probes.jsonl
+assessment-ai-evaluate finalize-seeds \
+  evidence/engine-probes.jsonl \
+  evidence/adapt-seed-attestations.jsonl \
+  --output evidence/seed-receipts.jsonl
+assessment-ai-evaluate build-adapt-seed-items \
+  evidence/engine-probes.jsonl \
+  evidence/imathas-object-ids.json \
+  --output evidence/adapt-seed-items.jsonl
 assessment-ai-evaluate compare-shadow evidence/shadow-receipts.jsonl
 assessment-ai-evaluate report \
   --corpus evidence/corpus.json \
@@ -47,6 +55,13 @@ grading, the exact engine image, and sealed network-isolation evidence. They
 retain `persisted_grade_match`, `object_idempotent`, and
 `cross_owner_access_blocked` as explicit remaining checks. In particular, the
 runner never treats Python preview RNG output as a PG/IMathAS answer oracle.
+
+`finalize-seeds` is fail closed: the canary attestation and engine ledgers must
+contain exactly the same 4,000 item/seed keys and matching immutable identities.
+Every attestation must include a refreshed matching grade, an idempotent object,
+blocked cross-owner access, an internal-only canary network, the exact ADAPT
+image, the clone-backup digest, and disabled hint mode. A plan or item summary
+cannot be promoted into final receipts.
 
 Validators exit `0` only when the corresponding release threshold passes and
 exit `2` for valid but insufficient or failing evidence. Invalid JSON/schema
