@@ -1153,6 +1153,14 @@ class DraftRepository:
                 draft = session.get(Draft, draft_id)
                 if draft is None:
                     raise DraftNotFoundError(f"draft {draft_id} was not found")
+                previous_hint_ladder = session.scalar(
+                    select(HintLadderRecord)
+                    .where(
+                        HintLadderRecord.draft_id == draft.id,
+                        HintLadderRecord.edit_count == draft.edit_count,
+                    )
+                    .order_by(HintLadderRecord.version.desc())
+                )
                 _validate_persisted_question(draft, validated)
                 before = draft.current_json
                 draft.current_json = validated.model_dump(mode="json")
@@ -1162,6 +1170,23 @@ class DraftRepository:
                 draft.reviewer_notes = notes
                 draft.status = ReviewStatus.READY_FOR_REVIEW
                 _clear_confirmations(draft)
+                if previous_hint_ladder is not None:
+                    ladder = HintLadderDraft.model_validate(
+                        previous_hint_ladder.ladder_json
+                    )
+                    session.add(
+                        HintLadderRecord(
+                            draft_id=draft.id,
+                            edit_count=draft.edit_count,
+                            version=1,
+                            ladder_json=ladder.model_dump(mode="json"),
+                            confirmations_json={
+                                rung.rung.value: False for rung in ladder.rungs
+                            },
+                            status="ready_for_review",
+                            reviewer_notes="Question edited; hint approval reset.",
+                        )
+                    )
                 validation = _engine_validation_for(validated)
                 if validation is not None:
                     session.add(

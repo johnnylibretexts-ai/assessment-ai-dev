@@ -98,3 +98,42 @@ def test_browser_canary_rejects_an_unrelated_existing_database(tmp_path: Path) -
         canary_marker=CANARY_MARKER,
     )
     assert manifest["fixture_count"] == 95
+
+
+def test_question_edit_carries_hint_ladder_forward_unapproved(tmp_path: Path) -> None:
+    database_path = tmp_path / "canary.db"
+    database_url = _database_url(database_path)
+    manifest = seed_browser_canary(database_url, canary_marker=CANARY_MARKER)
+    draft_id = manifest["drafts"][0]["draft_id"]
+
+    database = init_database(database_url)
+    repository = DraftRepository(database)
+    try:
+        before = repository.require_draft(draft_id)
+        assert before.current_hint_ladder is not None
+        approved = repository.review_hint_ladder(
+            draft_id,
+            reviewer="build08-reviewer",
+            confirmed_rungs=["conceptual", "strategic", "specific"],
+            approved=True,
+            notes="Approved before question edit.",
+        )
+        assert approved.status == "approved"
+
+        repository.edit_draft(
+            draft_id,
+            before.current,
+            editor="build08-reviewer",
+            notes="Exercise approval invalidation.",
+        )
+        after = repository.require_draft(draft_id)
+
+        assert after.edit_count == 1
+        assert after.current_hint_ladder is not None
+        assert after.current_hint_ladder.edit_count == 1
+        assert after.current_hint_ladder.status == "ready_for_review"
+        assert set(after.current_hint_ladder.confirmations_json.values()) == {False}
+        assert after.current_hint_ladder.ladder == approved.ladder
+        assert repository.require_hint_ladder(approved.id).status == "approved"
+    finally:
+        database.dispose()
