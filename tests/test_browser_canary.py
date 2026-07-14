@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -11,6 +13,7 @@ from evaluation.browser_canary import (
     BrowserCanaryError,
     seed_browser_canary,
 )
+from evaluation.adapt_browser import build_adapt_browser_manifest
 
 
 def _database_url(path: Path) -> str:
@@ -23,6 +26,30 @@ def test_browser_canary_requires_exact_marker(tmp_path: Path) -> None:
             _database_url(tmp_path / "canary.db"),
             canary_marker="",
         )
+
+
+def test_adapt_browser_manifest_covers_all_item_types_and_safe_media() -> None:
+    manifest = build_adapt_browser_manifest()
+    assert manifest["item_type_count"] == 19
+    assert manifest["native_qti_count"] == 17
+    assert manifest["external_engine_count"] == 2
+    assert len({item["item_type"] for item in manifest["items"]}) == 19
+    assert manifest["items_sha256"] == hashlib.sha256(
+        json.dumps(
+            manifest["items"], separators=(",", ":"), ensure_ascii=False
+        ).encode()
+    ).hexdigest()
+    assert all(
+        item["expected_response"] is not None
+        for item in manifest["items"]
+        if item["technology"] == "qti"
+    )
+    hotspot = next(
+        item for item in manifest["items"] if item["item_type"] == "image_hotspot"
+    )
+    assert hotspot["qti_json"]["imageUrl"].startswith(
+        "data:image/svg+xml;base64,"
+    )
 
 
 def test_browser_canary_requires_absolute_file_backed_sqlite() -> None:

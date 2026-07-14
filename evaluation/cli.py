@@ -11,6 +11,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from .adapt_seed import build_adapt_seed_items, finalize_seed_receipts
+from .adapt_browser import build_adapt_browser_manifest
 from .browser_canary import seed_browser_canary
 from .engine_probe import IMathASProbeClient, run_imathas_probes, run_webwork_probes
 from .fixtures import build_fixture_bundle, build_seed_plan
@@ -51,6 +52,9 @@ def build_parser() -> argparse.ArgumentParser:
     browser_canary = commands.add_parser("seed-browser-canary")
     browser_canary.add_argument("--database-url", required=True)
     browser_canary.add_argument("--output", type=Path, required=True)
+
+    adapt_browser = commands.add_parser("build-adapt-browser-manifest")
+    adapt_browser.add_argument("--output", type=Path, required=True)
 
     seed_plan = commands.add_parser("build-seed-plan")
     seed_plan.add_argument("--output", type=Path, required=True)
@@ -136,6 +140,20 @@ def main(argv: list[str] | None = None) -> int:
                     "seeded": manifest["fixture_count"],
                     "item_types": manifest["item_type_count"],
                     "contexts": manifest["context_type_count"],
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "build-adapt-browser-manifest":
+        manifest = build_adapt_browser_manifest()
+        _write_json(args.output, manifest)
+        print(
+            json.dumps(
+                {
+                    "items": manifest["item_type_count"],
+                    "native_qti": manifest["native_qti_count"],
+                    "external_engines": manifest["external_engine_count"],
                 },
                 sort_keys=True,
             )
