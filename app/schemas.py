@@ -450,6 +450,14 @@ class QuestionDraft(BaseModel):
             parameterized = self.response.parameterized
             if parameterized is None or parameterized.engine != self.item_type.value:
                 raise ValueError("parameterized drafts require a matching engine spec")
+            # Keep the provider retry boundary aligned with the publication boundary.
+            # A structurally valid JSON response can still contain malformed template
+            # placeholders, unsafe expressions, or unusable constraints. Validating the
+            # constrained DSL here lets the structured-output client return actionable
+            # feedback to the provider and prevents an uncompilable draft from existing.
+            from .parameterized import compile_parameterized_item
+
+            compile_parameterized_item(parameterized, validation_seeds=25)
         if (
             self.context_type
             in {
