@@ -56,6 +56,45 @@ def test_gemini_schema_is_reduced_to_supported_subset() -> None:
     assert "default" in json.dumps(original)
 
 
+@pytest.mark.asyncio
+async def test_gemini_sends_reduced_complex_schema() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            400,
+            json={
+                "error": {
+                    "status": "INVALID_ARGUMENT",
+                    "message": "test rejection",
+                }
+            },
+        )
+
+    client = GeminiClient(
+        settings(gemini_api_key="test-key", gemini_max_retries=0),
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(LLMTransportError, match="test rejection"):
+            await client.complete("Create a question.", QuestionDraft)
+    finally:
+        await client.aclose()
+
+    payload = json.loads(requests[0].content)
+    encoded = json.dumps(payload["generationConfig"]["responseJsonSchema"])
+    for unsupported in (
+        '"const"',
+        '"default"',
+        '"exclusiveMinimum"',
+        '"maxLength"',
+        '"minLength"',
+        '"pattern"',
+    ):
+        assert unsupported not in encoded
+
+
 def settings(**overrides: object) -> Settings:
     values: dict[str, object] = {
         "ollama_base_url": "https://ollama.com",

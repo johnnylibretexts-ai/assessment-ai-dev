@@ -210,7 +210,7 @@ class OllamaClient:
         if not prompt_version.strip():
             raise ValueError("prompt_version must not be blank")
 
-        json_schema = _gemini_response_schema(schema.model_json_schema())
+        json_schema = schema.model_json_schema()
         validation_feedback: str | None = None
         attempts: list[LLMAttemptMetadata] = []
 
@@ -453,7 +453,7 @@ class GeminiClient:
         if not prompt_version.strip():
             raise ValueError("prompt_version must not be blank")
 
-        json_schema = schema.model_json_schema()
+        json_schema = _gemini_response_schema(schema.model_json_schema())
         validation_feedback: str | None = None
         attempts: list[LLMAttemptMetadata] = []
 
