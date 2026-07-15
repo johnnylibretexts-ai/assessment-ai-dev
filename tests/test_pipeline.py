@@ -23,6 +23,7 @@ from app.pipeline import (
     AssessmentPipeline,
     CitationValidationError,
     _draft_prompt,
+    _hint_prompt,
     _revision_prompt,
 )
 from app.schemas import (
@@ -652,6 +653,19 @@ def test_parameterized_prompts_require_exact_safe_engine_spec(
     assert 'answer_expression "mass * speed"' in prompt
     assert "NEVER use a function call in an\nexpression" in prompt
     assert "`round(...)`, `sqrt(...)`, `min(...)`, `max(...)`, `sum(...)`" in prompt
+
+
+def test_hint_prompt_forbids_every_correct_response_fragment() -> None:
+    prompt = _hint_prompt(
+        public_page(),
+        concept_batch().concepts[0],
+        "[paragraph 0]\nTotal energy is conserved.",
+        question("Which statement describes total energy?"),
+    )
+
+    assert "compare every hint against every correct top-level choice" in prompt
+    assert "No correct answer string may\nappear in a hint" in prompt
+    assert "never repeat any correct blank value" in prompt
 
 
 @pytest.mark.asyncio
