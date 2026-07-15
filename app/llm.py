@@ -805,10 +805,19 @@ def _parse_and_validate(
 
     errors: list[str] = []
     for candidate in candidates:
-        try:
-            return schema.model_validate(candidate), ""
-        except ValidationError as exc:
-            errors.append(_concise_validation_error(exc))
+        validation_candidates = [candidate]
+        if isinstance(candidate, str):
+            try:
+                nested = json.loads(candidate)
+            except json.JSONDecodeError:
+                nested = None
+            if isinstance(nested, (dict, list)):
+                validation_candidates.insert(0, nested)
+        for validation_candidate in validation_candidates:
+            try:
+                return schema.model_validate(validation_candidate), ""
+            except ValidationError as exc:
+                errors.append(_concise_validation_error(exc))
     return None, errors[0] if errors else "response did not match the JSON schema"
 
 
