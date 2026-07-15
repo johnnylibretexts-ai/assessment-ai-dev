@@ -668,7 +668,7 @@ def test_dropdown_prompts_require_one_correct_top_level_choice() -> None:
         (AssessmentItemType.FILL_IN_BLANK, "populate response.blanks"),
         (AssessmentItemType.DRAG_DROP_CLOZE, "populate response.blanks"),
         (AssessmentItemType.SELECT_CHOICE, "top-level choices array"),
-        (AssessmentItemType.MATCHING, "response.matching_pairs"),
+        (AssessmentItemType.MATCHING, "Return at least two distinct objects"),
         (AssessmentItemType.ORDERING, "response.correct_order"),
         (AssessmentItemType.HIGHLIGHT_TEXT, "response.highlight_segments"),
         (AssessmentItemType.HIGHLIGHT_TABLE, "response.highlight_segments"),
