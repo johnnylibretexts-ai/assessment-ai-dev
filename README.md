@@ -58,6 +58,7 @@ ASSESSMENT_AI_OLLAMA_API_KEY=...
 ASSESSMENT_AI_GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 ASSESSMENT_AI_GEMINI_MODEL=gemini-2.5-flash
 ASSESSMENT_AI_GEMINI_API_KEY=...
+ASSESSMENT_AI_GEMINI_MAX_OUTPUT_TOKENS=8192
 ```
 
 Ollama Cloud currently does not enforce structured outputs. The client therefore includes the JSON

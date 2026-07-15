@@ -94,6 +94,144 @@ class CorpusManifest(BaseModel):
         return self
 
 
+class ProviderCallReceipt(BaseModel):
+    schema_version: Literal["build08-provider-call-v1"] = "build08-provider-call-v1"
+    qualification_run_id: str = Field(min_length=1, max_length=100)
+    call_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    sequence: int = Field(ge=1)
+    case_id: str = Field(pattern=r"^build08-draft-[0-9]{3}$")
+    stage: Literal[
+        "concept_extraction",
+        "initial_draft",
+        "critique",
+        "revision",
+        "hint_ladder",
+    ]
+    provider: Literal["gemini"] = "gemini"
+    model: Literal["gemini-2.5-flash"] = "gemini-2.5-flash"
+    prompt_version: str = Field(min_length=1, max_length=100)
+    attempt_count: int = Field(ge=1, le=3)
+    prompt_token_count: int = Field(ge=1)
+    output_token_count: int = Field(ge=1)
+    total_token_count: int = Field(ge=2)
+    estimated_cost_microusd: int = Field(ge=1)
+    input_rate_microusd_per_million: Literal[300_000] = 300_000
+    output_rate_microusd_per_million: Literal[2_500_000] = 2_500_000
+    rate_card_id: Literal["gemini-2.5-flash-paid-2026-07-14"] = (
+        "gemini-2.5-flash-paid-2026-07-14"
+    )
+    max_output_tokens: Literal[8_192] = 8_192
+    per_call_reserve_microusd: Literal[1_000_000] = 1_000_000
+    budget_ceiling_microusd: Literal[100_000_000] = 100_000_000
+    usage_complete: bool = True
+
+    @model_validator(mode="after")
+    def validate_usage(self) -> "ProviderCallReceipt":
+        if self.total_token_count != (
+            self.prompt_token_count + self.output_token_count
+        ):
+            raise ValueError("total tokens must equal prompt plus output tokens")
+        return self
+
+
+class BudgetReservation(BaseModel):
+    case_id: str = Field(pattern=r"^build08-draft-[0-9]{3}$")
+    stage: Literal[
+        "concept_extraction",
+        "initial_draft",
+        "critique",
+        "revision",
+        "hint_ladder",
+    ]
+    reserved_microusd: Literal[1_000_000] = 1_000_000
+
+
+class ProviderBudgetState(BaseModel):
+    schema_version: Literal["build08-provider-budget-v1"] = (
+        "build08-provider-budget-v1"
+    )
+    qualification_run_id: str = Field(min_length=1, max_length=100)
+    budget_ceiling_microusd: Literal[100_000_000] = 100_000_000
+    per_call_reserve_microusd: Literal[1_000_000] = 1_000_000
+    settled_microusd: int = Field(ge=0)
+    open_reservations: dict[str, BudgetReservation] = Field(default_factory=dict)
+
+
+class DraftPlanCase(BaseModel):
+    sequence: int = Field(ge=1, le=380)
+    case_id: str = Field(pattern=r"^build08-draft-[0-9]{3}$")
+    pilot_case: bool
+    page_key: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{2,63}$")
+    stratum: DomainStratum
+    item_type: AssessmentItemType
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> "DraftPlanCase":
+        if self.case_id != f"build08-draft-{self.sequence:03d}":
+            raise ValueError("case_id must match the plan sequence")
+        if self.pilot_case != (self.sequence <= 19):
+            raise ValueError("only the first 19 plan cases belong to the pilot")
+        return self
+
+
+class DraftQualificationPlan(BaseModel):
+    schema_version: Literal["build08-draft-plan-v1"] = "build08-draft-plan-v1"
+    corpus_sha256: str = Field(pattern=SHA256_PATTERN)
+    cases: list[DraftPlanCase] = Field(min_length=380, max_length=380)
+
+
+class DraftQualificationReceipt(BaseModel):
+    schema_version: Literal["build08-draft-qualification-v1"] = (
+        "build08-draft-qualification-v1"
+    )
+    qualification_run_id: str = Field(min_length=1, max_length=100)
+    sequence: int = Field(ge=1, le=380)
+    case_id: str = Field(pattern=r"^build08-draft-[0-9]{3}$")
+    pilot_case: bool
+    generation_run_id: str = Field(min_length=1, max_length=100)
+    draft_id: int = Field(gt=0)
+    page_key: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{2,63}$")
+    stratum: DomainStratum
+    source_identity: str = Field(min_length=1, max_length=4_096)
+    content_sha256: str = Field(pattern=SHA256_PATTERN)
+    license: str = Field(min_length=2, max_length=200)
+    item_type: AssessmentItemType
+    context_type: ItemContextType
+    provider_call_ids: list[str] = Field(min_length=5, max_length=5)
+    schema_valid: bool
+    citation_valid: bool
+    source_hash_valid: bool
+    license_valid: bool
+    critique_executed: bool
+    revision_executed: bool
+    hint_ladder_executed: bool
+    hint_rung_count: int = Field(ge=0, le=3)
+    hint_leak_detected: bool
+    qti_valid: bool
+    qti_sha256: str = Field(pattern=SHA256_PATTERN)
+    engine_validation_passed: bool
+    unsafe_executable_source_detected: bool
+    detected_critical_defect: bool
+    advanced_flags_false: bool
+    adapt_publishing_disabled: bool
+    publication_attempt_count: int = Field(ge=0)
+    lifecycle_status: Literal["draft"] = "draft"
+    review_status: Literal["ready_for_review"] = "ready_for_review"
+    artifact_label: Literal["ai_generated_unreviewed_dev_demo"] = (
+        "ai_generated_unreviewed_dev_demo"
+    )
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> "DraftQualificationReceipt":
+        if self.case_id != f"build08-draft-{self.sequence:03d}":
+            raise ValueError("case_id must match the receipt sequence")
+        if self.pilot_case != (self.sequence <= 19):
+            raise ValueError("only the first 19 cases belong to the pilot")
+        if len(self.provider_call_ids) != len(set(self.provider_call_ids)):
+            raise ValueError("provider call IDs must be unique within a draft")
+        return self
+
+
 class FixtureCase(BaseModel):
     fixture_id: str = Field(pattern=r"^build08-[a-z0-9_-]+$")
     draft: QuestionDraft

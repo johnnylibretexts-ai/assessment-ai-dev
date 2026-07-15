@@ -12,11 +12,17 @@ from pydantic import BaseModel
 
 from app.config import Settings
 
+from .corpus import build_public_corpus_manifest, load_corpus_source_catalog
 from .adapt_seed import build_adapt_seed_items, finalize_seed_receipts
 from .adapt_browser import build_adapt_browser_manifest
 from .browser_canary import seed_browser_canary
 from .engine_probe import IMathASProbeClient, run_imathas_probes, run_webwork_probes
 from .fixtures import build_fixture_bundle, build_seed_plan
+from .generation import (
+    CANARY_DATABASE_URL,
+    build_public_draft_plan,
+    run_provider_qualification,
+)
 from .publication_canary import (
     run_publication_recovery_probe,
     seed_publication_canary,
@@ -24,12 +30,16 @@ from .publication_canary import (
 )
 from .models import (
     CorpusManifest,
+    DraftQualificationReceipt,
+    DraftQualificationPlan,
     AdaptSeedAttestation,
     AdaptSeedItem,
     EngineProbeReceipt,
     FixtureBundle,
     OutageReceipt,
     QualificationReport,
+    ProviderBudgetState,
+    ProviderCallReceipt,
     ReviewRecord,
     SeedPlanCase,
     SeedReceipt,
@@ -38,8 +48,10 @@ from .models import (
 from .validators import (
     compare_shadow_receipts,
     validate_corpus_manifest,
+    validate_draft_qualification_receipts,
     validate_engine_probe_receipts,
     validate_outage_receipts,
+    validate_provider_call_receipts,
     validate_review_ledger,
     validate_seed_receipts,
 )
@@ -87,6 +99,36 @@ def build_parser() -> argparse.ArgumentParser:
     corpus = commands.add_parser("validate-corpus")
     corpus.add_argument("manifest", type=Path)
     corpus.add_argument("--output", type=Path)
+
+    build_corpus = commands.add_parser("build-corpus")
+    build_corpus.add_argument("catalog", type=Path)
+    build_corpus.add_argument("--output", type=Path, required=True)
+    build_corpus.add_argument("--retry-attempts", type=int, default=3)
+    build_corpus.add_argument("--retry-delay-seconds", type=float, default=1.0)
+
+    provider_calls = commands.add_parser("validate-provider-calls")
+    provider_calls.add_argument("ledger", type=Path)
+    provider_calls.add_argument("--budget-state", type=Path, required=True)
+    provider_calls.add_argument("--output", type=Path)
+
+    drafts = commands.add_parser("validate-drafts")
+    drafts.add_argument("ledger", type=Path)
+    drafts.add_argument("--provider-calls", type=Path, required=True)
+    drafts.add_argument("--corpus", type=Path, required=True)
+    drafts.add_argument("--mode", choices=("pilot", "full"), default="full")
+    drafts.add_argument("--output", type=Path)
+
+    provider_run = commands.add_parser("run-provider-corpus")
+    provider_run.add_argument("manifest", type=Path)
+    provider_run.add_argument("--plan", type=Path, required=True)
+    provider_run.add_argument("--provider-calls", type=Path, required=True)
+    provider_run.add_argument("--drafts", type=Path, required=True)
+    provider_run.add_argument("--mode", choices=("pilot", "full"), required=True)
+    provider_run.add_argument("--database-url", default=CANARY_DATABASE_URL)
+
+    draft_plan = commands.add_parser("build-draft-plan")
+    draft_plan.add_argument("manifest", type=Path)
+    draft_plan.add_argument("--output", type=Path, required=True)
 
     reviews = commands.add_parser("validate-reviews")
     reviews.add_argument("ledger", type=Path)
@@ -141,7 +183,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     report = commands.add_parser("report")
     report.add_argument("--corpus", type=Path, required=True)
-    report.add_argument("--reviews", type=Path, required=True)
+    report.add_argument("--drafts", type=Path, required=True)
+    report.add_argument("--provider-calls", type=Path, required=True)
+    report.add_argument("--budget-state", type=Path, required=True)
     report.add_argument("--seeds", type=Path, required=True)
     report.add_argument("--outages", type=Path, required=True)
     report.add_argument("--shadow", type=Path, required=True)
@@ -245,6 +289,76 @@ def main(argv: list[str] | None = None) -> int:
         )
         _emit(result, args.output)
         return 0 if result.passed else 2
+    if args.command == "build-corpus":
+        catalog = load_corpus_source_catalog(args.catalog)
+        manifest = asyncio.run(
+            build_public_corpus_manifest(
+                catalog,
+                Settings(),
+                retry_attempts=args.retry_attempts,
+                retry_delay_seconds=args.retry_delay_seconds,
+            )
+        )
+        _write_json(args.output, manifest)
+        print(
+            json.dumps(
+                {
+                    "pages": len(manifest.pages),
+                    "strata": len({page.stratum for page in manifest.pages}),
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "validate-provider-calls":
+        result = validate_provider_call_receipts(
+            _read_jsonl(args.ledger, ProviderCallReceipt),
+            ProviderBudgetState.model_validate(_read_json(args.budget_state)),
+        )
+        _emit(result, args.output)
+        return 0 if result.passed else 2
+    if args.command == "validate-drafts":
+        result = validate_draft_qualification_receipts(
+            _read_jsonl(args.ledger, DraftQualificationReceipt),
+            _read_jsonl(args.provider_calls, ProviderCallReceipt),
+            CorpusManifest.model_validate(_read_json(args.corpus)),
+            mode=args.mode,
+        )
+        _emit(result, args.output)
+        return 0 if result.passed else 2
+    if args.command == "run-provider-corpus":
+        drafts, spent = asyncio.run(
+            run_provider_qualification(
+                CorpusManifest.model_validate(_read_json(args.manifest)),
+                plan_path=args.plan,
+                provider_call_path=args.provider_calls,
+                draft_receipt_path=args.drafts,
+                mode=args.mode,
+                settings=Settings(),
+                database_url=args.database_url,
+            )
+        )
+        print(
+            json.dumps(
+                {
+                    "drafts": drafts,
+                    "spent_microusd": spent,
+                    "spent_usd": round(spent / 1_000_000, 6),
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "build-draft-plan":
+        plan = asyncio.run(
+            build_public_draft_plan(
+                CorpusManifest.model_validate(_read_json(args.manifest)),
+                Settings(),
+            )
+        )
+        _write_json(args.output, plan)
+        print(json.dumps({"cases": len(plan.cases)}, sort_keys=True))
+        return 0
     if args.command == "validate-reviews":
         result = validate_review_ledger(_read_jsonl(args.ledger, ReviewRecord))
         _emit(result, args.output)
@@ -359,11 +473,20 @@ def main(argv: list[str] | None = None) -> int:
         _emit(result, args.output)
         return 0 if result.passed else 2
     if args.command == "report":
+        provider_calls = _read_jsonl(args.provider_calls, ProviderCallReceipt)
+        budget_state = ProviderBudgetState.model_validate(
+            _read_json(args.budget_state)
+        )
         sections = [
             validate_corpus_manifest(
                 CorpusManifest.model_validate(_read_json(args.corpus))
             ),
-            validate_review_ledger(_read_jsonl(args.reviews, ReviewRecord)),
+            validate_provider_call_receipts(provider_calls, budget_state),
+            validate_draft_qualification_receipts(
+                _read_jsonl(args.drafts, DraftQualificationReceipt),
+                provider_calls,
+                CorpusManifest.model_validate(_read_json(args.corpus)),
+            ),
             validate_seed_receipts(_read_jsonl(args.seeds, SeedReceipt)),
             validate_outage_receipts(_read_jsonl(args.outages, OutageReceipt)),
             compare_shadow_receipts(_read_jsonl(args.shadow, ShadowReceipt)),
@@ -435,6 +558,10 @@ def _emit(value: BaseModel, output: Path | None) -> None:
 def _write_schemas(output_dir: Path) -> None:
     schemas: dict[str, type[BaseModel]] = {
         "corpus-manifest.schema.json": CorpusManifest,
+        "provider-call-receipt.schema.json": ProviderCallReceipt,
+        "provider-budget-state.schema.json": ProviderBudgetState,
+        "draft-qualification-receipt.schema.json": DraftQualificationReceipt,
+        "draft-qualification-plan.schema.json": DraftQualificationPlan,
         "fixture-bundle.schema.json": FixtureBundle,
         "review-record.schema.json": ReviewRecord,
         "seed-plan.schema.json": SeedPlanCase,

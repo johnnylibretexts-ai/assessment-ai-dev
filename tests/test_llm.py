@@ -348,6 +348,7 @@ async def test_gemini_uses_api_key_and_native_json_schema() -> None:
     assert payload["contents"][0]["role"] == "user"
     config = payload["generationConfig"]
     assert config["temperature"] == 0
+    assert config["maxOutputTokens"] == 8_192
     assert config["responseMimeType"] == "application/json"
     assert config["responseJsonSchema"] == Answer.model_json_schema()
     assert result.value == Answer(answer="four", confidence=1)

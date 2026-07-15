@@ -15,12 +15,14 @@ from evaluation.fixtures import build_draft, build_fixture_bundle, build_seed_pl
 from evaluation.models import (
     CorpusManifest,
     CorpusPage,
+    DraftQualificationReceipt,
     DomainStratum,
     EngineProbeReceipt,
     OutageBoundary,
     OutageOutcome,
     OutageReceipt,
     Publishability,
+    ProviderCallReceipt,
     ReviewRecord,
     ReviewRole,
     SeedReceipt,
@@ -30,8 +32,10 @@ from evaluation.models import (
 from evaluation.validators import (
     compare_shadow_receipts,
     validate_corpus_manifest,
+    validate_draft_qualification_receipts,
     validate_engine_probe_receipts,
     validate_outage_receipts,
+    validate_provider_call_receipts,
     validate_review_ledger,
     validate_seed_receipts,
 )
@@ -127,6 +131,49 @@ def test_review_validator_enforces_per_type_thresholds() -> None:
     )
     assert not failing.passed
     assert any("critical defect rate" in failure for failure in failing.failures)
+
+
+def test_automated_pilot_replaces_human_review_as_release_gate() -> None:
+    manifest = _corpus_manifest()
+    drafts, calls = _automated_draft_receipts(manifest, rounds=1)
+
+    budget = validate_provider_call_receipts(calls)
+    pilot = validate_draft_qualification_receipts(
+        drafts,
+        calls,
+        manifest,
+        mode="pilot",
+    )
+
+    assert budget.passed
+    assert pilot.passed
+    assert pilot.counts["drafts"] == 19
+    assert pilot.counts["publication_attempts"] == 0
+
+    drafts[0] = drafts[0].model_copy(update={"artifact_label": "invalid"})
+    # The label is a schema-level guard, so invalid evidence cannot be loaded.
+    try:
+        DraftQualificationReceipt.model_validate(drafts[0].model_dump())
+    except ValueError:
+        pass
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("unreviewed artifact label must be immutable")
+
+
+def test_full_automated_gate_requires_380_drafts_and_all_corpus_pages() -> None:
+    manifest = _corpus_manifest()
+    drafts, calls = _automated_draft_receipts(manifest, rounds=20)
+
+    result = validate_draft_qualification_receipts(drafts, calls, manifest)
+
+    assert result.passed
+    assert result.counts["drafts"] == 380
+    assert result.counts["used_pages"] == 48
+
+    drafts[19] = drafts[19].model_copy(update={"hint_leak_detected": True})
+    failing = validate_draft_qualification_receipts(drafts, calls, manifest)
+    assert not failing.passed
+    assert any("failed hint leak" in failure for failure in failing.failures)
 
 
 def test_seed_validator_requires_every_execution_check() -> None:
@@ -327,6 +374,103 @@ def _review_records() -> list[ReviewRecord]:
                     )
                 )
     return records
+
+
+def _automated_draft_receipts(
+    manifest: CorpusManifest,
+    *,
+    rounds: int,
+) -> tuple[list[DraftQualificationReceipt], list[ProviderCallReceipt]]:
+    pages = list(manifest.pages)
+    medicine_pages = [
+        page for page in pages if page.stratum == DomainStratum.MEDICINE_HEALTH
+    ]
+    drafts: list[DraftQualificationReceipt] = []
+    calls: list[ProviderCallReceipt] = []
+    stages = (
+        "concept_extraction",
+        "initial_draft",
+        "critique",
+        "revision",
+        "hint_ladder",
+    )
+    non_bow_index = 0
+    sequence = 0
+    call_sequence = 0
+    for round_index in range(rounds):
+        for item_type in AssessmentItemType:
+            sequence += 1
+            case_id = f"build08-draft-{sequence:03d}"
+            if item_type == AssessmentItemType.BOW_TIE:
+                page = medicine_pages[round_index % len(medicine_pages)]
+            else:
+                page = pages[non_bow_index % len(pages)]
+                non_bow_index += 1
+
+            call_ids: list[str] = []
+            for stage in stages:
+                call_sequence += 1
+                call_id = f"{call_sequence:032x}"
+                call_ids.append(call_id)
+                prompt_tokens = 100
+                output_tokens = 50
+                cost = (
+                    prompt_tokens * 300_000
+                    + output_tokens * 2_500_000
+                    + 999_999
+                ) // 1_000_000
+                calls.append(
+                    ProviderCallReceipt(
+                        qualification_run_id="automated-run",
+                        call_id=call_id,
+                        sequence=call_sequence,
+                        case_id=case_id,
+                        stage=stage,
+                        prompt_version=f"{stage}-v1",
+                        attempt_count=1,
+                        prompt_token_count=prompt_tokens,
+                        output_token_count=output_tokens,
+                        total_token_count=prompt_tokens + output_tokens,
+                        estimated_cost_microusd=cost,
+                    )
+                )
+
+            drafts.append(
+                DraftQualificationReceipt(
+                    qualification_run_id="automated-run",
+                    sequence=sequence,
+                    case_id=case_id,
+                    pilot_case=sequence <= 19,
+                    generation_run_id=f"generation-{sequence}",
+                    draft_id=sequence,
+                    page_key=page.page_key,
+                    stratum=page.stratum,
+                    source_identity=page.source_identity,
+                    content_sha256=page.content_sha256,
+                    license=page.license,
+                    item_type=item_type,
+                    context_type=list(ItemContextType)[(sequence - 1) % 5],
+                    provider_call_ids=call_ids,
+                    schema_valid=True,
+                    citation_valid=True,
+                    source_hash_valid=True,
+                    license_valid=True,
+                    critique_executed=True,
+                    revision_executed=True,
+                    hint_ladder_executed=True,
+                    hint_rung_count=3,
+                    hint_leak_detected=False,
+                    qti_valid=True,
+                    qti_sha256=_sha(case_id),
+                    engine_validation_passed=True,
+                    unsafe_executable_source_detected=False,
+                    detected_critical_defect=False,
+                    advanced_flags_false=True,
+                    adapt_publishing_disabled=True,
+                    publication_attempt_count=0,
+                )
+            )
+    return drafts, calls
 
 
 def _seed_receipts() -> list[SeedReceipt]:
