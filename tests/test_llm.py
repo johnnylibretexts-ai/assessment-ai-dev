@@ -479,19 +479,30 @@ async def test_gemini_does_not_retry_non_transient_http_error() -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
         nonlocal calls
         calls += 1
-        return httpx.Response(400, json={"error": {"status": "INVALID_ARGUMENT"}})
+        return httpx.Response(
+            400,
+            json={
+                "error": {
+                    "status": "INVALID_ARGUMENT",
+                    "message": "Invalid schema for api_key=secret-key",
+                }
+            },
+        )
 
     client = GeminiClient(
-        settings(gemini_api_key="test-key", gemini_max_retries=2),
+        settings(gemini_api_key="secret-key", gemini_max_retries=2),
         transport=httpx.MockTransport(handler),
     )
     try:
-        with pytest.raises(LLMTransportError, match="HTTP 400"):
+        with pytest.raises(LLMTransportError, match="HTTP 400") as caught:
             await client.complete("Do not retry a bad request.", Answer)
     finally:
         await client.aclose()
 
     assert calls == 1
+    assert "INVALID_ARGUMENT" in str(caught.value)
+    assert "secret-key" not in str(caught.value)
+    assert caught.value.http_status == 400
 
 
 @pytest.mark.asyncio

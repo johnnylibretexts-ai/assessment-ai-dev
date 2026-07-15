@@ -48,6 +48,10 @@ class LLMConfigurationError(LLMError):
 class LLMTransportError(LLMError):
     """Raised when Ollama cannot complete the HTTP request."""
 
+    def __init__(self, message: str, *, http_status: int | None = None) -> None:
+        super().__init__(message)
+        self.http_status = http_status
+
 
 class LLMStructuredOutputError(LLMError):
     """Raised after all structured-output validation attempts fail."""
@@ -474,10 +478,27 @@ class GeminiClient:
             if response.is_error:
                 raise LLMTransportError(
                     f"Gemini request failed with HTTP {response.status_code}"
+                    f"{self._safe_error_summary(response)}",
+                    http_status=response.status_code,
                 ) from None
             return response
 
         raise LLMTransportError("Gemini request failed")
+
+    def _safe_error_summary(self, response: httpx.Response) -> str:
+        try:
+            body = response.json()
+        except ValueError:
+            return ""
+        if not isinstance(body, dict) or not isinstance(body.get("error"), dict):
+            return ""
+        error = body["error"]
+        status = error.get("status")
+        message = error.get("message")
+        safe_status = self._safe_text(status) if isinstance(status, str) else ""
+        safe_message = self._safe_text(message) if isinstance(message, str) else ""
+        summary = ": ".join(part for part in (safe_status, safe_message) if part)
+        return f" ({summary[:1_000]})" if summary else ""
 
     def _read_response(
         self,
