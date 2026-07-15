@@ -16,7 +16,7 @@ from app.config import Settings
 from app.content import PublicLibreTextsContentAdapter
 from app.db import DraftRepository, ReviewStatus, init_database
 from app.llm import LLMClient, LLMResult, LLMStructuredOutputError, build_llm_client
-from app.media import HotspotMediaStore
+from app.media import HotspotMediaStore, supported_page_image_urls
 from app.pipeline import (
     CONCEPT_PROMPT_VERSION,
     CRITIQUE_PROMPT_VERSION,
@@ -330,19 +330,71 @@ def build_draft_plan(
     )
 
 
+def _repair_unsupported_hotspot_cases(
+    plan: DraftQualificationPlan,
+    manifest: CorpusManifest,
+    *,
+    supported_image_page_keys: set[str],
+) -> DraftQualificationPlan:
+    """Replace only hotspot assignments that cannot pass the media allowlist."""
+
+    page_by_key = {page.page_key: page for page in manifest.pages}
+    if supported_image_page_keys - set(page_by_key):
+        raise EvaluationRunError("supported image inventory is outside the sealed corpus")
+    candidates_by_stratum: dict[DomainStratum, list[Any]] = defaultdict(list)
+    for page in manifest.pages:
+        if page.page_key in supported_image_page_keys:
+            candidates_by_stratum[page.stratum].append(page)
+
+    repaired: list[DraftPlanCase] = []
+    for case in plan.cases:
+        if (
+            case.item_type != AssessmentItemType.IMAGE_HOTSPOT
+            or case.page_key in supported_image_page_keys
+        ):
+            repaired.append(case)
+            continue
+        candidates = candidates_by_stratum[case.stratum]
+        if not candidates:
+            raise EvaluationRunError(
+                f"hotspot qualification has no approved image in {case.stratum.value}"
+            )
+        replacement = candidates[(case.sequence - 1) % len(candidates)]
+        repaired.append(
+            case.model_copy(
+                update={
+                    "page_key": replacement.page_key,
+                    "stratum": replacement.stratum,
+                }
+            )
+        )
+
+    return plan.model_copy(update={"cases": repaired})
+
+
 async def build_public_draft_plan(
     manifest: CorpusManifest,
     settings: Settings,
 ) -> DraftQualificationPlan:
     public_settings = settings.model_copy(update={"public_sources_enabled": True})
-    image_page_keys: set[str] = set()
+    legacy_image_page_keys: set[str] = set()
+    supported_image_page_keys: set[str] = set()
     async with PublicLibreTextsContentAdapter(public_settings) as content:
         for corpus_page in manifest.pages:
             page = await content.fetch_page(corpus_page.canonical_url)
             _validate_fetched_page(corpus_page, page)
             if BeautifulSoup(page.html_body, "html.parser").find("img") is not None:
-                image_page_keys.add(corpus_page.page_key)
-    return build_draft_plan(manifest, image_page_keys=image_page_keys)
+                legacy_image_page_keys.add(corpus_page.page_key)
+            if supported_page_image_urls(page):
+                supported_image_page_keys.add(corpus_page.page_key)
+    legacy_plan = build_draft_plan(
+        manifest, image_page_keys=legacy_image_page_keys
+    )
+    return _repair_unsupported_hotspot_cases(
+        legacy_plan,
+        manifest,
+        supported_image_page_keys=supported_image_page_keys,
+    )
 
 
 async def run_provider_qualification(
@@ -372,19 +424,32 @@ async def run_provider_qualification(
     )
     async with PublicLibreTextsContentAdapter(public_settings) as content:
         pages_by_key: dict[str, NormalizedPage] = {}
-        image_page_keys: set[str] = set()
+        legacy_image_page_keys: set[str] = set()
+        supported_image_page_keys: set[str] = set()
         for corpus_page in manifest.pages:
             page = await content.fetch_page(corpus_page.canonical_url)
             _validate_fetched_page(corpus_page, page)
             pages_by_key[corpus_page.page_key] = page
             if BeautifulSoup(page.html_body, "html.parser").find("img") is not None:
-                image_page_keys.add(corpus_page.page_key)
+                legacy_image_page_keys.add(corpus_page.page_key)
+            if supported_page_image_urls(page):
+                supported_image_page_keys.add(corpus_page.page_key)
 
-        generated_plan = build_draft_plan(
+        legacy_plan = build_draft_plan(
             manifest,
-            image_page_keys=image_page_keys,
+            image_page_keys=legacy_image_page_keys,
         )
-        plan = _load_or_write_plan(plan_path, generated_plan)
+        generated_plan = _repair_unsupported_hotspot_cases(
+            legacy_plan,
+            manifest,
+            supported_image_page_keys=supported_image_page_keys,
+        )
+        plan = _load_or_write_plan(
+            plan_path,
+            generated_plan,
+            legacy_plan=legacy_plan,
+            locked_prefix=len(existing_receipts),
+        )
         _validate_receipts_against_plan(existing_receipts, plan)
 
         database = init_database(database_url)
@@ -670,14 +735,24 @@ def _validate_receipts_against_plan(
 def _load_or_write_plan(
     path: Path,
     generated: DraftQualificationPlan,
+    *,
+    legacy_plan: DraftQualificationPlan | None = None,
+    locked_prefix: int = 0,
 ) -> DraftQualificationPlan:
     if path.exists():
         existing = DraftQualificationPlan.model_validate_json(
             path.read_text(encoding="utf-8")
         )
-        if existing != generated:
-            raise EvaluationRunError("existing draft plan differs from current corpus")
-        return existing
+        if existing == generated:
+            return existing
+        if legacy_plan is not None and existing == legacy_plan:
+            if existing.cases[:locked_prefix] != generated.cases[:locked_prefix]:
+                raise EvaluationRunError(
+                    "draft plan repair would alter an accepted receipt prefix"
+                )
+            _write_json_atomic(path, generated)
+            return generated
+        raise EvaluationRunError("existing draft plan differs from current corpus")
     _write_json(path, generated)
     return generated
 

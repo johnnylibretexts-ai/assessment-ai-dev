@@ -35,7 +35,6 @@ from app.schemas import (
     Critique,
     Difficulty,
     GeneratedHintLadderDraft,
-    HintLadderDraft,
     HintRungDraft,
     HintRungType,
     NormalizedPage,
