@@ -111,12 +111,22 @@ class Choice(BaseModel):
     correct: bool = False
     feedback: str | None = Field(default=None, max_length=1_000)
 
+    @field_validator("id", mode="before")
+    @classmethod
+    def normalize_id(cls, value: object) -> object:
+        return value.upper() if isinstance(value, str) else value
+
 
 class MatchingPair(BaseModel):
     prompt_id: str = Field(pattern=r"^[A-Z][A-Z0-9_-]{0,31}$")
     prompt: str = Field(min_length=1, max_length=1_000)
     target_id: str = Field(pattern=r"^[A-Z][A-Z0-9_-]{0,31}$")
     target: str = Field(min_length=1, max_length=1_000)
+
+    @field_validator("prompt_id", "target_id", mode="before")
+    @classmethod
+    def normalize_ids(cls, value: object) -> object:
+        return value.upper() if isinstance(value, str) else value
 
 
 class ClozeBlank(BaseModel):
@@ -125,6 +135,11 @@ class ClozeBlank(BaseModel):
     options: list[str] = Field(default_factory=list, max_length=20)
     case_sensitive: bool = False
 
+    @field_validator("id", mode="before")
+    @classmethod
+    def normalize_id(cls, value: object) -> object:
+        return value.upper() if isinstance(value, str) else value
+
 
 class HotspotRegion(BaseModel):
     id: str = Field(pattern=r"^[A-Z][A-Z0-9_-]{0,31}$")
@@ -132,6 +147,11 @@ class HotspotRegion(BaseModel):
     shape: Literal["rectangle", "polygon"]
     coordinates: list[float] = Field(min_length=4, max_length=40)
     correct: bool = False
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def normalize_id(cls, value: object) -> object:
+        return value.upper() if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def validate_coordinates(self) -> "HotspotRegion":
@@ -151,11 +171,28 @@ class HighlightSegment(BaseModel):
     text: str = Field(min_length=1, max_length=2_000)
     correct: bool = False
 
+    @field_validator("id", mode="before")
+    @classmethod
+    def normalize_id(cls, value: object) -> object:
+        return value.upper() if isinstance(value, str) else value
+
 
 class MatrixRow(BaseModel):
     id: str = Field(pattern=r"^[A-Z][A-Z0-9_-]{0,31}$")
     text: str = Field(min_length=1, max_length=1_000)
     correct_column_ids: list[str] = Field(min_length=1, max_length=12)
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def normalize_id(cls, value: object) -> object:
+        return value.upper() if isinstance(value, str) else value
+
+    @field_validator("correct_column_ids", mode="before")
+    @classmethod
+    def normalize_column_ids(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        return [item.upper() if isinstance(item, str) else item for item in value]
 
 
 class BowTieGroup(BaseModel):
@@ -217,6 +254,13 @@ class ItemResponse(BaseModel):
     bow_tie_condition: BowTieGroup | None = None
     bow_tie_parameters: BowTieGroup | None = None
     parameterized: ParameterizedItemSpec | None = None
+
+    @field_validator("correct_order", mode="before")
+    @classmethod
+    def normalize_correct_order_ids(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        return [item.upper() if isinstance(item, str) else item for item in value]
 
     @field_validator("blanks", mode="before")
     @classmethod

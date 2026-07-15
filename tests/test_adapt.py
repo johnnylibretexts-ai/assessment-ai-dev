@@ -22,6 +22,7 @@ from app.schemas import (
     Choice,
     ClozeBlank,
     Difficulty,
+    HotspotRegion,
     ItemResponse,
     QuestionDraft,
 )
@@ -133,6 +134,25 @@ def test_item_response_normalizes_lossless_cloze_string_shorthand() -> None:
         ["conserved"],
         ["transformed"],
     ]
+
+
+def test_structural_ids_are_uppercased_but_still_strictly_validated() -> None:
+    region = HotspotRegion(
+        id="region_1",
+        label="Target",
+        shape="rectangle",
+        coordinates=[0.1, 0.2, 0.3, 0.4],
+        correct=True,
+    )
+    assert region.id == "REGION_1"
+
+    with pytest.raises(ValueError):
+        HotspotRegion(
+            id="still invalid!",
+            label="Target",
+            shape="rectangle",
+            coordinates=[0.1, 0.2, 0.3, 0.4],
+        )
 
 
 def test_fill_in_blank_payload_rejects_lossy_multiple_answers() -> None:
