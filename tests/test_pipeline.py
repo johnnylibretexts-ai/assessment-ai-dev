@@ -531,6 +531,27 @@ def test_dropdown_prompts_require_one_correct_top_level_choice() -> None:
         assert "correct=true on exactly one top-level choice" in prompt
 
 
+@pytest.mark.parametrize(
+    "item_type", [AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS]
+)
+def test_parameterized_prompts_require_exact_safe_engine_spec(
+    item_type: AssessmentItemType,
+) -> None:
+    source_page = public_page()
+    selected_concept = concept_batch().concepts[0]
+    prompt = _draft_prompt(
+        source_page,
+        selected_concept,
+        "[paragraph 0]\nTotal energy is conserved.",
+        item_type=item_type,
+    )
+
+    assert "response.parameterized is required" in prompt
+    assert f'engine value MUST be\nexactly "{item_type.value}"' in prompt
+    assert "Keep the top-level choices array empty" in prompt
+    assert "never return Perl, PG, PHP, shell, JavaScript" in prompt
+
+
 @pytest.mark.asyncio
 async def test_concept_citation_must_reference_a_presented_paragraph(store) -> None:
     database, repository = store
