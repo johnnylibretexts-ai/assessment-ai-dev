@@ -392,7 +392,7 @@ def _gemini_response_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _gemini_provider_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
-    """Relax only Gemini's provider constraint for oversized object graphs.
+    """Compact Gemini's provider constraint for oversized object graphs.
 
     The full schema remains in the prompt, and the original Pydantic model is
     still the mandatory local validator before a response can be accepted.
@@ -401,9 +401,53 @@ def _gemini_provider_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
     encoded = json.dumps(schema, sort_keys=True, separators=(",", ":"))
     if len(encoded.encode("utf-8")) <= _MAX_GEMINI_PROVIDER_SCHEMA_BYTES:
         return dict(schema)
+    compact = _compact_gemini_schema(schema)
+    compact_encoded = json.dumps(compact, sort_keys=True, separators=(",", ":"))
+    if len(compact_encoded.encode("utf-8")) <= _MAX_GEMINI_PROVIDER_SCHEMA_BYTES:
+        return compact
     if schema.get("type") != "object":
         raise LLMConfigurationError("oversized Gemini response schema must be an object")
     return {"type": "object", "additionalProperties": True}
+
+
+def _compact_gemini_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
+    definitions = schema.get("$defs")
+    definitions = definitions if isinstance(definitions, dict) else {}
+
+    def compact(node: Any, stack: tuple[str, ...] = ()) -> Any:
+        if isinstance(node, list):
+            return [compact(item, stack) for item in node]
+        if not isinstance(node, dict):
+            return node
+        reference = node.get("$ref")
+        if isinstance(reference, str):
+            prefix = "#/$defs/"
+            if not reference.startswith(prefix):
+                raise LLMConfigurationError("Gemini schema contains an external reference")
+            name = reference.removeprefix(prefix)
+            if name in stack or name not in definitions:
+                raise LLMConfigurationError("Gemini schema reference cannot be resolved")
+            return compact(definitions[name], (*stack, name))
+
+        result: dict[str, Any] = {}
+        for key in ("type", "enum", "required", "additionalProperties"):
+            if key in node:
+                result[key] = compact(node[key], stack)
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            result["properties"] = {
+                str(name): compact(value, stack)
+                for name, value in properties.items()
+            }
+        for key in ("items", "prefixItems", "anyOf", "oneOf"):
+            if key in node:
+                result[key] = compact(node[key], stack)
+        return result
+
+    compacted = compact(dict(schema))
+    if not isinstance(compacted, dict):
+        raise LLMConfigurationError("Gemini schema did not compact to an object")
+    return compacted
 
 
 class GeminiClient:

@@ -70,10 +70,14 @@ def test_gemini_schema_is_reduced_to_supported_subset() -> None:
 
     assert_ref_only(reduced)
     assert "default" in json.dumps(original)
-    assert _gemini_provider_schema(reduced) == {
-        "type": "object",
-        "additionalProperties": True,
-    }
+    provider_schema = _gemini_provider_schema(reduced)
+    assert len(json.dumps(provider_schema).encode("utf-8")) < 6_000
+    response_schema = provider_schema["properties"]["response"]
+    assert response_schema["properties"]["blanks"]["items"]["type"] == "object"
+    assert (
+        response_schema["properties"]["matching_pairs"]["items"]["type"]
+        == "object"
+    )
     simple = _gemini_response_schema(Answer.model_json_schema())
     assert _gemini_provider_schema(simple) == simple
 
@@ -105,10 +109,13 @@ async def test_gemini_sends_reduced_complex_schema() -> None:
         await client.aclose()
 
     payload = json.loads(requests[0].content)
-    assert payload["generationConfig"]["responseJsonSchema"] == {
-        "type": "object",
-        "additionalProperties": True,
-    }
+    provider_schema = payload["generationConfig"]["responseJsonSchema"]
+    assert len(json.dumps(provider_schema).encode("utf-8")) < 6_000
+    assert (
+        provider_schema["properties"]["response"]["properties"]
+        ["matching_pairs"]["items"]["type"]
+        == "object"
+    )
     prompt = payload["contents"][0]["parts"][0]["text"]
     assert '"$defs"' in prompt
     for unsupported in ('"const"', '"default"', '"pattern"'):
