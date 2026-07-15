@@ -704,12 +704,71 @@ or a 0-through-1000 coordinate scale.
 
 
 def _interaction_rule(item_type: AssessmentItemType) -> str:
-    if item_type == AssessmentItemType.DROPDOWN:
+    if item_type == AssessmentItemType.MULTIPLE_CHOICE:
         return """
-For this dropdown item, populate the top-level choices array with at least two choices. Set
+For this multiple_choice item, populate exactly four top-level choices and set correct=true on
+exactly one choice."""
+    if item_type == AssessmentItemType.TRUE_FALSE:
+        return """
+For this true_false item, populate exactly two top-level choices and set correct=true on exactly
+one choice."""
+    if item_type == AssessmentItemType.NUMERICAL:
+        return """
+For this numerical item, keep top-level choices empty and set response.numeric_answer to the
+finite numeric answer. Set response.numeric_tolerance to a nonnegative number."""
+    if item_type in {
+        AssessmentItemType.MULTIPLE_RESPONSE,
+        AssessmentItemType.SELECT_ALL,
+    }:
+        return f"""
+For this {item_type.value} item, populate at least two top-level choices and set correct=true on
+every correct choice, with at least one correct and one incorrect choice."""
+    if item_type == AssessmentItemType.SELECT_N:
+        return """
+For this select_n item, populate at least two top-level choices, set correct=true on every correct
+choice, and set response.select_n to exactly the number of correct=true choices."""
+    if item_type in {
+        AssessmentItemType.FILL_IN_BLANK,
+        AssessmentItemType.DRAG_DROP_CLOZE,
+    }:
+        return f"""
+For this {item_type.value} item, keep top-level choices empty and populate response.blanks. Every
+blank must have a unique ID, a nonempty correct string array, an options string array, and a
+case_sensitive boolean."""
+    if item_type in {AssessmentItemType.SELECT_CHOICE, AssessmentItemType.DROPDOWN}:
+        return f"""
+For this {item_type.value} item, populate the top-level choices array with at least two choices. Set
 correct=true on exactly one top-level choice and correct=false on every other choice. Do not put
-dropdown options or the answer in response.blanks, response.matrix_columns, or another response
+options or the answer in response.blanks, response.matrix_columns, or another response
 field."""
+    if item_type == AssessmentItemType.MATCHING:
+        return """
+For this matching item, keep top-level choices empty and populate at least two
+response.matching_pairs. Every pair requires unique prompt_id and target_id values plus nonempty
+prompt and target text."""
+    if item_type == AssessmentItemType.ORDERING:
+        return """
+For this ordering item, populate at least three top-level choices with unique IDs. Populate
+response.correct_order with every top-level choice ID exactly once in the correct order; do not
+omit, repeat, or invent an ID."""
+    if item_type in {
+        AssessmentItemType.HIGHLIGHT_TEXT,
+        AssessmentItemType.HIGHLIGHT_TABLE,
+    }:
+        return f"""
+For this {item_type.value} item, keep top-level choices empty and populate
+response.highlight_segments with unique IDs, nonempty text, and correct booleans. At least one
+segment must have correct=true."""
+    if item_type == AssessmentItemType.MATRIX:
+        return """
+For this matrix item, keep top-level choices empty. Populate at least two
+response.matrix_columns with unique choice IDs and at least one response.matrix_row. Every row's
+correct_column_ids must contain only IDs present in response.matrix_columns."""
+    if item_type == AssessmentItemType.BOW_TIE:
+        return """
+For this bow_tie item, keep top-level choices empty and populate response.bow_tie_actions,
+response.bow_tie_condition, and response.bow_tie_parameters. Each group needs at least two unique
+choices, and required_selections must exactly equal its number of correct=true choices."""
     if item_type in {AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS}:
         return f"""
 For this {item_type.value} item, response.parameterized is required and its engine value MUST be
