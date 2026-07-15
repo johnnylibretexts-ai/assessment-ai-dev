@@ -471,7 +471,6 @@ class GeminiClient:
                     }
                 ],
                 "generationConfig": {
-                    "temperature": 0,
                     "maxOutputTokens": self._max_output_tokens,
                     "thinkingConfig": {"thinkingLevel": self._thinking_level},
                     "responseMimeType": "application/json",
