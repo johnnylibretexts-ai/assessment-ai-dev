@@ -78,6 +78,15 @@ def test_gemini_schema_is_reduced_to_supported_subset() -> None:
         response_schema["properties"]["matching_pairs"]["items"]["type"]
         == "object"
     )
+    coordinate_schema = (
+        response_schema["properties"]["hotspot_regions"]["items"]["properties"]
+        ["coordinates"]
+    )
+    assert coordinate_schema["items"] == {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+    }
     simple = _gemini_response_schema(Answer.model_json_schema())
     assert _gemini_provider_schema(simple) == simple
 

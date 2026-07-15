@@ -689,7 +689,9 @@ def _hotspot_image_rule(
     return f"""
 For this image_hotspot item, response.image_url MUST exactly equal one value from the
 approved_source_images list below. Never invent, shorten, rewrite, or use any other image URL.
-Choose regions that correspond to the selected source image.
+Choose regions that correspond to the selected source image. Every coordinate must be a decimal
+from 0 through 1 inclusive, normalized to image width or height; never use pixels, percentages,
+or a 0-through-1000 coordinate scale.
 <approved_source_images>
 {rendered}
 </approved_source_images>"""

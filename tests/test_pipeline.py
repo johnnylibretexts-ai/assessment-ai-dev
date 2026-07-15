@@ -486,6 +486,8 @@ def test_hotspot_prompts_pin_response_to_exact_source_page_image_urls() -> None:
 
     for prompt in (draft_prompt, revision_prompt):
         assert "response.image_url MUST exactly equal one value" in prompt
+        assert "Every coordinate must be a decimal" in prompt
+        assert "never use pixels, percentages" in prompt
         assert prompt.count('<image_url value="') == 2
         assert all(url in prompt for url in image_urls)
 
