@@ -453,6 +453,30 @@ async def test_self_reported_hint_leak_is_rejected_before_persistence(store) -> 
 
 
 @pytest.mark.asyncio
+async def test_deterministically_detected_hint_leak_is_rejected_before_persistence(
+    store,
+) -> None:
+    database, repository = store
+    leaking = hint_ladder()
+    leaking.rungs[-1].text = "The answer is: It remains constant."
+    pipeline = AssessmentPipeline(
+        FakeContent(page()),
+        FakeLLM([*generation_responses(), leaking]),
+        repository,
+    )
+
+    with pytest.raises(CitationValidationError, match="specific hint.*answer leak"):
+        await pipeline.generate(
+            "Sandboxes/johnnyphung/Demo/Energy",
+            include_hint_ladder=True,
+        )
+
+    with database.session() as session:
+        assert session.scalar(select(func.count(Draft.id))) == 0
+        assert session.scalar(select(func.count(SourceSnapshot.id))) == 0
+
+
+@pytest.mark.asyncio
 async def test_source_text_in_model_prompts_is_bounded(store) -> None:
     _database, repository = store
     long_tail = "VISIBLE-" + ("x" * 70) + "-NEVER-SENT-TO-MODEL"

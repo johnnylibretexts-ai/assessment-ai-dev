@@ -1012,7 +1012,7 @@ class DraftRepository:
                 ladder = HintLadderDraft.model_validate(
                     _json_value(draft_write.hint_ladder)
                 )
-                ladder = _analyze_hint_leaks(draft_write.revised, ladder)
+                ladder = analyze_hint_leaks(draft_write.revised, ladder)
                 session.add(
                     HintLadderRecord(
                         draft_id=draft_ids_by_position[draft_write.position],
@@ -1234,7 +1234,7 @@ class DraftRepository:
             if draft is None:
                 raise DraftNotFoundError(f"draft {draft_id} was not found")
             question = QuestionDraft.model_validate(draft.current_json)
-            validated = _analyze_hint_leaks(question, validated)
+            validated = analyze_hint_leaks(question, validated)
             _validate_hint_ladder(question, validated)
             previous = session.scalars(
                 select(HintLadderRecord).where(
@@ -1679,7 +1679,7 @@ def _validate_hint_ladder(question: QuestionDraft, ladder: HintLadderDraft) -> N
             )
 
 
-def _analyze_hint_leaks(
+def analyze_hint_leaks(
     question: QuestionDraft, ladder: HintLadderDraft
 ) -> HintLadderDraft:
     analyzed = ladder.model_copy(deep=True)

@@ -16,6 +16,7 @@ from .db import (
     DraftWrite,
     LLMCallWrite,
     StoredGeneration,
+    analyze_hint_leaks,
     normalized_page_hash,
 )
 from .llm import LLMClient, LLMResult
@@ -309,12 +310,12 @@ class AssessmentPipeline:
                     draft_position=position,
                 )
                 calls.append(hint_call)
+                hint_ladder = analyze_hint_leaks(revised, hint_result.value)
                 _validate_hint_grounding(
-                    hint_result.value,
+                    hint_ladder,
                     concept=concept,
                     allowed_paragraphs=set(concept.source_paragraphs),
                 )
-                hint_ladder = hint_result.value
 
             generated.append(
                 DraftWrite(
