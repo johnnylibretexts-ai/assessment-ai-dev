@@ -82,7 +82,7 @@ publish questions, or write to any LibreTexts source. Transport retries are
 sequential and bounded.
 
 `run-provider-corpus` is the only paid evaluation command. It is pinned to the
-exact Gemini `gemini-3.5-flash` model, disposable SQLite database, 8,192-token
+exact zero-thinking Gemini `gemini-2.5-flash-lite` model, disposable SQLite database, 8,192-token
 output limit, 19-draft pilot, USD 5 per-call reserve, and USD 100 total ceiling.
 Every successful structured-output attempt is journaled and fsynced before a
 draft can qualify; missing usage metadata charges the full reserve and fails

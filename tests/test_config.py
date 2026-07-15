@@ -51,6 +51,12 @@ def test_normalizes_provider_order_and_reads_gemini_alias(
     assert "gemini-secret" not in repr(settings)
 
 
+def test_gemini_thinking_cannot_be_enabled() -> None:
+    assert Settings(_env_file=None).gemini_thinking_budget == 0
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, gemini_thinking_budget=1)
+
+
 @pytest.mark.parametrize("provider_order", ["", "openrouter", "ollama,ollama"])
 def test_rejects_invalid_provider_order(provider_order: str) -> None:
     with pytest.raises(ValidationError):

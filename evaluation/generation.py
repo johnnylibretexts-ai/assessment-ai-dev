@@ -43,7 +43,7 @@ from .models import (
 from .validators import validate_provider_call_receipts
 
 
-QUALIFICATION_RUN_ID = "build08-provider-corpus-gemini35-2026-07-14"
+QUALIFICATION_RUN_ID = "build08-provider-corpus-gemini25-flash-lite-2026-07-14"
 CANARY_MARKER = "build08-provider-corpus-canary"
 CANARY_DATABASE_URL = "sqlite:////data/build08-provider-corpus.db"
 BUDGET_CEILING_MICROUSD = 100_000_000
@@ -241,6 +241,7 @@ class BudgetedGeminiClient:
             prompt_token_count=usage["prompt_tokens"],
             output_token_count=usage["output_tokens"],
             total_token_count=usage["prompt_tokens"] + usage["output_tokens"],
+            thought_token_count=usage["thought_tokens"],
             estimated_cost_microusd=usage["cost_microusd"],
             usage_complete=usage["complete"],
         )
@@ -249,6 +250,8 @@ class BudgetedGeminiClient:
         self._case_call_ids.append(call.call_id)
         if not call.usage_complete:
             raise BudgetGuardError("Gemini omitted required token usage metadata")
+        if call.thought_token_count != 0:
+            raise BudgetGuardError("Gemini returned thinking tokens while disabled")
         if call.estimated_cost_microusd > PER_CALL_RESERVE_MICROUSD:
             raise BudgetGuardError("a provider call exceeded its USD 5 reserve")
 
@@ -548,29 +551,37 @@ def _build_draft_receipt(
 def _usage_for_attempts(attempts: tuple[Any, ...]) -> dict[str, int | bool]:
     prompt_tokens = 0
     output_tokens = 0
+    thought_tokens = 0
     complete = True
     for attempt in attempts:
         metadata = attempt.response_metadata
         prompt = metadata.get("promptTokenCount")
         total = metadata.get("totalTokenCount")
+        thoughts = metadata.get("thoughtsTokenCount", 0)
         if not isinstance(prompt, int) or not isinstance(total, int) or total <= prompt:
+            complete = False
+            break
+        if not isinstance(thoughts, int) or thoughts < 0:
             complete = False
             break
         prompt_tokens += prompt
         output_tokens += total - prompt
+        thought_tokens += thoughts
     if not complete or prompt_tokens < 1 or output_tokens < 1:
         return {
             "attempt_count": len(attempts),
             "prompt_tokens": 1,
             "output_tokens": 1,
+            "thought_tokens": 0,
             "cost_microusd": PER_CALL_RESERVE_MICROUSD,
             "complete": False,
         }
-    numerator = prompt_tokens * 1_500_000 + output_tokens * 9_000_000
+    numerator = prompt_tokens * 100_000 + output_tokens * 400_000
     return {
         "attempt_count": len(attempts),
         "prompt_tokens": prompt_tokens,
         "output_tokens": output_tokens,
+        "thought_tokens": thought_tokens,
         "cost_microusd": (numerator + 999_999) // 1_000_000,
         "complete": True,
     }
@@ -583,8 +594,12 @@ def _validate_run_settings(settings: Settings, database_url: str) -> None:
         raise EvaluationRunError("provider qualification requires the disposable database")
     if settings.llm_providers != ("gemini",):
         raise EvaluationRunError("provider qualification is pinned to Gemini only")
-    if settings.gemini_model != "gemini-3.5-flash":
-        raise EvaluationRunError("provider qualification is pinned to gemini-3.5-flash")
+    if settings.gemini_model != "gemini-2.5-flash-lite":
+        raise EvaluationRunError(
+            "provider qualification is pinned to gemini-2.5-flash-lite"
+        )
+    if settings.gemini_thinking_budget != 0:
+        raise EvaluationRunError("Gemini thinking must be explicitly disabled")
     if settings.gemini_max_output_tokens != 8_192:
         raise EvaluationRunError("Gemini output must be capped at 8,192 tokens")
     if settings.gemini_max_retries > 2 or settings.max_source_chars > 60_000:
