@@ -187,6 +187,8 @@ def validate_corpus_manifest(manifest: CorpusManifest) -> SectionResult:
 def validate_provider_call_receipts(
     records: Iterable[ProviderCallReceipt],
     budget_state: ProviderBudgetState | None = None,
+    *,
+    require_settled: bool = False,
 ) -> SectionResult:
     calls = list(records)
     failures: list[str] = []
@@ -202,6 +204,8 @@ def validate_provider_call_receipts(
         failures.append("provider call sequence must be contiguous from one")
 
     for call in calls:
+        if not call.thinking_disabled or call.thought_token_count != 0:
+            failures.append(f"{call.call_id}: Gemini thinking was not fully disabled")
         if not call.usage_complete:
             failures.append(f"{call.call_id}: provider usage metadata is incomplete")
             if call.estimated_cost_microusd != call.per_call_reserve_microusd:
@@ -233,6 +237,8 @@ def validate_provider_call_receipts(
             reservation.reserved_microusd
             for reservation in budget_state.open_reservations.values()
         )
+        if require_settled and budget_state.open_reservations:
+            failures.append("provider qualification has open budget reservations")
         ceiling = budget_state.budget_ceiling_microusd
     spent = settled + open_reserve
     if spent > ceiling:
@@ -690,7 +696,7 @@ def _estimated_gemini_cost_microusd(
     output_token_count: int,
 ) -> int:
     numerator = (
-        prompt_token_count * 1_500_000 + output_token_count * 9_000_000
+        prompt_token_count * 100_000 + output_token_count * 400_000
     )
     return math.ceil(numerator / 1_000_000)
 

@@ -314,6 +314,7 @@ def main(argv: list[str] | None = None) -> int:
         result = validate_provider_call_receipts(
             _read_jsonl(args.ledger, ProviderCallReceipt),
             ProviderBudgetState.model_validate(_read_json(args.budget_state)),
+            require_settled=True,
         )
         _emit(result, args.output)
         return 0 if result.passed else 2
@@ -481,7 +482,9 @@ def main(argv: list[str] | None = None) -> int:
             validate_corpus_manifest(
                 CorpusManifest.model_validate(_read_json(args.corpus))
             ),
-            validate_provider_call_receipts(provider_calls, budget_state),
+            validate_provider_call_receipts(
+                provider_calls, budget_state, require_settled=True
+            ),
             validate_draft_qualification_receipts(
                 _read_jsonl(args.drafts, DraftQualificationReceipt),
                 provider_calls,

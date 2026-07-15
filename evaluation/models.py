@@ -108,18 +108,20 @@ class ProviderCallReceipt(BaseModel):
         "hint_ladder",
     ]
     provider: Literal["gemini"] = "gemini"
-    model: Literal["gemini-3.5-flash"] = "gemini-3.5-flash"
+    model: Literal["gemini-2.5-flash-lite"] = "gemini-2.5-flash-lite"
     prompt_version: str = Field(min_length=1, max_length=100)
     attempt_count: int = Field(ge=1, le=3)
     prompt_token_count: int = Field(ge=1)
     output_token_count: int = Field(ge=1)
     total_token_count: int = Field(ge=2)
     estimated_cost_microusd: int = Field(ge=1)
-    input_rate_microusd_per_million: Literal[1_500_000] = 1_500_000
-    output_rate_microusd_per_million: Literal[9_000_000] = 9_000_000
-    rate_card_id: Literal["gemini-3.5-flash-paid-2026-07-14"] = (
-        "gemini-3.5-flash-paid-2026-07-14"
+    input_rate_microusd_per_million: Literal[100_000] = 100_000
+    output_rate_microusd_per_million: Literal[400_000] = 400_000
+    rate_card_id: Literal["gemini-2.5-flash-lite-paid-2026-07-14"] = (
+        "gemini-2.5-flash-lite-paid-2026-07-14"
     )
+    thinking_disabled: Literal[True] = True
+    thought_token_count: int = Field(default=0, ge=0)
     max_output_tokens: Literal[8_192] = 8_192
     per_call_reserve_microusd: Literal[5_000_000] = 5_000_000
     budget_ceiling_microusd: Literal[100_000_000] = 100_000_000

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
@@ -57,7 +58,7 @@ class Settings(BaseSettings):
     # behavior while allowing Gemini to serve as an explicit fallback.
     llm_provider_order: str = "ollama"
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
-    gemini_model: str = "gemini-3.5-flash"
+    gemini_model: str = "gemini-2.5-flash-lite"
     gemini_api_key: SecretStr | None = Field(
         default=None,
         validation_alias=AliasChoices(
@@ -68,6 +69,9 @@ class Settings(BaseSettings):
     gemini_timeout_seconds: float = Field(default=180.0, ge=5, le=600)
     gemini_max_retries: int = Field(default=2, ge=0, le=5)
     gemini_max_output_tokens: int = Field(default=8_192, ge=1_024, le=8_192)
+    # BUILD-08 and normal Gemini calls are zero-thinking by construction. Keep
+    # this as a literal so an environment override cannot silently enable it.
+    gemini_thinking_budget: Literal[0] = 0
 
     adapt_publishing_enabled: bool = False
     adapt_base_url: str = "https://adapt.libretexts.dev/api"
