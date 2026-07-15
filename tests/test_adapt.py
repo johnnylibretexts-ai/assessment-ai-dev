@@ -123,6 +123,18 @@ def test_fill_in_blank_payload_matches_adapt_positional_contract() -> None:
     ]
 
 
+def test_item_response_normalizes_lossless_cloze_string_shorthand() -> None:
+    response = ItemResponse.model_validate(
+        {"blanks": ["conserved", "transformed"]}
+    )
+
+    assert [blank.id for blank in response.blanks] == ["B1", "B2"]
+    assert [blank.correct for blank in response.blanks] == [
+        ["conserved"],
+        ["transformed"],
+    ]
+
+
 def test_fill_in_blank_payload_rejects_lossy_multiple_answers() -> None:
     fill = QuestionDraft(
         item_type=AssessmentItemType.FILL_IN_BLANK,

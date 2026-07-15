@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class Paragraph(BaseModel):
@@ -217,6 +217,19 @@ class ItemResponse(BaseModel):
     bow_tie_condition: BowTieGroup | None = None
     bow_tie_parameters: BowTieGroup | None = None
     parameterized: ParameterizedItemSpec | None = None
+
+    @field_validator("blanks", mode="before")
+    @classmethod
+    def normalize_blank_shorthand(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return value
+        normalized: list[object] = []
+        for index, blank in enumerate(value, start=1):
+            if isinstance(blank, str):
+                normalized.append({"id": f"B{index}", "correct": [blank]})
+            else:
+                normalized.append(blank)
+        return normalized
 
 
 class HintRungType(StrEnum):
