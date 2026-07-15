@@ -16,6 +16,7 @@ from app.llm import (
     OllamaClient,
     _gemini_provider_schema,
     _gemini_response_schema,
+    _parse_and_validate,
     generation_status,
 )
 from app.schemas import QuestionDraft
@@ -24,6 +25,20 @@ from app.schemas import QuestionDraft
 class Answer(BaseModel):
     answer: str
     confidence: int = Field(ge=0, le=1)
+
+
+def test_parser_boundedly_unwraps_one_json_encoded_object() -> None:
+    raw = json.dumps(json.dumps({"answer": "four", "confidence": 1}))
+
+    value, error = _parse_and_validate(raw, Answer)
+
+    assert error == ""
+    assert value == Answer(answer="four", confidence=1)
+
+    twice_encoded = json.dumps(raw)
+    value, error = _parse_and_validate(twice_encoded, Answer)
+    assert value is None
+    assert error
 
 
 def test_gemini_schema_is_reduced_to_supported_subset() -> None:
