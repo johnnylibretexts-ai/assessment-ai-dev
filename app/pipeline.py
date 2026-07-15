@@ -316,7 +316,10 @@ class AssessmentPipeline:
                     draft_position=position,
                 )
                 calls.append(hint_call)
-                hint_ladder = analyze_hint_leaks(revised, hint_result.value)
+                generated_ladder = hint_result.value.model_copy(
+                    update={"concept_label": concept.label}, deep=True
+                )
+                hint_ladder = analyze_hint_leaks(revised, generated_ladder)
                 _validate_hint_grounding(
                     hint_ladder,
                     concept=concept,
