@@ -158,6 +158,14 @@ def test_select_n_is_inferred_only_when_missing_and_rejects_conflicts() -> None:
         QuestionDraft.model_validate(payload)
 
 
+def test_question_schema_rejects_xml_forbidden_control_characters() -> None:
+    payload = draft().model_dump(mode="json")
+    payload["explanation"] = "Valid text followed by a forbidden null.\x00"
+
+    with pytest.raises(ValueError, match="XML-forbidden control characters"):
+        QuestionDraft.model_validate(payload)
+
+
 def test_structural_ids_are_uppercased_but_still_strictly_validated() -> None:
     region = HotspotRegion(
         id="region_1",

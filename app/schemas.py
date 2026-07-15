@@ -373,6 +373,8 @@ class QuestionDraft(BaseModel):
 
     @model_validator(mode="after")
     def validate_item(self) -> "QuestionDraft":
+        if not _xml_text_tree_is_valid(self.model_dump(mode="python")):
+            raise ValueError("question text contains XML-forbidden control characters")
         ids = [choice.id for choice in self.choices]
         if len(ids) != len(set(ids)):
             raise ValueError("choice ids must be unique")
@@ -485,6 +487,25 @@ class QuestionDraft(BaseModel):
         if self.context_type == ItemContextType.SHARED_STIMULUS and not self.set_key:
             raise ValueError("shared-stimulus items require a set key")
         return self
+
+
+def _xml_text_tree_is_valid(value: object) -> bool:
+    if isinstance(value, str):
+        return all(
+            code in {0x9, 0xA, 0xD}
+            or 0x20 <= code <= 0xD7FF
+            or 0xE000 <= code <= 0xFFFD
+            or 0x10000 <= code <= 0x10FFFF
+            for code in map(ord, value)
+        )
+    if isinstance(value, dict):
+        return all(
+            _xml_text_tree_is_valid(key) and _xml_text_tree_is_valid(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, (list, tuple)):
+        return all(_xml_text_tree_is_valid(item) for item in value)
+    return True
 
 
 class Critique(BaseModel):
