@@ -43,11 +43,11 @@ from .models import (
 from .validators import validate_provider_call_receipts
 
 
-QUALIFICATION_RUN_ID = "build08-provider-corpus-2026-07-14"
+QUALIFICATION_RUN_ID = "build08-provider-corpus-gemini35-2026-07-14"
 CANARY_MARKER = "build08-provider-corpus-canary"
 CANARY_DATABASE_URL = "sqlite:////data/build08-provider-corpus.db"
 BUDGET_CEILING_MICROUSD = 100_000_000
-PER_CALL_RESERVE_MICROUSD = 1_000_000
+PER_CALL_RESERVE_MICROUSD = 5_000_000
 MAX_REQUEST_BYTES = 900_000
 
 _STAGE_BY_PROMPT_VERSION = {
@@ -250,7 +250,7 @@ class BudgetedGeminiClient:
         if not call.usage_complete:
             raise BudgetGuardError("Gemini omitted required token usage metadata")
         if call.estimated_cost_microusd > PER_CALL_RESERVE_MICROUSD:
-            raise BudgetGuardError("a provider call exceeded its USD 1 reserve")
+            raise BudgetGuardError("a provider call exceeded its USD 5 reserve")
 
     async def aclose(self) -> None:
         close = getattr(self.client, "aclose", None)
@@ -566,7 +566,7 @@ def _usage_for_attempts(attempts: tuple[Any, ...]) -> dict[str, int | bool]:
             "cost_microusd": PER_CALL_RESERVE_MICROUSD,
             "complete": False,
         }
-    numerator = prompt_tokens * 300_000 + output_tokens * 2_500_000
+    numerator = prompt_tokens * 1_500_000 + output_tokens * 9_000_000
     return {
         "attempt_count": len(attempts),
         "prompt_tokens": prompt_tokens,
@@ -583,12 +583,12 @@ def _validate_run_settings(settings: Settings, database_url: str) -> None:
         raise EvaluationRunError("provider qualification requires the disposable database")
     if settings.llm_providers != ("gemini",):
         raise EvaluationRunError("provider qualification is pinned to Gemini only")
-    if settings.gemini_model != "gemini-2.5-flash":
-        raise EvaluationRunError("provider qualification is pinned to gemini-2.5-flash")
+    if settings.gemini_model != "gemini-3.5-flash":
+        raise EvaluationRunError("provider qualification is pinned to gemini-3.5-flash")
     if settings.gemini_max_output_tokens != 8_192:
         raise EvaluationRunError("Gemini output must be capped at 8,192 tokens")
     if settings.gemini_max_retries > 2 or settings.max_source_chars > 60_000:
-        raise EvaluationRunError("provider retry/source bounds exceed the USD 1 reserve")
+        raise EvaluationRunError("provider retry/source bounds exceed the USD 5 reserve")
     if settings.gemini_api_key is None or not (
         settings.gemini_api_key.get_secret_value().strip()
     ):

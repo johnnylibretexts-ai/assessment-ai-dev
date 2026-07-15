@@ -415,8 +415,8 @@ def _automated_draft_receipts(
                 prompt_tokens = 100
                 output_tokens = 50
                 cost = (
-                    prompt_tokens * 300_000
-                    + output_tokens * 2_500_000
+                    prompt_tokens * 1_500_000
+                    + output_tokens * 9_000_000
                     + 999_999
                 ) // 1_000_000
                 calls.append(
