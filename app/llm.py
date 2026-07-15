@@ -23,6 +23,7 @@ _FENCED_JSON_RE = re.compile(
 _BEARER_RE = re.compile(r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s,;]+")
 _API_KEY_RE = re.compile(r"(?i)((?:api[_-]?key|access[_-]?token)\s*[:=]\s*)[^\s,;]+")
 _MAX_STORED_RAW_CHARS = 100_000
+_MAX_GEMINI_PROVIDER_SCHEMA_BYTES = 6_000
 _GEMINI_JSON_SCHEMA_KEYS = frozenset(
     {
         "$id",
@@ -390,6 +391,21 @@ def _gemini_response_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
     return clean(dict(schema))
 
 
+def _gemini_provider_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
+    """Relax only Gemini's provider constraint for oversized object graphs.
+
+    The full schema remains in the prompt, and the original Pydantic model is
+    still the mandatory local validator before a response can be accepted.
+    """
+
+    encoded = json.dumps(schema, sort_keys=True, separators=(",", ":"))
+    if len(encoded.encode("utf-8")) <= _MAX_GEMINI_PROVIDER_SCHEMA_BYTES:
+        return dict(schema)
+    if schema.get("type") != "object":
+        raise LLMConfigurationError("oversized Gemini response schema must be an object")
+    return {"type": "object", "additionalProperties": True}
+
+
 class GeminiClient:
     """Structured-output client for Google's Gemini generateContent API."""
 
@@ -454,6 +470,7 @@ class GeminiClient:
             raise ValueError("prompt_version must not be blank")
 
         json_schema = _gemini_response_schema(schema.model_json_schema())
+        provider_schema = _gemini_provider_schema(json_schema)
         validation_feedback: str | None = None
         attempts: list[LLMAttemptMetadata] = []
 
@@ -474,7 +491,7 @@ class GeminiClient:
                     "maxOutputTokens": self._max_output_tokens,
                     "thinkingConfig": {"thinkingLevel": self._thinking_level},
                     "responseMimeType": "application/json",
-                    "responseJsonSchema": json_schema,
+                    "responseJsonSchema": provider_schema,
                 },
             }
 
