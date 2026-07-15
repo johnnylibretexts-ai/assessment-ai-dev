@@ -552,6 +552,8 @@ def test_parameterized_prompts_require_exact_safe_engine_spec(
     assert "never return Perl, PG, PHP, shell, JavaScript" in prompt
     assert "every brace pair MUST be exactly a\ndeclared variable placeholder" in prompt
     assert 'answer_expression "mass * speed"' in prompt
+    assert "NEVER use a function call in an\nexpression" in prompt
+    assert "`round(...)`, `sqrt(...)`, `min(...)`, `max(...)`, `sum(...)`" in prompt
 
 
 @pytest.mark.asyncio
