@@ -562,6 +562,31 @@ def test_hotspot_prompts_pin_response_to_exact_source_page_image_urls() -> None:
     assert "approved_source_images" not in ordinary_prompt
 
 
+def test_draft_and_revision_prompts_pin_exact_concept_citation_ids() -> None:
+    selected_concept = concept_batch(paragraph=1).concepts[0]
+    critique = Critique(revision_required=False)
+    prompts = (
+        _draft_prompt(
+            public_page(),
+            selected_concept,
+            "[paragraph 1]\nEnergy can change form.",
+        ),
+        _revision_prompt(
+            public_page(),
+            selected_concept,
+            "[paragraph 1]\nEnergy can change form.",
+            question("Which statement describes energy?", paragraph=1),
+            critique,
+        ),
+    )
+
+    for prompt in prompts:
+        normalized = " ".join(prompt.split())
+        assert "Every citation_paragraphs value MUST come from this exact" in normalized
+        assert "exact selected-concept list" in normalized
+        assert "other value: [1]" in normalized
+
+
 def test_dropdown_prompts_require_one_correct_top_level_choice() -> None:
     source_page = public_page()
     selected_concept = concept_batch().concepts[0]
