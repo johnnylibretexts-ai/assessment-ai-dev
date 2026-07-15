@@ -709,6 +709,8 @@ def test_parameterized_prompts_require_exact_safe_engine_spec(
     assert "Keep the top-level choices array empty" in prompt
     assert "never return Perl, PG, PHP, shell, JavaScript" in prompt
     assert "every brace pair MUST be exactly a\ndeclared variable placeholder" in prompt
+    assert "maximum MUST be numerically greater than minimum" in prompt
+    assert '"minimum":1,"maximum":10,"step":1' in prompt
     assert 'answer_expression "mass * speed"' in prompt
     assert "NEVER use a function call in an\nexpression" in prompt
     assert "`round(...)`, `sqrt(...)`, `min(...)`, `max(...)`, `sum(...)`" in prompt

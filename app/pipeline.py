@@ -788,7 +788,10 @@ exactly \"{item_type.value}\". Populate its structured variables, prompt_templat
 answer_expression, explanation_template, constraints, tolerance, units, and seed_policy fields.
 Keep the top-level choices array empty and do not use any alternate response field. Return only
 the safe constrained specification; never return Perl, PG, PHP, shell, JavaScript, or other
-executable code. In prompt_template and explanation_template, every brace pair MUST be exactly a
+executable code. Every variable MUST use this exact object shape with a genuinely variable bounded
+range: {{"name":"x","minimum":1,"maximum":10,"step":1,"integer":true}}. For every variable,
+maximum MUST be numerically greater than minimum and step MUST be positive; never use equal,
+reversed, or constant bounds. In prompt_template and explanation_template, every brace pair MUST be exactly a
 declared variable placeholder such as {{mass}}; do not use LaTeX commands, formatting braces,
 escaped braces, or undeclared placeholders. In answer_expression, use declared variable names
 without braces, numeric constants, parentheses, and only +, -, *, /, **, or %. Constraints may
