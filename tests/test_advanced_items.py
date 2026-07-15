@@ -125,6 +125,20 @@ def test_parameter_compiler_is_deterministic_across_25_bounded_seeds() -> None:
     assert "unless $parameters_valid" in first.source
 
 
+def test_parameterized_question_schema_rejects_malformed_templates() -> None:
+    malformed = parameter_spec("imathas").model_copy(
+        update={"explanation_template": "Divide {mass by {speed}."}
+    )
+
+    with pytest.raises(ValidationError, match="malformed placeholders"):
+        QuestionDraft(
+            **base_fields(),
+            item_type=AssessmentItemType.IMATHAS,
+            response=ItemResponse(parameterized=malformed),
+            specialist_review_required=True,
+        )
+
+
 def test_parameter_compiler_rejects_calls_attributes_and_unknown_names() -> None:
     for expression in ["__import__('os')", "mass.real", "mass + secret"]:
         spec = parameter_spec().model_copy(update={"answer_expression": expression})
