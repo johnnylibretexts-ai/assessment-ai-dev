@@ -33,6 +33,9 @@ from app.schemas import (
     ConceptBatch,
     Critique,
     Difficulty,
+    HintLadderDraft,
+    HintRungDraft,
+    HintRungType,
     NormalizedPage,
     Paragraph,
     QuestionDraft,
@@ -171,6 +174,21 @@ def generation_responses(
         ),
         question(revised_stem),
     ]
+
+
+def hint_ladder(*, leaking_rung: HintRungType | None = None) -> HintLadderDraft:
+    return HintLadderDraft(
+        concept_label="Conservation of energy",
+        rungs=[
+            HintRungDraft(
+                rung=rung,
+                text=f"Use the {rung.value} idea without revealing the answer.",
+                citation_paragraphs=[0],
+                answer_leak_detected=rung == leaking_rung,
+            )
+            for rung in HintRungType
+        ],
+    )
 
 
 @pytest.fixture
@@ -412,6 +430,26 @@ async def test_question_citation_must_stay_within_selected_concept_source(
 
     with database.session() as session:
         assert session.scalar(select(func.count(Draft.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_self_reported_hint_leak_is_rejected_before_persistence(store) -> None:
+    database, repository = store
+    responses = [
+        *generation_responses(),
+        hint_ladder(leaking_rung=HintRungType.SPECIFIC),
+    ]
+    pipeline = AssessmentPipeline(FakeContent(page()), FakeLLM(responses), repository)
+
+    with pytest.raises(CitationValidationError, match="specific hint.*answer leak"):
+        await pipeline.generate(
+            "Sandboxes/johnnyphung/Demo/Energy",
+            include_hint_ladder=True,
+        )
+
+    with database.session() as session:
+        assert session.scalar(select(func.count(Draft.id))) == 0
+        assert session.scalar(select(func.count(SourceSnapshot.id))) == 0
 
 
 @pytest.mark.asyncio
