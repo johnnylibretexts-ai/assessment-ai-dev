@@ -325,6 +325,38 @@ class QuestionDraft(BaseModel):
     specialist_review_required: bool = False
     targeted_misconception: str | None = Field(default=None, max_length=1_000)
 
+    @model_validator(mode="before")
+    @classmethod
+    def infer_missing_select_n(cls, value: object) -> object:
+        if not isinstance(value, dict) or value.get("item_type") not in {
+            AssessmentItemType.SELECT_N,
+            AssessmentItemType.SELECT_N.value,
+        }:
+            return value
+        correct_count = sum(
+            choice.correct
+            if isinstance(choice, Choice)
+            else choice.get("correct") is True
+            for choice in value.get("choices", [])
+            if isinstance(choice, (Choice, dict))
+        )
+        if correct_count < 1:
+            return value
+        response = value.get("response")
+        if response is None:
+            response = {}
+        if isinstance(response, ItemResponse):
+            if response.select_n is not None:
+                return value
+            response = response.model_copy(update={"select_n": correct_count})
+        elif isinstance(response, dict):
+            if response.get("select_n") is not None:
+                return value
+            response = {**response, "select_n": correct_count}
+        else:
+            return value
+        return {**value, "response": response}
+
     @model_validator(mode="after")
     def validate_item(self) -> "QuestionDraft":
         ids = [choice.id for choice in self.choices]
