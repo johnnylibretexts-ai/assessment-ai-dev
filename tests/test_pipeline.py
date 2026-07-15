@@ -550,6 +550,8 @@ def test_parameterized_prompts_require_exact_safe_engine_spec(
     assert f'engine value MUST be\nexactly "{item_type.value}"' in prompt
     assert "Keep the top-level choices array empty" in prompt
     assert "never return Perl, PG, PHP, shell, JavaScript" in prompt
+    assert "every brace pair MUST be exactly a\ndeclared variable placeholder" in prompt
+    assert 'answer_expression "mass * speed"' in prompt
 
 
 @pytest.mark.asyncio
