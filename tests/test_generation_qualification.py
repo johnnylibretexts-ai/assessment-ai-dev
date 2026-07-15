@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel
 
 from app.llm import LLMAttemptMetadata, LLMCallMetadata, LLMResult
@@ -11,8 +12,11 @@ from app.schemas import AssessmentItemType
 from app.source_policy import parse_public_source_url
 from evaluation.generation import (
     BudgetedGeminiClient,
+    EvaluationRunError,
     ProviderCallLedger,
+    _load_or_write_plan,
     _qualification_pipeline_version,
+    _repair_unsupported_hotspot_cases,
     build_draft_plan,
 )
 from evaluation.models import (
@@ -94,6 +98,56 @@ def test_draft_plan_covers_380_cases_and_uses_all_pages() -> None:
     ]
     assert len(bow_ties) == 20
     assert {case.stratum for case in bow_ties} == {DomainStratum.MEDICINE_HEALTH}
+
+
+def test_plan_repair_changes_only_unaccepted_unsupported_hotspots(
+    tmp_path: Path,
+) -> None:
+    manifest = _manifest()
+    legacy_image_keys = {
+        "chemistry-0",
+        "biology-0",
+        "medicine_health-0",
+        "humanities_social-0",
+        "humanities_social-1",
+    }
+    legacy = build_draft_plan(manifest, image_page_keys=legacy_image_keys)
+    repaired = _repair_unsupported_hotspot_cases(
+        legacy,
+        manifest,
+        supported_image_page_keys=legacy_image_keys - {"humanities_social-0"},
+    )
+    changed = [
+        (before, after)
+        for before, after in zip(legacy.cases, repaired.cases, strict=True)
+        if before != after
+    ]
+
+    assert changed
+    assert all(before.item_type == AssessmentItemType.IMAGE_HOTSPOT for before, _ in changed)
+    assert all(before.page_key == "humanities_social-0" for before, _ in changed)
+    assert all(after.page_key == "humanities_social-1" for _, after in changed)
+    assert all(before.stratum == after.stratum for before, after in changed)
+
+    first_changed_sequence = changed[0][0].sequence
+    path = tmp_path / "draft-plan.json"
+    path.write_text(legacy.model_dump_json(), encoding="utf-8")
+    migrated = _load_or_write_plan(
+        path,
+        repaired,
+        legacy_plan=legacy,
+        locked_prefix=first_changed_sequence - 1,
+    )
+    assert migrated == repaired
+
+    path.write_text(legacy.model_dump_json(), encoding="utf-8")
+    with pytest.raises(EvaluationRunError, match="accepted receipt prefix"):
+        _load_or_write_plan(
+            path,
+            repaired,
+            legacy_plan=legacy,
+            locked_prefix=first_changed_sequence,
+        )
 
 
 async def test_budgeted_client_writes_usage_without_model_output(tmp_path: Path) -> None:
