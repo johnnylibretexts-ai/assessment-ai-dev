@@ -499,6 +499,38 @@ def test_hotspot_prompts_pin_response_to_exact_source_page_image_urls() -> None:
     assert "approved_source_images" not in ordinary_prompt
 
 
+def test_dropdown_prompts_require_one_correct_top_level_choice() -> None:
+    source_page = public_page()
+    selected_concept = concept_batch().concepts[0]
+    initial = question("Select the conserved quantity.")
+    critique = Critique(
+        issues=[],
+        distractor_flags=[],
+        revision_instructions=["Keep exactly one correct option."],
+        revision_required=False,
+    )
+    prompts = (
+        _draft_prompt(
+            source_page,
+            selected_concept,
+            "[paragraph 0]\nTotal energy is conserved.",
+            item_type=AssessmentItemType.DROPDOWN,
+        ),
+        _revision_prompt(
+            source_page,
+            selected_concept,
+            "[paragraph 0]\nTotal energy is conserved.",
+            initial,
+            critique,
+            item_type=AssessmentItemType.DROPDOWN,
+        ),
+    )
+
+    for prompt in prompts:
+        assert "top-level choices array with at least two choices" in prompt
+        assert "correct=true on exactly one top-level choice" in prompt
+
+
 @pytest.mark.asyncio
 async def test_concept_citation_must_reference_a_presented_paragraph(store) -> None:
     database, repository = store
