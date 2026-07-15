@@ -83,6 +83,32 @@ async def test_hotspot_image_must_be_discovered_then_is_reencoded_locally(
 
 
 @pytest.mark.asyncio
+async def test_hotspot_allows_one_pinned_mindtouch_cdn_redirect(
+    tmp_path: Path,
+) -> None:
+    source = "https://chem.libretexts.org/@api/deki/files/123/diagram.png"
+    cdn = "https://files.mtstatic.com/site_4334/123/0?Signature=test"
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        if request.url == source:
+            return httpx.Response(302, headers={"location": cdn})
+        assert request.url == cdn
+        assert "authorization" not in request.headers
+        assert "cookie" not in request.headers
+        return httpx.Response(200, content=png(), headers={"content-type": "image/png"})
+
+    store = HotspotMediaStore(
+        settings(tmp_path), transport=httpx.MockTransport(handler)
+    )
+    copied = await store.copy_from_page(source, page(source))
+
+    assert copied.startswith("https://assess-ai.libretexts.dev/media/")
+    assert calls == [source, cdn]
+
+
+@pytest.mark.asyncio
 async def test_hotspot_rejects_undiscovered_redirect_svg_and_hostile_hosts(
     tmp_path: Path,
 ) -> None:
@@ -116,6 +142,7 @@ async def test_hotspot_rejects_undiscovered_redirect_svg_and_hostile_hosts(
     [
         "https://assess-ai.libretexts.dev/media/internal.png",
         "https://files.libretexts.net/private/internal.png",
+        "https://files.mtstatic.com/site_4334/private/internal.png",
         "https://chem.libretexts.org.evil.example/media/diagram.png",
     ],
 )
