@@ -204,8 +204,8 @@ def validate_provider_call_receipts(
         failures.append("provider call sequence must be contiguous from one")
 
     for call in calls:
-        if not call.thinking_disabled or call.thought_token_count != 0:
-            failures.append(f"{call.call_id}: Gemini thinking was not fully disabled")
+        if call.thinking_level != "minimal":
+            failures.append(f"{call.call_id}: Gemini thinking was not minimal")
         if not call.usage_complete:
             failures.append(f"{call.call_id}: provider usage metadata is incomplete")
             if call.estimated_cost_microusd != call.per_call_reserve_microusd:
@@ -696,7 +696,7 @@ def _estimated_gemini_cost_microusd(
     output_token_count: int,
 ) -> int:
     numerator = (
-        prompt_token_count * 100_000 + output_token_count * 400_000
+        prompt_token_count * 1_500_000 + output_token_count * 9_000_000
     )
     return math.ceil(numerator / 1_000_000)
 

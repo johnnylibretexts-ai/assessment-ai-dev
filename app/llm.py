@@ -354,7 +354,7 @@ class GeminiClient:
         self._url = f"{settings.gemini_base_url}/models/{self._model}:generateContent"
         self._max_attempts = settings.gemini_max_retries + 1
         self._max_output_tokens = settings.gemini_max_output_tokens
-        self._thinking_budget = settings.gemini_thinking_budget
+        self._thinking_level = settings.gemini_thinking_level
         self._sleep = sleep
         self._headers = {"x-goog-api-key": self._secret}
         self._owns_client = client is None
@@ -403,7 +403,7 @@ class GeminiClient:
                 "generationConfig": {
                     "temperature": 0,
                     "maxOutputTokens": self._max_output_tokens,
-                    "thinkingConfig": {"thinkingBudget": self._thinking_budget},
+                    "thinkingConfig": {"thinkingLevel": self._thinking_level},
                     "responseMimeType": "application/json",
                     "responseJsonSchema": json_schema,
                 },
@@ -434,13 +434,6 @@ class GeminiClient:
                     validation_error=None if value is not None else safe_feedback,
                 )
             )
-
-            thought_tokens = safe_response_metadata.get("thoughtsTokenCount", 0)
-            if isinstance(thought_tokens, int) and thought_tokens > 0:
-                raise LLMStructuredOutputError(
-                    "Gemini returned thinking tokens while thinking was disabled",
-                    attempts=tuple(attempts),
-                ) from None
 
             if value is not None:
                 metadata = LLMCallMetadata(

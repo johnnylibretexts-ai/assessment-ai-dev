@@ -43,7 +43,7 @@ from .models import (
 from .validators import validate_provider_call_receipts
 
 
-QUALIFICATION_RUN_ID = "build08-provider-corpus-gemini25-flash-lite-2026-07-14"
+QUALIFICATION_RUN_ID = "build08-provider-corpus-gemini35-minimal-2026-07-14"
 CANARY_MARKER = "build08-provider-corpus-canary"
 CANARY_DATABASE_URL = "sqlite:////data/build08-provider-corpus.db"
 BUDGET_CEILING_MICROUSD = 100_000_000
@@ -250,8 +250,6 @@ class BudgetedGeminiClient:
         self._case_call_ids.append(call.call_id)
         if not call.usage_complete:
             raise BudgetGuardError("Gemini omitted required token usage metadata")
-        if call.thought_token_count != 0:
-            raise BudgetGuardError("Gemini returned thinking tokens while disabled")
         if call.estimated_cost_microusd > PER_CALL_RESERVE_MICROUSD:
             raise BudgetGuardError("a provider call exceeded its USD 5 reserve")
 
@@ -576,7 +574,7 @@ def _usage_for_attempts(attempts: tuple[Any, ...]) -> dict[str, int | bool]:
             "cost_microusd": PER_CALL_RESERVE_MICROUSD,
             "complete": False,
         }
-    numerator = prompt_tokens * 100_000 + output_tokens * 400_000
+    numerator = prompt_tokens * 1_500_000 + output_tokens * 9_000_000
     return {
         "attempt_count": len(attempts),
         "prompt_tokens": prompt_tokens,
@@ -594,12 +592,10 @@ def _validate_run_settings(settings: Settings, database_url: str) -> None:
         raise EvaluationRunError("provider qualification requires the disposable database")
     if settings.llm_providers != ("gemini",):
         raise EvaluationRunError("provider qualification is pinned to Gemini only")
-    if settings.gemini_model != "gemini-2.5-flash-lite":
-        raise EvaluationRunError(
-            "provider qualification is pinned to gemini-2.5-flash-lite"
-        )
-    if settings.gemini_thinking_budget != 0:
-        raise EvaluationRunError("Gemini thinking must be explicitly disabled")
+    if settings.gemini_model != "gemini-3.5-flash":
+        raise EvaluationRunError("provider qualification is pinned to gemini-3.5-flash")
+    if settings.gemini_thinking_level != "minimal":
+        raise EvaluationRunError("Gemini thinking must remain at minimal")
     if settings.gemini_max_output_tokens != 8_192:
         raise EvaluationRunError("Gemini output must be capped at 8,192 tokens")
     if settings.gemini_max_retries > 2 or settings.max_source_chars > 60_000:

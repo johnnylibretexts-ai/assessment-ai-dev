@@ -51,7 +51,7 @@ class FakeGemini:
             value=value,
             metadata=LLMCallMetadata(
                 provider="gemini",
-                model="gemini-2.5-flash-lite",
+                model="gemini-3.5-flash",
                 prompt_version=prompt_version,
                 attempt=1,
                 raw_response=attempt.raw_response,
@@ -101,14 +101,14 @@ async def test_budgeted_client_writes_usage_without_model_output(tmp_path: Path)
 
     assert result.value.answer == "safe"
     assert len(call_ids) == 1
-    assert ledger.spent_microusd == 6
+    assert ledger.spent_microusd == 102
     assert validate_provider_call_receipts(ledger.calls).passed
     payload = path.read_text(encoding="utf-8")
     assert '"answer":"safe"' not in payload
     assert path.stat().st_mode & 0o777 == 0o600
 
 
-def test_provider_receipts_reject_any_thinking_tokens() -> None:
+def test_provider_receipts_track_minimal_thinking_tokens() -> None:
     call = ProviderCallReceipt(
         qualification_run_id="test-run",
         call_id="1" * 32,
@@ -121,15 +121,13 @@ def test_provider_receipts_reject_any_thinking_tokens() -> None:
         output_token_count=11,
         total_token_count=31,
         thought_token_count=3,
-        estimated_cost_microusd=7,
+        estimated_cost_microusd=129,
     )
 
     result = validate_provider_call_receipts([call])
 
-    assert not result.passed
-    assert result.failures == [
-        f"{call.call_id}: Gemini thinking was not fully disabled"
-    ]
+    assert result.passed
+    assert result.counts["calls"] == 1
 
 
 def test_release_validation_rejects_open_budget_reservations() -> None:
@@ -144,11 +142,11 @@ def test_release_validation_rejects_open_budget_reservations() -> None:
         prompt_token_count=20,
         output_token_count=8,
         total_token_count=28,
-        estimated_cost_microusd=6,
+        estimated_cost_microusd=102,
     )
     state = ProviderBudgetState(
         qualification_run_id="test-run",
-        settled_microusd=6,
+        settled_microusd=102,
         open_reservations={
             "2" * 32: BudgetReservation(
                 case_id="build08-draft-001",
