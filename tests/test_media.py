@@ -57,6 +57,18 @@ def test_discovered_page_image_urls_are_canonical_sorted_and_deduplicated() -> N
     )
 
 
+def test_discovery_skips_unapproved_images_without_hiding_safe_siblings() -> None:
+    source_page = page("/media/approved.png")
+    source_page.html_body += (
+        '<img src="http://legacy.example/diagram.svg">'
+        '<img src="https://evil.example/diagram.png">'
+    )
+
+    assert discovered_page_image_urls(source_page) == (
+        "https://chem.libretexts.org/media/approved.png",
+    )
+
+
 def test_supported_page_image_urls_exclude_unsafe_image_formats() -> None:
     source_page = page("/media/diagram.jpg")
     source_page.html_body += (
