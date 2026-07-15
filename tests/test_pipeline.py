@@ -257,22 +257,32 @@ async def test_pipeline_pins_model_edited_concept_labels_but_audits_raw_output(
     responses = generation_responses()
     responses[1] = responses[1].model_copy(update={"concept_label": "Wrong initial"})
     responses[3] = responses[3].model_copy(update={"concept_label": "Wrong revision"})
+    responses.append(
+        hint_ladder().model_copy(update={"concept_label": "Wrong hint label"})
+    )
     pipeline = AssessmentPipeline(
         FakeContent(page()),
         FakeLLM(responses),
         repository,
     )
 
-    outcome = await pipeline.generate("Sandboxes/johnnyphung/Demo/Energy")
+    outcome = await pipeline.generate(
+        "Sandboxes/johnnyphung/Demo/Energy", include_hint_ladder=True
+    )
 
     stored = repository.require_draft(outcome.draft_id)
     assert stored.raw_json["concept_label"] == "Conservation of energy"
     assert stored.current.concept_label == "Conservation of energy"
+    assert stored.current_hint_ladder is not None
+    assert (
+        stored.current_hint_ladder.ladder.concept_label == "Conservation of energy"
+    )
     source = repository.get_source(outcome.source_id)
     assert source is not None
     calls = sorted(source.llm_calls, key=lambda call: call.id)
     assert "Wrong initial" in calls[1].raw_response
     assert "Wrong revision" in calls[3].raw_response
+    assert "Wrong hint label" in calls[4].raw_response
 
 
 @pytest.mark.asyncio
