@@ -34,6 +34,7 @@ from app.schemas import (
     ConceptBatch,
     Critique,
     Difficulty,
+    GeneratedHintLadderDraft,
     HintLadderDraft,
     HintRungDraft,
     HintRungType,
@@ -177,10 +178,10 @@ def generation_responses(
     ]
 
 
-def hint_ladder(*, leaking_rung: HintRungType | None = None) -> HintLadderDraft:
-    return HintLadderDraft(
-        concept_label="Conservation of energy",
-        rungs=[
+def hint_ladder(*, leaking_rung: HintRungType | None = None) -> GeneratedHintLadderDraft:
+    values = {
+        "concept_label": "Conservation of energy",
+        "rungs": [
             HintRungDraft(
                 rung=rung,
                 text=f"Use the {rung.value} idea without revealing the answer.",
@@ -189,6 +190,13 @@ def hint_ladder(*, leaking_rung: HintRungType | None = None) -> HintLadderDraft:
             )
             for rung in HintRungType
         ],
+    }
+    if leaking_rung is not None:
+        # Bypass the provider response contract to prove that the pipeline keeps
+        # its independent pre-persistence defense for an untrusted client.
+        return GeneratedHintLadderDraft.model_construct(**values)
+    return GeneratedHintLadderDraft(
+        **values,
     )
 
 
