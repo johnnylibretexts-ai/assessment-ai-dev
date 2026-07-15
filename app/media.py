@@ -24,6 +24,7 @@ class HotspotMediaStore:
     MAX_BYTES = 5_000_000
     MAX_PIXELS = 20_000_000
     ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp"}
+    GENERIC_BINARY_CONTENT_TYPE = "application/octet-stream"
     ALLOWED_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
     def __init__(
@@ -109,7 +110,10 @@ class HotspotMediaStore:
         if response.status_code != 200:
             raise HotspotMediaError("The source image could not be retrieved.")
         content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
-        if content_type not in self.ALLOWED_CONTENT_TYPES:
+        if content_type not in {
+            *self.ALLOWED_CONTENT_TYPES,
+            self.GENERIC_BINARY_CONTENT_TYPE,
+        }:
             raise HotspotMediaError(
                 "Only PNG, JPEG, and WebP source images are supported."
             )
@@ -130,7 +134,7 @@ class HotspotMediaStore:
 
     @staticmethod
     def _discovered_urls(page: NormalizedPage) -> set[str]:
-        return set(discovered_page_image_urls(page))
+        return set(supported_page_image_urls(page))
 
 
 def discovered_page_image_urls(page: NormalizedPage) -> tuple[str, ...]:
@@ -143,6 +147,14 @@ def discovered_page_image_urls(page: NormalizedPage) -> tuple[str, ...]:
         if isinstance(source, str):
             urls.add(_canonical_media_url(source, page.source.canonical_url))
     return tuple(sorted(urls))
+
+
+def supported_page_image_urls(page: NormalizedPage) -> tuple[str, ...]:
+    return tuple(
+        url
+        for url in discovered_page_image_urls(page)
+        if urlsplit(url).path.casefold().endswith((".png", ".jpg", ".jpeg", ".webp"))
+    )
 
 
 def _canonical_media_url(value: str, source_url: str) -> str:

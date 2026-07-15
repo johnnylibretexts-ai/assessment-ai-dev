@@ -21,7 +21,7 @@ from .db import (
 )
 from .llm import LLMClient, LLMResult
 from .parameterized import compile_parameterized_item
-from .media import HotspotMediaStore, discovered_page_image_urls
+from .media import HotspotMediaStore, supported_page_image_urls
 from .schemas import (
     AssessmentItemType,
     Concept,
@@ -177,7 +177,7 @@ class AssessmentPipeline:
         )
         hotspot_image_urls: tuple[str, ...] = ()
         if AssessmentItemType.IMAGE_HOTSPOT in resolved_types:
-            hotspot_image_urls = discovered_page_image_urls(page)
+            hotspot_image_urls = supported_page_image_urls(page)
             if not hotspot_image_urls:
                 raise PipelineError(
                     "Image-hotspot generation requires an approved image on the source page."
