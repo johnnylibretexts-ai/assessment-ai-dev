@@ -719,7 +719,11 @@ escaped braces, or undeclared placeholders. In answer_expression, use declared v
 without braces, numeric constants, parentheses, and only +, -, *, /, **, or %. Constraints may
 also use exactly one of ==, !=, <, <=, >, or >=. Example: variables mass and speed, prompt
 \"Find momentum for mass {{mass}} and speed {{speed}}.\", answer_expression \"mass * speed\",
-explanation_template \"Multiply {{mass}} by {{speed}}.\""""
+explanation_template \"Multiply {{mass}} by {{speed}}.\" NEVER use a function call in an
+expression: `round(...)`, `sqrt(...)`, `min(...)`, `max(...)`, `sum(...)`, and every other
+name followed by parentheses are forbidden. Use `x ** 0.5` instead of `sqrt(x)` when a square
+root is source-grounded, or choose a source-grounded relationship that needs only the allowed
+operators."""
     return ""
 
 
