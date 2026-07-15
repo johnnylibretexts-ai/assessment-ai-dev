@@ -570,6 +570,42 @@ def test_dropdown_prompts_require_one_correct_top_level_choice() -> None:
 
 
 @pytest.mark.parametrize(
+    ("item_type", "required_text"),
+    [
+        (AssessmentItemType.MULTIPLE_CHOICE, "exactly four top-level choices"),
+        (AssessmentItemType.TRUE_FALSE, "exactly two top-level choices"),
+        (AssessmentItemType.NUMERICAL, "response.numeric_answer"),
+        (
+            AssessmentItemType.MULTIPLE_RESPONSE,
+            "at least one correct and one incorrect",
+        ),
+        (AssessmentItemType.SELECT_ALL, "at least one correct and one incorrect"),
+        (AssessmentItemType.SELECT_N, "response.select_n"),
+        (AssessmentItemType.FILL_IN_BLANK, "populate response.blanks"),
+        (AssessmentItemType.DRAG_DROP_CLOZE, "populate response.blanks"),
+        (AssessmentItemType.SELECT_CHOICE, "top-level choices array"),
+        (AssessmentItemType.MATCHING, "response.matching_pairs"),
+        (AssessmentItemType.ORDERING, "response.correct_order"),
+        (AssessmentItemType.HIGHLIGHT_TEXT, "response.highlight_segments"),
+        (AssessmentItemType.HIGHLIGHT_TABLE, "response.highlight_segments"),
+        (AssessmentItemType.MATRIX, "response.matrix_columns"),
+        (AssessmentItemType.BOW_TIE, "response.bow_tie_actions"),
+    ],
+)
+def test_native_interaction_prompts_state_their_structural_contract(
+    item_type: AssessmentItemType, required_text: str
+) -> None:
+    prompt = _draft_prompt(
+        public_page(),
+        concept_batch().concepts[0],
+        "[paragraph 0]\nTotal energy is conserved.",
+        item_type=item_type,
+    )
+
+    assert required_text in prompt
+
+
+@pytest.mark.parametrize(
     "item_type", [AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS]
 )
 def test_parameterized_prompts_require_exact_safe_engine_spec(
