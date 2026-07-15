@@ -713,7 +713,13 @@ exactly \"{item_type.value}\". Populate its structured variables, prompt_templat
 answer_expression, explanation_template, constraints, tolerance, units, and seed_policy fields.
 Keep the top-level choices array empty and do not use any alternate response field. Return only
 the safe constrained specification; never return Perl, PG, PHP, shell, JavaScript, or other
-executable code."""
+executable code. In prompt_template and explanation_template, every brace pair MUST be exactly a
+declared variable placeholder such as {{mass}}; do not use LaTeX commands, formatting braces,
+escaped braces, or undeclared placeholders. In answer_expression, use declared variable names
+without braces, numeric constants, parentheses, and only +, -, *, /, **, or %. Constraints may
+also use exactly one of ==, !=, <, <=, >, or >=. Example: variables mass and speed, prompt
+\"Find momentum for mass {{mass}} and speed {{speed}}.\", answer_expression \"mass * speed\",
+explanation_template \"Multiply {{mass}} by {{speed}}.\""""
     return ""
 
 
