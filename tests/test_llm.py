@@ -14,13 +14,46 @@ from app.llm import (
     LLMStructuredOutputError,
     LLMTransportError,
     OllamaClient,
+    _gemini_response_schema,
     generation_status,
 )
+from app.schemas import QuestionDraft
 
 
 class Answer(BaseModel):
     answer: str
     confidence: int = Field(ge=0, le=1)
+
+
+def test_gemini_schema_is_reduced_to_supported_subset() -> None:
+    original = QuestionDraft.model_json_schema()
+    reduced = _gemini_response_schema(original)
+    encoded = json.dumps(reduced, sort_keys=True)
+
+    for unsupported in (
+        '"const"',
+        '"default"',
+        '"exclusiveMinimum"',
+        '"maxLength"',
+        '"minLength"',
+        '"pattern"',
+    ):
+        assert unsupported not in encoded
+    assert '"enum"' in encoded
+    assert '"$defs"' in encoded
+
+    def assert_ref_only(node: object) -> None:
+        if isinstance(node, list):
+            for item in node:
+                assert_ref_only(item)
+        elif isinstance(node, dict):
+            if "$ref" in node:
+                assert set(node) == {"$ref"}
+            for value in node.values():
+                assert_ref_only(value)
+
+    assert_ref_only(reduced)
+    assert "default" in json.dumps(original)
 
 
 def settings(**overrides: object) -> Settings:

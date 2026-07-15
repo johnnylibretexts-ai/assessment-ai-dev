@@ -23,6 +23,30 @@ _FENCED_JSON_RE = re.compile(
 _BEARER_RE = re.compile(r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s,;]+")
 _API_KEY_RE = re.compile(r"(?i)((?:api[_-]?key|access[_-]?token)\s*[:=]\s*)[^\s,;]+")
 _MAX_STORED_RAW_CHARS = 100_000
+_GEMINI_JSON_SCHEMA_KEYS = frozenset(
+    {
+        "$id",
+        "$anchor",
+        "$ref",
+        "type",
+        "format",
+        "title",
+        "description",
+        "enum",
+        "items",
+        "prefixItems",
+        "minItems",
+        "maxItems",
+        "minimum",
+        "maximum",
+        "anyOf",
+        "oneOf",
+        "properties",
+        "additionalProperties",
+        "required",
+        "propertyOrdering",
+    }
+)
 _RESPONSE_METADATA_FIELDS = (
     "model",
     "created_at",
@@ -186,7 +210,7 @@ class OllamaClient:
         if not prompt_version.strip():
             raise ValueError("prompt_version must not be blank")
 
-        json_schema = schema.model_json_schema()
+        json_schema = _gemini_response_schema(schema.model_json_schema())
         validation_feedback: str | None = None
         attempts: list[LLMAttemptMetadata] = []
 
@@ -318,6 +342,52 @@ class OllamaClient:
 
     def _safe_scalar(self, value: JsonScalar) -> JsonScalar:
         return self._safe_text(value) if isinstance(value, str) else value
+
+
+def _gemini_response_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
+    """Reduce Pydantic JSON Schema to Gemini's documented supported subset.
+
+    Provider-side schema enforcement is deliberately narrower than the local
+    Pydantic validator. Unsupported constraints are omitted from the request,
+    then the complete original model still validates the returned JSON.
+    """
+
+    def clean(node: Any) -> Any:
+        if isinstance(node, list):
+            return [clean(item) for item in node]
+        if not isinstance(node, dict):
+            return node
+
+        result: dict[str, Any] = {}
+        definitions = node.get("$defs")
+        if isinstance(definitions, dict):
+            result["$defs"] = {
+                str(name): clean(value) for name, value in definitions.items()
+            }
+
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            result["properties"] = {
+                str(name): clean(value) for name, value in properties.items()
+            }
+
+        for key, value in node.items():
+            if key in {"$defs", "properties", "const"}:
+                continue
+            if key not in _GEMINI_JSON_SCHEMA_KEYS:
+                continue
+            result[key] = clean(value)
+
+        if "const" in node and "enum" not in result:
+            result["enum"] = [clean(node["const"])]
+
+        # Gemini rejects siblings beside $ref. Pydantic validation retains the
+        # omitted descriptions and constraints after the response returns.
+        if "$ref" in result:
+            return {key: value for key, value in result.items() if key.startswith("$")}
+        return result
+
+    return clean(dict(schema))
 
 
 class GeminiClient:
