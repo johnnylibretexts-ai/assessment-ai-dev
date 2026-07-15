@@ -754,7 +754,10 @@ field."""
         return """
 For this matching item, keep top-level choices empty and populate at least two
 response.matching_pairs. Every pair requires unique prompt_id and target_id values plus nonempty
-prompt and target text."""
+prompt and target text. Use this exact object shape for each pair:
+{"prompt_id":"P1","prompt":"source-grounded prompt","target_id":"T1","target":"source-grounded target"}.
+Return at least two distinct objects in response.matching_pairs; never omit the array during
+revision."""
     if item_type == AssessmentItemType.ORDERING:
         return """
 For this ordering item, populate at least three top-level choices with unique IDs. Populate
