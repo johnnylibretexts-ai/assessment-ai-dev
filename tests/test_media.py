@@ -6,7 +6,11 @@ import pytest
 from PIL import Image
 
 from app.config import Settings
-from app.media import HotspotMediaError, HotspotMediaStore
+from app.media import (
+    HotspotMediaError,
+    HotspotMediaStore,
+    discovered_page_image_urls,
+)
 from app.schemas import NormalizedPage, Paragraph, SourceInfo
 
 
@@ -36,6 +40,19 @@ def settings(tmp_path: Path) -> Settings:
         _env_file=None,
         database_url=f"sqlite:///{tmp_path / 'media.db'}",
         hotspot_media_dir=tmp_path / "media",
+    )
+
+
+def test_discovered_page_image_urls_are_canonical_sorted_and_deduplicated() -> None:
+    source_page = page("/media/b.png")
+    source_page.html_body += (
+        '<img src="https://chem.libretexts.org/media/a.png#fragment">'
+        '<img src="/media/b.png">'
+    )
+
+    assert discovered_page_image_urls(source_page) == (
+        "https://chem.libretexts.org/media/a.png",
+        "https://chem.libretexts.org/media/b.png",
     )
 
 
