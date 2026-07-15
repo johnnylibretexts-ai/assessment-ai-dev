@@ -124,13 +124,19 @@ class HotspotMediaStore:
 
     @staticmethod
     def _discovered_urls(page: NormalizedPage) -> set[str]:
-        soup = BeautifulSoup(page.html_body, "html.parser")
-        urls = set()
-        for image in soup.find_all("img"):
-            source = image.get("src")
-            if isinstance(source, str):
-                urls.add(_canonical_media_url(source, page.source.canonical_url))
-        return urls
+        return set(discovered_page_image_urls(page))
+
+
+def discovered_page_image_urls(page: NormalizedPage) -> tuple[str, ...]:
+    """Return the exact, canonical image URLs present on a validated source page."""
+
+    soup = BeautifulSoup(page.html_body, "html.parser")
+    urls = set()
+    for image in soup.find_all("img"):
+        source = image.get("src")
+        if isinstance(source, str):
+            urls.add(_canonical_media_url(source, page.source.canonical_url))
+    return tuple(sorted(urls))
 
 
 def _canonical_media_url(value: str, source_url: str) -> str:
