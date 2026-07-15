@@ -307,6 +307,20 @@ class HintLadderDraft(BaseModel):
         return self
 
 
+class GeneratedHintLadderDraft(HintLadderDraft):
+    """Provider response contract; stored reviewer ladders may retain leak flags."""
+
+    @model_validator(mode="after")
+    def reject_self_reported_leaks(self) -> "GeneratedHintLadderDraft":
+        leaking = [rung.rung.value for rung in self.rungs if rung.answer_leak_detected]
+        if leaking:
+            raise ValueError(
+                "generated hint ladder self-reports answer leakage in: "
+                + ", ".join(leaking)
+            )
+        return self
+
+
 class QuestionDraft(BaseModel):
     schema_version: Literal["assessment-item-v2"] = "assessment-item-v2"
     item_type: AssessmentItemType = AssessmentItemType.MULTIPLE_CHOICE

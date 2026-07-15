@@ -27,6 +27,7 @@ from .schemas import (
     Concept,
     ConceptBatch,
     Critique,
+    GeneratedHintLadderDraft,
     HintLadderDraft,
     NormalizedPage,
     QuestionDraft,
@@ -310,7 +311,7 @@ class AssessmentPipeline:
                         focused_source,
                         revised,
                     ),
-                    schema=HintLadderDraft,
+                    schema=GeneratedHintLadderDraft,
                     prompt_version=HINT_PROMPT_VERSION,
                     draft_position=position,
                 )

@@ -14,6 +14,7 @@ from app.schemas import (
     BloomLevel,
     Choice,
     Difficulty,
+    GeneratedHintLadderDraft,
     HintLadderDraft,
     HintRungDraft,
     HintRungType,
@@ -198,6 +199,24 @@ def test_hint_ladder_requires_exactly_one_independently_cited_rung_of_each_type(
             concept_label="Energy",
             rungs=[ladder.rungs[0], ladder.rungs[0], ladder.rungs[2]],
         )
+
+
+def test_generated_hint_schema_rejects_self_reported_leaks() -> None:
+    ladder = HintLadderDraft(
+        concept_label="Energy",
+        rungs=[
+            HintRungDraft(
+                rung=rung,
+                text=f"Use the {rung.value} idea without revealing the answer.",
+                citation_paragraphs=[1],
+                answer_leak_detected=rung == HintRungType.STRATEGIC,
+            )
+            for rung in HintRungType
+        ],
+    )
+
+    with pytest.raises(ValidationError, match="strategic"):
+        GeneratedHintLadderDraft.model_validate(ladder.model_dump(mode="json"))
 
 
 def test_hint_storage_marks_verbatim_correct_answer_as_a_leak(tmp_path) -> None:
