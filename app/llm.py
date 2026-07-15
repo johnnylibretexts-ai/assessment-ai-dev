@@ -52,6 +52,15 @@ class LLMTransportError(LLMError):
 class LLMStructuredOutputError(LLMError):
     """Raised after all structured-output validation attempts fail."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        attempts: tuple[Any, ...] = (),
+    ) -> None:
+        super().__init__(message)
+        self.attempts = attempts
+
 
 class LLMAttemptMetadata(BaseModel):
     """Safe, serializable provenance for one model response."""
@@ -234,7 +243,8 @@ class OllamaClient:
         failure = self._safe_text(validation_feedback or "invalid structured output")
         raise LLMStructuredOutputError(
             f"Ollama returned invalid structured output after "
-            f"{self._max_attempts} attempt(s): {failure}"
+            f"{self._max_attempts} attempt(s): {failure}",
+            attempts=tuple(attempts),
         ) from None
 
     async def _post(self, payload: Mapping[str, Any]) -> httpx.Response:
@@ -339,6 +349,7 @@ class GeminiClient:
         self._model = settings.gemini_model.strip()
         self._url = f"{settings.gemini_base_url}/models/{self._model}:generateContent"
         self._max_attempts = settings.gemini_max_retries + 1
+        self._max_output_tokens = settings.gemini_max_output_tokens
         self._sleep = sleep
         self._headers = {"x-goog-api-key": self._secret}
         self._owns_client = client is None
@@ -386,6 +397,7 @@ class GeminiClient:
                 ],
                 "generationConfig": {
                     "temperature": 0,
+                    "maxOutputTokens": self._max_output_tokens,
                     "responseMimeType": "application/json",
                     "responseJsonSchema": json_schema,
                 },
@@ -432,7 +444,8 @@ class GeminiClient:
         failure = self._safe_text(validation_feedback or "invalid structured output")
         raise LLMStructuredOutputError(
             f"Gemini returned invalid structured output after "
-            f"{self._max_attempts} attempt(s): {failure}"
+            f"{self._max_attempts} attempt(s): {failure}",
+            attempts=tuple(attempts),
         ) from None
 
     async def _post(self, payload: Mapping[str, Any]) -> httpx.Response:

@@ -8,10 +8,13 @@ from app.schemas import AssessmentItemType
 
 from .models import (
     CorpusManifest,
+    DraftQualificationReceipt,
     EngineProbeReceipt,
     OutageBoundary,
     OutageReceipt,
     Publishability,
+    ProviderBudgetState,
+    ProviderCallReceipt,
     ReviewRecord,
     ReviewRole,
     SectionResult,
@@ -19,6 +22,15 @@ from .models import (
     ShadowMode,
     ShadowReceipt,
 )
+
+
+EXPECTED_DRAFT_STAGES = {
+    "concept_extraction",
+    "initial_draft",
+    "critique",
+    "revision",
+    "hint_ladder",
+}
 
 
 def validate_outage_receipts(records: Iterable[OutageReceipt]) -> SectionResult:
@@ -169,6 +181,212 @@ def validate_corpus_manifest(manifest: CorpusManifest) -> SectionResult:
         name="corpus",
         passed=True,
         counts={"pages": len(manifest.pages), **dict(sorted(counts.items()))},
+    )
+
+
+def validate_provider_call_receipts(
+    records: Iterable[ProviderCallReceipt],
+    budget_state: ProviderBudgetState | None = None,
+) -> SectionResult:
+    calls = list(records)
+    failures: list[str] = []
+    run_ids = {call.qualification_run_id for call in calls}
+    if len(run_ids) != 1:
+        failures.append("provider call ledger must contain exactly one run_id")
+
+    call_ids = [call.call_id for call in calls]
+    if len(call_ids) != len(set(call_ids)):
+        failures.append("provider call ledger contains duplicate call IDs")
+    sequences = [call.sequence for call in calls]
+    if sorted(sequences) != list(range(1, len(calls) + 1)):
+        failures.append("provider call sequence must be contiguous from one")
+
+    for call in calls:
+        if not call.usage_complete:
+            failures.append(f"{call.call_id}: provider usage metadata is incomplete")
+            if call.estimated_cost_microusd != call.per_call_reserve_microusd:
+                failures.append(
+                    f"{call.call_id}: incomplete usage must charge the full reserve"
+                )
+        else:
+            expected_cost = _estimated_gemini_cost_microusd(
+                call.prompt_token_count,
+                call.output_token_count,
+            )
+            if call.estimated_cost_microusd != expected_cost:
+                failures.append(f"{call.call_id}: provider cost does not match usage")
+        if call.estimated_cost_microusd > call.per_call_reserve_microusd:
+            failures.append(f"{call.call_id}: provider cost exceeded its reserve")
+
+    settled = sum(call.estimated_cost_microusd for call in calls)
+    ceiling = calls[0].budget_ceiling_microusd if calls else 100_000_000
+    open_reserve = 0
+    if budget_state is not None:
+        if run_ids and {budget_state.qualification_run_id} != run_ids:
+            failures.append("provider budget state run ID does not match calls")
+        if budget_state.settled_microusd != settled:
+            failures.append("provider budget settled total does not match calls")
+        call_ids_set = set(call_ids)
+        if call_ids_set.intersection(budget_state.open_reservations):
+            failures.append("settled provider calls still have open reservations")
+        open_reserve = sum(
+            reservation.reserved_microusd
+            for reservation in budget_state.open_reservations.values()
+        )
+        ceiling = budget_state.budget_ceiling_microusd
+    spent = settled + open_reserve
+    if spent > ceiling:
+        failures.append("provider spending exceeded the USD 100 ceiling")
+    return _result(
+        "provider_budget",
+        failures,
+        {
+            "calls": len(calls),
+            "run_id": next(iter(run_ids)) if len(run_ids) == 1 else "mixed",
+            "spent_microusd": spent,
+            "spent_usd": round(spent / 1_000_000, 6),
+            "settled_microusd": settled,
+            "open_reservations": (
+                len(budget_state.open_reservations) if budget_state is not None else 0
+            ),
+            "budget_ceiling_usd": ceiling / 1_000_000,
+        },
+    )
+
+
+def validate_draft_qualification_receipts(
+    records: Iterable[DraftQualificationReceipt],
+    provider_calls: Iterable[ProviderCallReceipt],
+    manifest: CorpusManifest,
+    *,
+    mode: str = "full",
+) -> SectionResult:
+    if mode not in {"pilot", "full"}:
+        raise ValueError("draft qualification mode must be pilot or full")
+    receipts = list(records)
+    calls = list(provider_calls)
+    failures: list[str] = []
+    expected_count = 19 if mode == "pilot" else 380
+    if len(receipts) != expected_count:
+        failures.append(f"{mode} requires exactly {expected_count} draft receipts")
+
+    run_ids = {receipt.qualification_run_id for receipt in receipts}
+    call_run_ids = {call.qualification_run_id for call in calls}
+    if len(run_ids) != 1:
+        failures.append("draft receipts must contain exactly one run_id")
+    if call_run_ids != run_ids:
+        failures.append("draft and provider-call run IDs must match")
+
+    expected_sequences = list(range(1, expected_count + 1))
+    if sorted(receipt.sequence for receipt in receipts) != expected_sequences:
+        failures.append(f"{mode} draft sequence is incomplete or duplicated")
+    if len({receipt.draft_id for receipt in receipts}) != len(receipts):
+        failures.append("draft receipts contain duplicate draft IDs")
+    if len({receipt.case_id for receipt in receipts}) != len(receipts):
+        failures.append("draft receipts contain duplicate case IDs")
+
+    corpus_by_key = {page.page_key: page for page in manifest.pages}
+    calls_by_id = {call.call_id: call for call in calls}
+    referenced_call_ids: list[str] = []
+    per_type = Counter(receipt.item_type for receipt in receipts)
+    strata_by_type: dict[AssessmentItemType, set[str]] = defaultdict(set)
+    for receipt in receipts:
+        page = corpus_by_key.get(receipt.page_key)
+        if page is None:
+            failures.append(f"{receipt.case_id}: page is absent from the sealed corpus")
+        elif any(
+            (
+                receipt.stratum != page.stratum,
+                receipt.source_identity != page.source_identity,
+                receipt.content_sha256 != page.content_sha256,
+                receipt.license != page.license,
+            )
+        ):
+            failures.append(f"{receipt.case_id}: source provenance does not match corpus")
+        strata_by_type[receipt.item_type].add(receipt.stratum.value)
+
+        selected_calls = [
+            calls_by_id[call_id]
+            for call_id in receipt.provider_call_ids
+            if call_id in calls_by_id
+        ]
+        referenced_call_ids.extend(receipt.provider_call_ids)
+        if len(selected_calls) != 5:
+            failures.append(f"{receipt.case_id}: requires five recorded provider calls")
+        elif (
+            {call.stage for call in selected_calls} != EXPECTED_DRAFT_STAGES
+            or any(call.case_id != receipt.case_id for call in selected_calls)
+        ):
+            failures.append(f"{receipt.case_id}: provider stage ledger is incomplete")
+
+        checks = {
+            "schema": receipt.schema_valid,
+            "citation": receipt.citation_valid,
+            "source hash": receipt.source_hash_valid,
+            "license": receipt.license_valid,
+            "critique": receipt.critique_executed,
+            "revision": receipt.revision_executed,
+            "hint ladder": receipt.hint_ladder_executed,
+            "three hint rungs": receipt.hint_rung_count == 3,
+            "hint leak": not receipt.hint_leak_detected,
+            "QTI": receipt.qti_valid,
+            "engine validation": receipt.engine_validation_passed,
+            "safe executable source": not receipt.unsafe_executable_source_detected,
+            "critical defect": not receipt.detected_critical_defect,
+            "advanced flags": receipt.advanced_flags_false,
+            "publishing disabled": receipt.adapt_publishing_disabled,
+            "no publication": receipt.publication_attempt_count == 0,
+        }
+        for name, passed in checks.items():
+            if not passed:
+                failures.append(f"{receipt.case_id}: failed {name}")
+
+        if (
+            receipt.item_type == AssessmentItemType.BOW_TIE
+            and receipt.stratum.value != "medicine_health"
+        ):
+            failures.append(f"{receipt.case_id}: bow-tie source is not medicine/health")
+
+    if len(referenced_call_ids) != len(set(referenced_call_ids)):
+        failures.append("provider calls cannot qualify more than one draft")
+
+    if mode == "pilot":
+        for item_type in AssessmentItemType:
+            if per_type[item_type] != 1:
+                failures.append(f"{item_type.value}: pilot requires exactly one draft")
+    else:
+        for item_type in AssessmentItemType:
+            if per_type[item_type] != 20:
+                failures.append(f"{item_type.value}: requires exactly 20 drafts")
+            if item_type != AssessmentItemType.BOW_TIE and len(
+                strata_by_type[item_type]
+            ) < 3:
+                failures.append(f"{item_type.value}: requires at least three strata")
+        used_pages = {receipt.page_key for receipt in receipts}
+        if used_pages != set(corpus_by_key):
+            failures.append("full draft ledger must use all 48 sealed corpus pages")
+
+    spent = sum(call.estimated_cost_microusd for call in calls)
+    projected = math.ceil(spent * 380 / len(receipts)) if receipts else 0
+    if mode == "pilot" and projected > 100_000_000:
+        failures.append("pilot projects the 380-draft run above USD 100")
+    if mode == "full" and spent > 100_000_000:
+        failures.append("full draft run exceeded USD 100")
+
+    return _result(
+        "automated_draft_pilot" if mode == "pilot" else "automated_drafts",
+        failures,
+        {
+            "drafts": len(receipts),
+            "item_types": len(per_type),
+            "used_pages": len({receipt.page_key for receipt in receipts}),
+            "provider_calls": len(calls),
+            "spent_microusd": spent,
+            "projected_full_run_microusd": projected,
+            "publication_attempts": sum(
+                receipt.publication_attempt_count for receipt in receipts
+            ),
+        },
     )
 
 
@@ -465,6 +683,16 @@ def _cohen_kappa(pairs: list[tuple[bool, bool]]) -> float:
     if expected == 1.0:
         return 1.0 if observed == 1.0 else 0.0
     return (observed - expected) / (1 - expected)
+
+
+def _estimated_gemini_cost_microusd(
+    prompt_token_count: int,
+    output_token_count: int,
+) -> int:
+    numerator = (
+        prompt_token_count * 300_000 + output_token_count * 2_500_000
+    )
+    return math.ceil(numerator / 1_000_000)
 
 
 def _result(

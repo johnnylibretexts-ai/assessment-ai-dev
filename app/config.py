@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     )
     gemini_timeout_seconds: float = Field(default=180.0, ge=5, le=600)
     gemini_max_retries: int = Field(default=2, ge=0, le=5)
+    gemini_max_output_tokens: int = Field(default=8_192, ge=1_024, le=8_192)
 
     adapt_publishing_enabled: bool = False
     adapt_base_url: str = "https://adapt.libretexts.dev/api"
