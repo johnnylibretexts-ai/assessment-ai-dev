@@ -108,20 +108,20 @@ class ProviderCallReceipt(BaseModel):
         "hint_ladder",
     ]
     provider: Literal["gemini"] = "gemini"
-    model: Literal["gemini-2.5-flash"] = "gemini-2.5-flash"
+    model: Literal["gemini-3.5-flash"] = "gemini-3.5-flash"
     prompt_version: str = Field(min_length=1, max_length=100)
     attempt_count: int = Field(ge=1, le=3)
     prompt_token_count: int = Field(ge=1)
     output_token_count: int = Field(ge=1)
     total_token_count: int = Field(ge=2)
     estimated_cost_microusd: int = Field(ge=1)
-    input_rate_microusd_per_million: Literal[300_000] = 300_000
-    output_rate_microusd_per_million: Literal[2_500_000] = 2_500_000
-    rate_card_id: Literal["gemini-2.5-flash-paid-2026-07-14"] = (
-        "gemini-2.5-flash-paid-2026-07-14"
+    input_rate_microusd_per_million: Literal[1_500_000] = 1_500_000
+    output_rate_microusd_per_million: Literal[9_000_000] = 9_000_000
+    rate_card_id: Literal["gemini-3.5-flash-paid-2026-07-14"] = (
+        "gemini-3.5-flash-paid-2026-07-14"
     )
     max_output_tokens: Literal[8_192] = 8_192
-    per_call_reserve_microusd: Literal[1_000_000] = 1_000_000
+    per_call_reserve_microusd: Literal[5_000_000] = 5_000_000
     budget_ceiling_microusd: Literal[100_000_000] = 100_000_000
     usage_complete: bool = True
 
@@ -143,7 +143,7 @@ class BudgetReservation(BaseModel):
         "revision",
         "hint_ladder",
     ]
-    reserved_microusd: Literal[1_000_000] = 1_000_000
+    reserved_microusd: Literal[5_000_000] = 5_000_000
 
 
 class ProviderBudgetState(BaseModel):
@@ -152,7 +152,7 @@ class ProviderBudgetState(BaseModel):
     )
     qualification_run_id: str = Field(min_length=1, max_length=100)
     budget_ceiling_microusd: Literal[100_000_000] = 100_000_000
-    per_call_reserve_microusd: Literal[1_000_000] = 1_000_000
+    per_call_reserve_microusd: Literal[5_000_000] = 5_000_000
     settled_microusd: int = Field(ge=0)
     open_reservations: dict[str, BudgetReservation] = Field(default_factory=dict)
 

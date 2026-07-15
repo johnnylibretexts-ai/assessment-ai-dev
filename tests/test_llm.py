@@ -317,14 +317,14 @@ async def test_gemini_uses_api_key_and_native_json_schema() -> None:
                     "candidatesTokenCount": 8,
                     "totalTokenCount": 28,
                 },
-                "modelVersion": "gemini-2.5-flash-001",
+                "modelVersion": "gemini-3.5-flash-05-2026",
             },
         )
 
     client = GeminiClient(
         settings(
             gemini_api_key="test-gemini-key",
-            gemini_model="gemini-2.5-flash",
+            gemini_model="gemini-3.5-flash",
             gemini_max_retries=0,
         ),
         transport=httpx.MockTransport(handler),
@@ -341,7 +341,7 @@ async def test_gemini_uses_api_key_and_native_json_schema() -> None:
     request = requests[0]
     assert request.url == httpx.URL(
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        "gemini-2.5-flash:generateContent"
+        "gemini-3.5-flash:generateContent"
     )
     assert request.headers["x-goog-api-key"] == "test-gemini-key"
     payload = json.loads(request.content)
@@ -353,7 +353,7 @@ async def test_gemini_uses_api_key_and_native_json_schema() -> None:
     assert config["responseJsonSchema"] == Answer.model_json_schema()
     assert result.value == Answer(answer="four", confidence=1)
     assert result.metadata.provider == "gemini"
-    assert result.metadata.model == "gemini-2.5-flash"
+    assert result.metadata.model == "gemini-3.5-flash"
     assert result.metadata.response_metadata["totalTokenCount"] == 28
 
 

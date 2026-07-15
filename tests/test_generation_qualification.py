@@ -44,7 +44,7 @@ class FakeGemini:
             value=value,
             metadata=LLMCallMetadata(
                 provider="gemini",
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 prompt_version=prompt_version,
                 attempt=1,
                 raw_response=attempt.raw_response,
@@ -94,7 +94,7 @@ async def test_budgeted_client_writes_usage_without_model_output(tmp_path: Path)
 
     assert result.value.answer == "safe"
     assert len(call_ids) == 1
-    assert ledger.spent_microusd == 26
+    assert ledger.spent_microusd == 102
     assert validate_provider_call_receipts(ledger.calls).passed
     payload = path.read_text(encoding="utf-8")
     assert '"answer":"safe"' not in payload

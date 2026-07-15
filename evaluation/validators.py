@@ -690,7 +690,7 @@ def _estimated_gemini_cost_microusd(
     output_token_count: int,
 ) -> int:
     numerator = (
-        prompt_token_count * 300_000 + output_token_count * 2_500_000
+        prompt_token_count * 1_500_000 + output_token_count * 9_000_000
     )
     return math.ceil(numerator / 1_000_000)
 

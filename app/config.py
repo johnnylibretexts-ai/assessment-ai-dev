@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # behavior while allowing Gemini to serve as an explicit fallback.
     llm_provider_order: str = "ollama"
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.5-flash"
     gemini_api_key: SecretStr | None = Field(
         default=None,
         validation_alias=AliasChoices(
