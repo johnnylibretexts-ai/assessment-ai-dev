@@ -214,8 +214,11 @@ class AssessmentPipeline:
                 draft_position=position,
             )
             calls.append(draft_call)
+            draft = draft_result.value.model_copy(
+                update={"concept_label": concept.label}, deep=True
+            )
             _validate_question_grounding(
-                draft_result.value,
+                draft,
                 concept=concept,
                 allowed_paragraphs=excerpt.paragraph_ids,
                 stage="initial draft",
@@ -225,7 +228,7 @@ class AssessmentPipeline:
                 page,
                 concept,
                 focused_source,
-                draft_result.value,
+                draft,
             )
             critique_result, critique_call = await self._complete(
                 stage="critique",
@@ -240,7 +243,7 @@ class AssessmentPipeline:
                 page,
                 concept,
                 focused_source,
-                draft_result.value,
+                draft,
                 critique_result.value,
                 item_type=item_type,
                 hotspot_image_urls=hotspot_image_urls,
@@ -253,19 +256,21 @@ class AssessmentPipeline:
                 draft_position=position,
             )
             calls.append(revision_call)
+            revised = revision_result.value.model_copy(
+                update={"concept_label": concept.label}, deep=True
+            )
             _validate_question_grounding(
-                revision_result.value,
+                revised,
                 concept=concept,
                 allowed_paragraphs=excerpt.paragraph_ids,
                 stage="revised draft",
                 expected_item_type=item_type,
             )
-            revised = revision_result.value
             engine_validation = None
             if item_type == AssessmentItemType.IMAGE_HOTSPOT:
                 if self.hotspot_media is None:
                     raise PipelineError("Hotspot media storage is not configured.")
-                revised = revision_result.value.model_copy(deep=True)
+                revised = revised.model_copy(deep=True)
                 assert revised.response.image_url is not None
                 revised.response.image_url = await self.hotspot_media.copy_from_page(
                     revised.response.image_url, page
@@ -321,7 +326,7 @@ class AssessmentPipeline:
                 DraftWrite(
                     position=position,
                     concept=concept,
-                    raw=draft_result.value,
+                    raw=draft,
                     critique=critique_result.value,
                     revised=revised,
                     hint_ladder=hint_ladder,
