@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -145,7 +145,9 @@ class HotspotRegion(BaseModel):
     id: str = Field(pattern=r"^[A-Z][A-Z0-9_-]{0,31}$")
     label: str = Field(min_length=1, max_length=500)
     shape: Literal["rectangle", "polygon"]
-    coordinates: list[float] = Field(min_length=4, max_length=40)
+    coordinates: list[Annotated[float, Field(ge=0, le=1)]] = Field(
+        min_length=4, max_length=40
+    )
     correct: bool = False
 
     @field_validator("id", mode="before")

@@ -430,7 +430,14 @@ def _compact_gemini_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
             return compact(definitions[name], (*stack, name))
 
         result: dict[str, Any] = {}
-        for key in ("type", "enum", "required", "additionalProperties"):
+        for key in (
+            "type",
+            "enum",
+            "required",
+            "additionalProperties",
+            "minimum",
+            "maximum",
+        ):
             if key in node:
                 result[key] = compact(node[key], stack)
         properties = node.get("properties")
