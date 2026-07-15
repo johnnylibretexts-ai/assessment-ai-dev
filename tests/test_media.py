@@ -10,6 +10,7 @@ from app.media import (
     HotspotMediaError,
     HotspotMediaStore,
     discovered_page_image_urls,
+    supported_page_image_urls,
 )
 from app.schemas import NormalizedPage, Paragraph, SourceInfo
 
@@ -56,6 +57,21 @@ def test_discovered_page_image_urls_are_canonical_sorted_and_deduplicated() -> N
     )
 
 
+def test_supported_page_image_urls_exclude_unsafe_image_formats() -> None:
+    source_page = page("/media/diagram.jpg")
+    source_page.html_body += (
+        '<img src="/media/vector.svg">'
+        '<img src="/media/animation.gif">'
+        '<img src="/media/no-extension">'
+        '<img src="/media/vector.svg.png">'
+    )
+
+    assert supported_page_image_urls(source_page) == (
+        "https://chem.libretexts.org/media/diagram.jpg",
+        "https://chem.libretexts.org/media/vector.svg.png",
+    )
+
+
 @pytest.mark.asyncio
 async def test_hotspot_image_must_be_discovered_then_is_reencoded_locally(
     tmp_path: Path,
@@ -66,7 +82,11 @@ async def test_hotspot_image_must_be_discovered_then_is_reencoded_locally(
         assert request.url == source
         assert "authorization" not in request.headers
         assert "cookie" not in request.headers
-        return httpx.Response(200, content=png(), headers={"content-type": "image/png"})
+        return httpx.Response(
+            200,
+            content=png(),
+            headers={"content-type": "application/octet-stream"},
+        )
 
     store = HotspotMediaStore(
         settings(tmp_path), transport=httpx.MockTransport(handler)
