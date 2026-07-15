@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     # behavior while allowing Gemini to serve as an explicit fallback.
     llm_provider_order: str = "ollama"
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
-    gemini_model: str = "gemini-2.5-flash-lite"
+    gemini_model: str = "gemini-3.5-flash"
     gemini_api_key: SecretStr | None = Field(
         default=None,
         validation_alias=AliasChoices(
@@ -69,9 +69,9 @@ class Settings(BaseSettings):
     gemini_timeout_seconds: float = Field(default=180.0, ge=5, le=600)
     gemini_max_retries: int = Field(default=2, ge=0, le=5)
     gemini_max_output_tokens: int = Field(default=8_192, ge=1_024, le=8_192)
-    # BUILD-08 and normal Gemini calls are zero-thinking by construction. Keep
-    # this as a literal so an environment override cannot silently enable it.
-    gemini_thinking_budget: Literal[0] = 0
+    # Keep paid Gemini 3.x reasoning at the owner-approved minimum. A Literal
+    # prevents an environment override from silently increasing its cost.
+    gemini_thinking_level: Literal["minimal"] = "minimal"
 
     adapt_publishing_enabled: bool = False
     adapt_base_url: str = "https://adapt.libretexts.dev/api"
