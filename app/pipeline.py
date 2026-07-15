@@ -706,6 +706,14 @@ For this dropdown item, populate the top-level choices array with at least two c
 correct=true on exactly one top-level choice and correct=false on every other choice. Do not put
 dropdown options or the answer in response.blanks, response.matrix_columns, or another response
 field."""
+    if item_type in {AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS}:
+        return f"""
+For this {item_type.value} item, response.parameterized is required and its engine value MUST be
+exactly \"{item_type.value}\". Populate its structured variables, prompt_template,
+answer_expression, explanation_template, constraints, tolerance, units, and seed_policy fields.
+Keep the top-level choices array empty and do not use any alternate response field. Return only
+the safe constrained specification; never return Perl, PG, PHP, shell, JavaScript, or other
+executable code."""
     return ""
 
 
