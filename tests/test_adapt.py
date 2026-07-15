@@ -136,6 +136,28 @@ def test_item_response_normalizes_lossless_cloze_string_shorthand() -> None:
     ]
 
 
+def test_select_n_is_inferred_only_when_missing_and_rejects_conflicts() -> None:
+    payload = draft().model_dump(mode="json")
+    payload.update(
+        {
+            "item_type": "select_n",
+            "choices": [
+                {"id": "A", "text": "First", "correct": True},
+                {"id": "B", "text": "Second", "correct": False},
+                {"id": "C", "text": "Third", "correct": True},
+            ],
+            "response": {},
+        }
+    )
+
+    inferred = QuestionDraft.model_validate(payload)
+    assert inferred.response.select_n == 2
+
+    payload["response"] = {"select_n": 1}
+    with pytest.raises(ValueError, match="select_n must equal"):
+        QuestionDraft.model_validate(payload)
+
+
 def test_structural_ids_are_uppercased_but_still_strictly_validated() -> None:
     region = HotspotRegion(
         id="region_1",
