@@ -549,6 +549,10 @@ def _validate_hint_grounding(
     if ladder.concept_label.strip().casefold() != concept.label.strip().casefold():
         raise CitationValidationError("hint ladder changed the selected concept label")
     for rung in ladder.rungs:
+        if rung.answer_leak_detected:
+            raise CitationValidationError(
+                f"{rung.rung.value} hint self-reported an answer leak"
+            )
         invalid = set(rung.citation_paragraphs) - allowed_paragraphs
         if invalid:
             raise CitationValidationError(

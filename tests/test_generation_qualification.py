@@ -12,6 +12,7 @@ from app.source_policy import parse_public_source_url
 from evaluation.generation import (
     BudgetedGeminiClient,
     ProviderCallLedger,
+    _qualification_pipeline_version,
     build_draft_plan,
 )
 from evaluation.models import (
@@ -27,6 +28,15 @@ from evaluation.validators import validate_provider_call_receipts
 
 class Answer(BaseModel):
     answer: str
+
+
+def test_unreceipted_retry_uses_a_new_pipeline_version() -> None:
+    first = _qualification_pipeline_version("build08-draft-022", 0)
+    retry = _qualification_pipeline_version("build08-draft-022", 5)
+
+    assert first.endswith("build08-draft-022-attempt-1")
+    assert retry.endswith("build08-draft-022-attempt-6")
+    assert retry != first
 
 
 class FakeGemini:

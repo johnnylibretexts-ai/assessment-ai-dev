@@ -395,13 +395,18 @@ async def run_provider_qualification(
         try:
             for case in plan.cases[len(existing_receipts) : target_count]:
                 page = pages_by_key[case.page_key]
+                prior_case_call_count = sum(
+                    call.case_id == case.case_id for call in ledger.calls
+                )
                 llm.start_case(case.case_id)
                 try:
                     pipeline = AssessmentPipeline(
                         content,
                         llm,
                         repository,
-                        pipeline_version=f"{PIPELINE_VERSION}-{case.case_id}",
+                        pipeline_version=_qualification_pipeline_version(
+                            case.case_id, prior_case_call_count
+                        ),
                         max_source_chars=public_settings.max_source_chars,
                         hotspot_media=HotspotMediaStore(public_settings),
                     )
@@ -433,6 +438,14 @@ async def run_provider_qualification(
             database.dispose()
 
     return len(existing_receipts), ledger.spent_microusd
+
+
+def _qualification_pipeline_version(case_id: str, prior_call_count: int) -> str:
+    """Avoid reusing an unreceipted generation after a failed or cut-off attempt."""
+
+    if prior_call_count < 0:
+        raise ValueError("prior provider-call count cannot be negative")
+    return f"{PIPELINE_VERSION}-{case_id}-attempt-{prior_call_count + 1}"
 
 
 def _build_draft_receipt(
