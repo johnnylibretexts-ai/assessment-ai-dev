@@ -177,7 +177,9 @@ def generation_responses(
     ]
 
 
-def hint_ladder(*, leaking_rung: HintRungType | None = None) -> GeneratedHintLadderDraft:
+def hint_ladder(
+    *, leaking_rung: HintRungType | None = None
+) -> GeneratedHintLadderDraft:
     values = {
         "concept_label": "Conservation of energy",
         "rungs": [
@@ -273,9 +275,7 @@ async def test_pipeline_pins_model_edited_concept_labels_but_audits_raw_output(
     assert stored.raw_json["concept_label"] == "Conservation of energy"
     assert stored.current.concept_label == "Conservation of energy"
     assert stored.current_hint_ladder is not None
-    assert (
-        stored.current_hint_ladder.ladder.concept_label == "Conservation of energy"
-    )
+    assert stored.current_hint_ladder.ladder.concept_label == "Conservation of energy"
     source = repository.get_source(outcome.source_id)
     assert source is not None
     calls = sorted(source.llm_calls, key=lambda call: call.id)

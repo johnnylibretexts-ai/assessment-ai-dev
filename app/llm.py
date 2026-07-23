@@ -406,7 +406,9 @@ def _gemini_provider_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
     if len(compact_encoded.encode("utf-8")) <= _MAX_GEMINI_PROVIDER_SCHEMA_BYTES:
         return compact
     if schema.get("type") != "object":
-        raise LLMConfigurationError("oversized Gemini response schema must be an object")
+        raise LLMConfigurationError(
+            "oversized Gemini response schema must be an object"
+        )
     return {"type": "object", "additionalProperties": True}
 
 
@@ -423,10 +425,14 @@ def _compact_gemini_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(reference, str):
             prefix = "#/$defs/"
             if not reference.startswith(prefix):
-                raise LLMConfigurationError("Gemini schema contains an external reference")
+                raise LLMConfigurationError(
+                    "Gemini schema contains an external reference"
+                )
             name = reference.removeprefix(prefix)
             if name in stack or name not in definitions:
-                raise LLMConfigurationError("Gemini schema reference cannot be resolved")
+                raise LLMConfigurationError(
+                    "Gemini schema reference cannot be resolved"
+                )
             return compact(definitions[name], (*stack, name))
 
         result: dict[str, Any] = {}
@@ -443,8 +449,7 @@ def _compact_gemini_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
         properties = node.get("properties")
         if isinstance(properties, dict):
             result["properties"] = {
-                str(name): compact(value, stack)
-                for name, value in properties.items()
+                str(name): compact(value, stack) for name, value in properties.items()
             }
         for key in ("items", "prefixItems", "anyOf", "oneOf"):
             if key in node:

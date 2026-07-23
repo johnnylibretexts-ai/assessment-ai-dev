@@ -74,14 +74,10 @@ def test_gemini_schema_is_reduced_to_supported_subset() -> None:
     assert len(json.dumps(provider_schema).encode("utf-8")) < 6_000
     response_schema = provider_schema["properties"]["response"]
     assert response_schema["properties"]["blanks"]["items"]["type"] == "object"
-    assert (
-        response_schema["properties"]["matching_pairs"]["items"]["type"]
-        == "object"
-    )
-    coordinate_schema = (
-        response_schema["properties"]["hotspot_regions"]["items"]["properties"]
-        ["coordinates"]
-    )
+    assert response_schema["properties"]["matching_pairs"]["items"]["type"] == "object"
+    coordinate_schema = response_schema["properties"]["hotspot_regions"]["items"][
+        "properties"
+    ]["coordinates"]
     assert coordinate_schema["items"] == {
         "type": "number",
         "minimum": 0,
@@ -121,8 +117,9 @@ async def test_gemini_sends_reduced_complex_schema() -> None:
     provider_schema = payload["generationConfig"]["responseJsonSchema"]
     assert len(json.dumps(provider_schema).encode("utf-8")) < 6_000
     assert (
-        provider_schema["properties"]["response"]["properties"]
-        ["matching_pairs"]["items"]["type"]
+        provider_schema["properties"]["response"]["properties"]["matching_pairs"][
+            "items"
+        ]["type"]
         == "object"
     )
     prompt = payload["contents"][0]["parts"][0]["text"]
