@@ -5,10 +5,17 @@ from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from typing import Any
 
+from .computation import ComputationProfile
+from .computation_client import ComputationClient
+from .computation_workflow import (
+    item_type_for_delivery,
+    validate_requested_profile,
+)
 from .config import Settings
 from .db import DraftRepository, GenerationJob, GenerationJobStatus
 from .pipeline import AssessmentPipeline
 from .media import HotspotMediaStore
+from .native_engine_runner import NativeEngineRunner
 from .schemas import AssessmentItemType, GenerateRequest, SourceType
 
 
@@ -22,11 +29,15 @@ class GenerationWorker:
         *,
         content_factory: Callable[[SourceType], AbstractAsyncContextManager[Any]],
         llm_factory: Callable[[], AbstractAsyncContextManager[Any]],
+        computation_client: ComputationClient | None = None,
+        native_engine_runner: NativeEngineRunner | None = None,
     ) -> None:
         self._settings = settings
         self._repository = repository
         self._content_factory = content_factory
         self._llm_factory = llm_factory
+        self._computation_client = computation_client
+        self._native_engine_runner = native_engine_runner
         self._task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
 
@@ -84,6 +95,16 @@ class GenerationWorker:
                     max_source_chars=self._settings.max_source_chars,
                     hotspot_media=HotspotMediaStore(self._settings),
                     progress_callback=report,
+                    computation_client=self._computation_client,
+                    computation_mode=self._settings.computation_mode,
+                    computation_families=self._settings.computation_families,
+                    computation_container_digest=(
+                        self._settings.computation_container_digest
+                    ),
+                    computation_image_reference=(
+                        self._settings.computation_image_reference
+                    ),
+                    native_engine_runner=self._native_engine_runner,
                 )
                 outcome = await pipeline.generate(
                     request.source_locator,
@@ -93,6 +114,7 @@ class GenerationWorker:
                         request.include_hint_ladder
                         and self._settings.hint_generation_enabled
                     ),
+                    computation_profile=request.computation_profile,
                 )
             await asyncio.to_thread(
                 self._repository.update_generation_job,
@@ -120,6 +142,17 @@ def _validated_item_types(
     selected = (
         list(request.item_types) if request.generation_mode == "selected" else None
     )
+    if request.computation_profile is not None:
+        validate_computation_profile_settings(
+            settings,
+            request.computation_profile,
+        )
+        expected = item_type_for_delivery(request.computation_profile.delivery)
+        if selected and any(item != expected for item in selected):
+            raise ValueError(
+                "Item type selection does not match computation_profile.delivery."
+            )
+        selected = [expected]
     parameterized = {AssessmentItemType.WEBWORK, AssessmentItemType.IMATHAS}
     requested = set(selected or ())
     if requested & parameterized and not settings.parameterized_items_enabled:
@@ -135,6 +168,27 @@ def _validated_item_types(
     ):
         raise ValueError("The local IMathAS engine is not configured.")
     return selected
+
+
+def validate_computation_profile_settings(
+    settings: Settings,
+    profile: ComputationProfile,
+) -> None:
+    """Apply the same computation/engine feature gates on every request path."""
+
+    validate_requested_profile(
+        profile,
+        mode=settings.computation_mode,
+        allowed_families=settings.computation_families,
+    )
+    if profile.delivery.value not in {"webwork", "imathas"}:
+        return
+    if not settings.parameterized_items_enabled:
+        raise ValueError("Parameterized item generation is disabled.")
+    if profile.delivery.value == "webwork" and settings.webwork_status != "configured":
+        raise ValueError("The local WeBWorK engine is not configured.")
+    if profile.delivery.value == "imathas" and settings.imathas_status != "configured":
+        raise ValueError("The local IMathAS engine is not configured.")
 
 
 def _safe_error_code(exc: Exception) -> str:

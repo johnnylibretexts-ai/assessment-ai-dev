@@ -89,8 +89,399 @@
         </details>
       {% endif %}
 
+      {% set computation_report = computation|default(draft.computation|default(none, true), true) %}
+      {% if computation_report %}
+        {% set computation_status = computation_report.status|default('unsupported', true) %}
+        {% set computation_status_label = computation_report.status_label|default(computation_status.replace('_', ' ')|title, true) %}
+        {% set computation_is_current = computation_report.current|default(true) %}
+        {% set computation_is_stale = computation_report.stale|default(false) %}
+        <section class="computation-panel computation-panel-{{ computation_status }}"
+                 aria-labelledby="computation-heading">
+          <div class="card-topline computation-heading-row">
+            <div>
+              <p class="eyebrow">Assessment computation</p>
+              <h3 id="computation-heading">Validation report</h3>
+            </div>
+            <span class="status computation-status computation-status-{{ computation_status }}">
+              Status: {{ computation_status_label }}
+            </span>
+          </div>
+
+          {% if computation_is_stale or not computation_is_current %}
+            <p class="computation-evidence-state computation-evidence-stale">
+              <strong>Stale evidence:</strong> this report does not apply to the current
+              draft revision. A fresh validation report is required.
+            </p>
+          {% else %}
+            <p class="computation-evidence-state">
+              <strong>Current evidence:</strong> this report is bound to the current
+              draft revision.
+            </p>
+          {% endif %}
+
+          {% if computation_report.legacy_reason|default('') == 'legacy_without_blueprint' %}
+            <p class="computation-evidence-state computation-evidence-warning">
+              <strong>Unsupported legacy draft:</strong> this item predates the typed
+              computation blueprint and must be explicitly revalidated.
+            </p>
+            <details class="computation-revalidation">
+              <summary>Explicitly revalidate with a typed blueprint</summary>
+              <p id="computation-revalidation-help" class="help">
+                Paste one strict <code>assessment-computation-v0</code> blueprint.
+                Revalidation runs in the isolated computation service, replaces
+                answer-bearing fields from the computed result, creates a fresh
+                draft revision, and resets human approval. Expression strings,
+                URLs, paths, files, and executable code are not accepted.
+              </p>
+              <form method="post"
+                    action="/drafts/{{ draft.id }}/computation/revalidate">
+                <input type="hidden" name="expected_edit_count"
+                       value="{{ draft.edit_count }}">
+                <label for="computation-blueprint-json">
+                  Typed computation blueprint JSON
+                </label>
+                <textarea id="computation-blueprint-json" name="blueprint_json"
+                          rows="18" maxlength="65536" required
+                          spellcheck="false"
+                          aria-describedby="computation-revalidation-help"></textarea>
+                <button type="submit">Rebind and revalidate this revision</button>
+              </form>
+            </details>
+          {% elif computation_report.legacy_reason|default('') %}
+            <p class="computation-evidence-state computation-evidence-warning">
+              <strong>Legacy limitation:</strong>
+              {{ computation_report.legacy_reason.replace('_', ' ') }}.
+            </p>
+          {% endif %}
+
+          <div class="computation-scope-note" role="note">
+            <strong>Human review is still mandatory.</strong>
+            This report validates structured computational assertions only. It does
+            not validate source alignment, wording, accessibility, or pedagogy; those
+            remain human-reviewed.
+          </div>
+
+          {% if computation_report.exact_result is defined
+                or computation_report.approximate_result is defined
+                or computation_report.target_unit|default(none) %}
+            <dl class="computation-facts" aria-label="Computed result">
+              {% if computation_report.exact_result is defined and computation_report.exact_result is not none %}
+                <div>
+                  <dt>Exact result</dt>
+                  <dd><code>{% if computation_report.exact_result is string or computation_report.exact_result is number %}{{ computation_report.exact_result }}{% else %}{{ computation_report.exact_result|tojson }}{% endif %}</code></dd>
+                </div>
+              {% endif %}
+              {% if computation_report.approximate_result is defined and computation_report.approximate_result is not none %}
+                <div>
+                  <dt>Approximate result</dt>
+                  <dd><code>{% if computation_report.approximate_result is string or computation_report.approximate_result is number %}{{ computation_report.approximate_result }}{% else %}{{ computation_report.approximate_result|tojson }}{% endif %}</code></dd>
+                </div>
+              {% endif %}
+              {% if computation_report.target_unit|default(none) %}
+                <div>
+                  <dt>Target unit</dt>
+                  <dd><code>{{ computation_report.target_unit }}</code></dd>
+                </div>
+              {% endif %}
+            </dl>
+          {% endif %}
+
+          {% if computation_report.domain|default(none) %}
+            <div class="computation-section">
+              <h4>Domain</h4>
+              <p>{% if computation_report.domain is string %}{{ computation_report.domain }}{% else %}<code>{{ computation_report.domain|tojson }}</code>{% endif %}</p>
+            </div>
+          {% endif %}
+
+          {% if computation_report.assumptions|default([], true) %}
+            <div class="computation-section">
+              <h4>Structured assumptions</h4>
+              <ul>
+                {% for assumption in computation_report.assumptions %}
+                  <li>{% if assumption is string %}{{ assumption }}{% else %}<code>{{ assumption|tojson }}</code>{% endif %}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          {% if computation_report.checks|default([], true) %}
+            <div class="computation-section table-scroll" tabindex="0"
+                 aria-label="Scrollable computation validation checks">
+              <table class="interaction-table computation-checks">
+                <caption>Deterministic validation checks</caption>
+                <thead>
+                  <tr><th scope="col">Check</th><th scope="col">Status</th><th scope="col">Detail</th></tr>
+                </thead>
+                <tbody>
+                  {% for check in computation_report.checks %}
+                    {% set check_status = check.status|default('unknown', true) %}
+                    <tr>
+                      <th scope="row">{{ check.name|default('Unnamed check', true) }}</th>
+                      <td><span class="check-status check-status-{{ check_status }}">{{ check_status.replace('_', ' ') }}</span></td>
+                      <td>
+                        {{ check.detail|default('No detail recorded.', true) }}
+                        {% if check.details|default({}, true) %}
+                          <details>
+                            <summary>Show bounded structured evidence</summary>
+                            <pre tabindex="0"
+                                 aria-label="Scrollable bounded evidence for {{ check.name|default('validation check', true) }}">{{ check.details|tojson(indent=2) }}</pre>
+                            {% if check.details_truncated|default(false) %}
+                              <p class="muted">Additional or oversized detail was omitted from this display.</p>
+                            {% endif %}
+                          </details>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
+
+          {% if computation_report.limitations|default([], true) %}
+            <div class="computation-section computation-limitations">
+              <h4>Limitations</h4>
+              <ul>
+                {% for limitation in computation_report.limitations %}
+                  <li>{% if limitation is string %}{{ limitation }}{% else %}<code>{{ limitation|tojson }}</code>{% endif %}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          <details class="computation-technical">
+            <summary>Technical evidence and reproducibility</summary>
+            <dl class="computation-facts">
+              <div><dt>Schema</dt><dd><code>{{ computation_report.schema_version|default('Not recorded', true) }}</code></dd></div>
+              <div><dt>Validator</dt><dd><code>{{ computation_report.validator_revision|default('Not recorded', true) }}</code></dd></div>
+              <div><dt>Container digest</dt><dd><code>{{ computation_report.container_digest|default('Not recorded', true) }}</code></dd></div>
+              <div><dt>Duration</dt><dd>{% if computation_report.duration_ms is defined and computation_report.duration_ms is not none %}{{ computation_report.duration_ms }} ms{% else %}Not recorded{% endif %}</dd></div>
+            </dl>
+
+            {% if computation_report.dependency_versions|default(none) %}
+              <h4>Dependency versions</h4>
+              <pre tabindex="0" aria-label="Scrollable computation dependency versions">{{ computation_report.dependency_versions|tojson(indent=2) }}</pre>
+            {% endif %}
+
+            <h4>Evidence hashes</h4>
+            <dl class="computation-hashes">
+              {% set computation_hashes = computation_report.hashes|default({}, true) %}
+              {% for hash_key, hash_label in [('source', 'Source'), ('draft', 'Draft'), ('blueprint', 'Blueprint'), ('report', 'Report')] %}
+                <div>
+                  <dt>{{ hash_label }}</dt>
+                  <dd><code>{{ computation_hashes[hash_key]|default('Not recorded', true) }}</code></dd>
+                </div>
+              {% endfor %}
+            </dl>
+
+            {% set computation_seeds = (computation_report.seeds|default([], true))[:25] %}
+            {% if computation_seeds %}
+              <h4>Bounded deterministic seed evidence ({{ computation_seeds|length }})</h4>
+              <pre tabindex="0" aria-label="Scrollable bounded deterministic seed evidence">{{ computation_seeds|tojson(indent=2) }}</pre>
+            {% endif %}
+
+            {% set computation_seed_samples = (computation_report.seed_samples|default([], true))[:25] %}
+            {% if computation_seed_samples %}
+              <div class="table-scroll" tabindex="0"
+                   aria-label="Scrollable bounded computation seed samples">
+                <table class="interaction-table computation-checks">
+                  <caption>Bounded computation seed samples ({{ computation_seed_samples|length }})</caption>
+                  <thead>
+                    <tr><th scope="col">Kind</th><th scope="col">Seed</th><th scope="col">Variable values</th></tr>
+                  </thead>
+                  <tbody>
+                    {% for sample in computation_seed_samples %}
+                      <tr>
+                        <th scope="row">{{ sample.kind|default('sample', true) }}</th>
+                        <td>{% if sample.seed is defined and sample.seed is not none %}<code>{{ sample.seed }}</code>{% else %}Boundary{% endif %}</td>
+                        <td><code>{{ sample['values']|default({}, true)|tojson }}</code></td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endif %}
+
+            {% set native_seed_observations = (computation_report.native_seed_observations|default([], true))[:25] %}
+            {% if native_seed_observations %}
+              <div class="table-scroll" tabindex="0"
+                   aria-label="Scrollable native-engine seed observations">
+                <table class="interaction-table computation-checks">
+                  <caption>Native-engine seed observations ({{ native_seed_observations|length }}, bounded to 25)</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Seed</th>
+                      <th scope="col">Observed variables</th>
+                      <th scope="col">Engine checks</th>
+                      <th scope="col">Runtime counts</th>
+                      <th scope="col">Evidence hashes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for observation in native_seed_observations %}
+                      <tr>
+                        <th scope="row"><code>{{ observation.seed }}</code></th>
+                        <td><code>{{ observation.observed_variables|default({}, true)|tojson }}</code></td>
+                        <td>
+                          <dl aria-label="Native-engine checks for seed {{ observation.seed }}">
+                            {% for field, label in [
+                              ('parameters_satisfied', 'Parameters satisfied'),
+                              ('constraints_satisfied', 'Constraints satisfied'),
+                              ('correct_answer_accepted', 'Correct answer accepted'),
+                              ('alternate_correct_answer_accepted', 'Alternate correct answer accepted'),
+                              ('wrong_answer_rejected', 'Wrong answer rejected'),
+                              ('rendered', 'Rendered')
+                            ] %}
+                              {% if field in observation %}
+                                <div><dt>{{ label }}</dt><dd><code>{{ observation[field] }}</code></dd></div>
+                              {% endif %}
+                            {% endfor %}
+                          </dl>
+                        </td>
+                        <td>
+                          <dl aria-label="Native-engine runtime counts for seed {{ observation.seed }}">
+                            {% for field, label in [
+                              ('warnings_count', 'Warnings'),
+                              ('errors_count', 'Errors'),
+                              ('outbound_request_count', 'Outbound requests')
+                            ] %}
+                              {% if field in observation %}
+                                <div><dt>{{ label }}</dt><dd><code>{{ observation[field] }}</code></dd></div>
+                              {% endif %}
+                            {% endfor %}
+                          </dl>
+                        </td>
+                        <td>
+                          <dl aria-label="Native-engine hashes for seed {{ observation.seed }}">
+                            <div><dt>Observation</dt><dd><code>{{ observation.observation_sha256 }}</code></dd></div>
+                            <div><dt>Render</dt><dd><code>{{ observation.render_sha256 }}</code></dd></div>
+                            <div><dt>Repeat render</dt><dd><code>{{ observation.repeat_render_sha256 }}</code></dd></div>
+                          </dl>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endif %}
+
+            {% set compiled_engine_evidence = computation_report.engine_evidence|default({}, true) %}
+            {% set native_receipt_evidence = computation_report.native_receipt_evidence|default({}, true) %}
+            {% if compiled_engine_evidence or native_receipt_evidence %}
+              <h4>External-engine evidence</h4>
+              {% for evidence_label, evidence in [('Compiled source', compiled_engine_evidence), ('Native receipt', native_receipt_evidence)] %}
+                {% if evidence %}
+                  <h5>{{ evidence_label }}</h5>
+                  <dl class="computation-hashes" aria-label="{{ evidence_label }} evidence">
+                    {% for field, label in [
+                      ('engine', 'Engine'),
+                      ('answer_kind', 'Answer kind'),
+                      ('native_grader', 'Native grader'),
+                      ('compiler_version', 'Compiler'),
+                      ('source_sha256', 'Source SHA-256'),
+                      ('blueprint_sha256', 'Blueprint SHA-256'),
+                      ('draft_sha256', 'Draft SHA-256'),
+                      ('request_sha256', 'Request SHA-256'),
+                      ('receipt_sha256', 'Receipt SHA-256'),
+                      ('seed_plan_sha256', 'Seed plan SHA-256'),
+                      ('seed_receipts_sha256', 'Seed receipts SHA-256'),
+                      ('runner_id', 'Runner'),
+                      ('runner_version', 'Runner version'),
+                      ('runner_manifest_sha256', 'Runner manifest SHA-256'),
+                      ('runner_image_digest', 'Runner image digest'),
+                      ('qualification_report_sha256', 'Qualification report SHA-256'),
+                      ('promotion_approval_sha256', 'Promotion approval SHA-256'),
+                      ('manifest_sha256', 'Manifest SHA-256'),
+                      ('plan_sha256', 'Plan SHA-256'),
+                      ('fixture_sha256', 'Fixture SHA-256'),
+                      ('lineage_sha256', 'Lineage SHA-256'),
+                      ('lineage_blueprint_sha256', 'Lineage blueprint SHA-256'),
+                      ('engine_observed_values_sha256', 'Observed values SHA-256'),
+                      ('network_attestation_sha256', 'Network attestation SHA-256'),
+                      ('render_sha256', 'Render SHA-256'),
+                      ('repeat_render_sha256', 'Repeat render SHA-256'),
+                      ('engine_image_digest', 'Engine image digest'),
+                      ('adapter_image_digest', 'Adapter image digest'),
+                      ('status', 'Status'),
+                      ('execution_status', 'Execution status'),
+                      ('seed', 'Seed'),
+                      ('seed_count', 'Compiled preview count'),
+                      ('seeds_validated', 'Seeds validated'),
+                      ('warnings_count', 'Warnings'),
+                      ('errors_count', 'Errors'),
+                      ('outbound_request_count', 'Outbound request count'),
+                      ('passed', 'Passed'),
+                      ('server_verified', 'Server verified'),
+                      ('constraints_satisfied', 'Constraints satisfied'),
+                      ('correct_answer_accepted', 'Correct answer accepted'),
+                      ('wrong_answer_rejected', 'Wrong answer rejected'),
+                      ('rendered', 'Rendered')
+                    ] %}
+                      {% if field in evidence %}
+                        <div>
+                          <dt>{{ label }}</dt>
+                          <dd><code>{{ evidence[field] }}</code></dd>
+                        </div>
+                      {% endif %}
+                    {% endfor %}
+                  </dl>
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+          </details>
+
+          {% if computation_report.attestations|default([], true) %}
+            <div class="computation-section" aria-labelledby="computation-attestations-heading">
+              <h4 id="computation-attestations-heading">Specialist attestations</h4>
+              <ul class="attestation-list">
+                {% for attestation in computation_report.attestations %}
+                  <li>
+                    <div class="card-topline">
+                      <strong>{{ attestation.specialist_identity|default(attestation.identity|default('Computation specialist', true), true) }}</strong>
+                      {% if attestation.created_at|default(none) %}<span class="muted">{{ attestation.created_at }}</span>{% endif %}
+                    </div>
+                    <p>{{ attestation.rationale|default('No rationale recorded.', true) }}</p>
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          {% if computation_status in ['partially_validated', 'unsupported']
+                and computation_report.specialist_allowed|default(false)
+                and computation_is_current
+                and not computation_is_stale %}
+            <section class="computation-attestation" aria-labelledby="computation-attestation-heading">
+              <h4 id="computation-attestation-heading">Computation-specialist attestation</h4>
+              <p id="computation-attestation-help" class="help">
+                Explain why this exact draft revision is acceptable despite its
+                incomplete or unsupported validation. The attestation is append-only
+                and bound to the current report hash.
+              </p>
+              <form method="post" action="/drafts/{{ draft.id }}/computation/attest">
+                <label for="computation-attestation-rationale">Specialist rationale</label>
+                <textarea id="computation-attestation-rationale" name="rationale"
+                          rows="4" minlength="20" maxlength="2000" required
+                          aria-describedby="computation-attestation-help"></textarea>
+                <button type="submit">Record specialist attestation</button>
+              </form>
+            </section>
+          {% endif %}
+        </section>
+      {% endif %}
+
       <details class="edit-box">
         <summary>Edit this draft</summary>
+        {% if computation_report
+              and computation_report.status|default('not_applicable', true) != 'not_applicable'
+              and not computation_report.legacy_reason|default('') %}
+          <p class="help">
+            Edit the qualitative framing and pedagogy around the computed task and
+            result. Saving rebinds all answer-bearing values, units, choices,
+            correctness flags, tolerances, and parameter expressions to the frozen
+            typed blueprint; changing those computed spans is rejected or overwritten.
+          </p>
+        {% endif %}
         <form method="post" action="/drafts/{{ draft.id }}/edit" class="review-form">
           {% if draft.item_type == 'multiple_choice' %}
           <label for="stem">Question</label>

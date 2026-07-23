@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from html import escape
@@ -10,7 +11,34 @@ from typing import Any, Awaitable, Callable, Protocol, TypeVar
 
 from pydantic import BaseModel
 
+from .computation import AssessmentComputationBlueprint, ComputationProfile
+from .computation_client import ComputationClient, ComputationClientError
+from .computation_workflow import (
+    BLUEPRINT_PROMPT_VERSION,
+    COMPUTATION_PIPELINE_VERSION,
+    COMPUTATION_PROSE_PROMPT_VERSION,
+    ComputationPreflight,
+    ComputationWorkflowError,
+    bind_draft,
+    blueprint_prompt,
+    build_computation_artifacts,
+    computation_client_failure_report,
+    frozen_result_instructions,
+    item_type_for_delivery,
+    not_applicable_validation_write,
+    preflight_computation,
+    unresolved_computation_instructions,
+    validate_requested_profile,
+    validation_write,
+)
+from .config import Settings
+from .computation_policy import (
+    computation_runtime_promotion_sha256,
+    computation_runtime_registry_state_sha256,
+)
 from .db import (
+    ComputationEvidenceError,
+    ComputationGateBinding,
     Draft,
     DraftRepository,
     DraftWrite,
@@ -20,10 +48,18 @@ from .db import (
     normalized_page_hash,
 )
 from .llm import LLMClient, LLMResult
-from .parameterized import compile_parameterized_item
+from .parameterized import (
+    compile_parameterized_item,
+    formula_adapter_registry_sha256,
+)
 from .media import HotspotMediaStore, supported_page_image_urls
+from .native_engine_runner import (
+    NativeEngineRunner,
+    native_runner_registry_sha256,
+)
 from .schemas import (
     AssessmentItemType,
+    ComputationQuestionDraft,
     Concept,
     ConceptBatch,
     Critique,
@@ -115,6 +151,12 @@ class AssessmentPipeline:
         max_source_paragraphs: int = 200,
         hotspot_media: HotspotMediaStore | None = None,
         progress_callback: Callable[[str, int], Awaitable[None] | None] | None = None,
+        computation_client: ComputationClient | None = None,
+        computation_mode: str = "off",
+        computation_families: tuple[str, ...] = (),
+        computation_container_digest: str = "unavailable",
+        computation_image_reference: str = "unavailable",
+        native_engine_runner: NativeEngineRunner | None = None,
     ) -> None:
         if not pipeline_version.strip():
             raise ValueError("pipeline_version must not be blank")
@@ -130,6 +172,12 @@ class AssessmentPipeline:
         self.max_source_paragraphs = max_source_paragraphs
         self.hotspot_media = hotspot_media
         self.progress_callback = progress_callback
+        self.computation_client = computation_client
+        self.computation_mode = computation_mode
+        self.computation_families = computation_families
+        self.computation_container_digest = computation_container_digest
+        self.computation_image_reference = computation_image_reference
+        self.native_engine_runner = native_engine_runner
 
     async def generate(
         self,
@@ -138,6 +186,7 @@ class AssessmentPipeline:
         item_types: list[AssessmentItemType] | None = None,
         item_count: int = 1,
         include_hint_ladder: bool = False,
+        computation_profile: ComputationProfile | None = None,
     ) -> GenerationOutcome:
         page = await self.content.fetch_page(source_locator)
         return await self.generate_page(
@@ -145,6 +194,7 @@ class AssessmentPipeline:
             item_types=item_types,
             item_count=item_count,
             include_hint_ladder=include_hint_ladder,
+            computation_profile=computation_profile,
         )
 
     async def generate_page(
@@ -154,12 +204,54 @@ class AssessmentPipeline:
         item_types: list[AssessmentItemType] | None = None,
         item_count: int = 1,
         include_hint_ladder: bool = False,
+        computation_profile: ComputationProfile | None = None,
     ) -> GenerationOutcome:
-        resolved_types = _resolve_item_types(item_types, item_count=item_count)
+        resolved_types = _resolve_computation_item_types(
+            item_types,
+            item_count=item_count,
+            profile=computation_profile,
+        )
+        computation_runtime_status = None
+        computation_runtime_failure_code = None
+        if computation_profile is not None:
+            validate_requested_profile(
+                computation_profile,
+                mode=self.computation_mode,
+                allowed_families=self.computation_families,
+            )
+            if self.computation_client is None:
+                raise ComputationWorkflowError(
+                    "The isolated assessment computation service is unavailable."
+                )
+            try:
+                computation_runtime_status = await self.computation_client.ready()
+            except ComputationClientError as exc:
+                # A failed readiness probe must never reuse a prior successful
+                # computation cache entry. Keep only the stable sanitized code;
+                # preflight below retries through its existing fail-closed
+                # report path so the draft/evidence behavior stays unchanged.
+                computation_runtime_failure_code = exc.code
         effective_pipeline_version = _request_pipeline_version(
             self.pipeline_version,
             resolved_types,
             include_hint_ladder=include_hint_ladder,
+            computation_profile=computation_profile,
+            computation_mode=self.computation_mode,
+            computation_image_reference=self.computation_image_reference,
+            computation_container_digest=self.computation_container_digest,
+            runtime_manifest_sha256=(
+                computation_runtime_status.runtime_manifest_sha256
+                if computation_runtime_status is not None
+                else None
+            ),
+            runtime_ready_failure_code=computation_runtime_failure_code,
+            native_runner_id=(
+                self.native_engine_runner.runner_id
+                if self.native_engine_runner is not None
+                and computation_profile is not None
+                and computation_profile.delivery.value in {"webwork", "imathas"}
+                else None
+            ),
         )
         content_hash = normalized_page_hash(page)
         existing = await asyncio.to_thread(
@@ -200,24 +292,101 @@ class AssessmentPipeline:
         for position, item_type in enumerate(resolved_types):
             concept = concepts[position % len(concepts)]
             focused_source = _render_selected_source(excerpt, concept.source_paragraphs)
-            draft_prompt = _draft_prompt(
-                page,
-                concept,
-                focused_source,
-                item_type=item_type,
-                hotspot_image_urls=hotspot_image_urls,
+            blueprint = None
+            frozen_result = None
+            computation_preflight = None
+            computation_context = ""
+            if computation_profile is not None:
+                assert self.computation_client is not None
+                blueprint_result, blueprint_call = await self._complete(
+                    stage="computation_blueprint",
+                    prompt=blueprint_prompt(
+                        page_title=_untrusted(page.title),
+                        concept_json=_untrusted(_pretty(concept)),
+                        source_text=_untrusted(focused_source),
+                        profile=computation_profile,
+                    ),
+                    schema=AssessmentComputationBlueprint,
+                    prompt_version=BLUEPRINT_PROMPT_VERSION,
+                    draft_position=position,
+                )
+                calls.append(blueprint_call)
+                blueprint_payload = blueprint_result.value.model_dump(
+                    mode="json",
+                )
+                blueprint_payload["source_concept_label"] = concept.label
+                blueprint = AssessmentComputationBlueprint.model_validate(
+                    blueprint_payload
+                )
+                if blueprint.profile != computation_profile:
+                    raise ComputationWorkflowError(
+                        "The computation blueprint changed the requested profile."
+                    )
+                preflight_started = time.perf_counter()
+                try:
+                    computation_preflight = await preflight_computation(
+                        client=self.computation_client,
+                        blueprint=blueprint,
+                        container_digest=self.computation_container_digest,
+                        image_reference=self.computation_image_reference,
+                        runtime_status=computation_runtime_status,
+                    )
+                except ComputationClientError as exc:
+                    computation_preflight = ComputationPreflight(
+                        result=None,
+                        report=computation_client_failure_report(
+                            blueprint=blueprint,
+                            error=exc,
+                            phase="generation_preflight",
+                        ),
+                        duration_ms=max(
+                            0,
+                            round((time.perf_counter() - preflight_started) * 1_000),
+                        ),
+                    )
+                frozen_result = computation_preflight.result
+                computation_context = (
+                    frozen_result_instructions(blueprint, frozen_result)
+                    if frozen_result is not None
+                    else unresolved_computation_instructions(
+                        blueprint,
+                        computation_preflight.report,
+                    )
+                )
+            draft_prompt = (
+                _draft_prompt(
+                    page,
+                    concept,
+                    focused_source,
+                    item_type=item_type,
+                    hotspot_image_urls=hotspot_image_urls,
+                )
+                + computation_context
             )
+            computation_prose = blueprint is not None and frozen_result is not None
             draft_result, draft_call = await self._complete(
                 stage="initial_draft",
                 prompt=draft_prompt,
-                schema=QuestionDraft,
-                prompt_version=DRAFT_PROMPT_VERSION,
+                schema=(
+                    ComputationQuestionDraft if computation_prose else QuestionDraft
+                ),
+                prompt_version=(
+                    COMPUTATION_PROSE_PROMPT_VERSION
+                    if computation_prose
+                    else DRAFT_PROMPT_VERSION
+                ),
                 draft_position=position,
             )
             calls.append(draft_call)
-            draft = draft_result.value.model_copy(
-                update={"concept_label": concept.label}, deep=True
+            provider_draft = QuestionDraft.model_validate(
+                draft_result.value.model_copy(
+                    update={"concept_label": concept.label},
+                    deep=True,
+                ).model_dump(mode="json")
             )
+            draft = provider_draft
+            if blueprint is not None and frozen_result is not None:
+                draft, _ = bind_draft(blueprint, frozen_result, draft)
             _validate_question_grounding(
                 draft,
                 concept=concept,
@@ -225,11 +394,14 @@ class AssessmentPipeline:
                 stage="initial draft",
                 expected_item_type=item_type,
             )
-            critique_prompt = _critique_prompt(
-                page,
-                concept,
-                focused_source,
-                draft,
+            critique_prompt = (
+                _critique_prompt(
+                    page,
+                    concept,
+                    focused_source,
+                    draft,
+                )
+                + computation_context
             )
             critique_result, critique_call = await self._complete(
                 stage="critique",
@@ -240,26 +412,68 @@ class AssessmentPipeline:
             )
             calls.append(critique_call)
 
-            revision_prompt = _revision_prompt(
-                page,
-                concept,
-                focused_source,
-                draft,
-                critique_result.value,
-                item_type=item_type,
-                hotspot_image_urls=hotspot_image_urls,
+            revision_prompt = (
+                _revision_prompt(
+                    page,
+                    concept,
+                    focused_source,
+                    draft,
+                    critique_result.value,
+                    item_type=item_type,
+                    hotspot_image_urls=hotspot_image_urls,
+                )
+                + computation_context
             )
             revision_result, revision_call = await self._complete(
                 stage="revision",
                 prompt=revision_prompt,
-                schema=QuestionDraft,
-                prompt_version=REVISION_PROMPT_VERSION,
+                schema=(
+                    ComputationQuestionDraft if computation_prose else QuestionDraft
+                ),
+                prompt_version=(
+                    COMPUTATION_PROSE_PROMPT_VERSION
+                    if computation_prose
+                    else REVISION_PROMPT_VERSION
+                ),
                 draft_position=position,
             )
             calls.append(revision_call)
-            revised = revision_result.value.model_copy(
-                update={"concept_label": concept.label}, deep=True
+            revised = QuestionDraft.model_validate(
+                revision_result.value.model_copy(
+                    update={"concept_label": concept.label},
+                    deep=True,
+                ).model_dump(mode="json")
             )
+            computation_validation = None
+            computation_engine_validation = None
+            if blueprint is not None and frozen_result is not None:
+                assert self.computation_client is not None
+                try:
+                    artifacts = await build_computation_artifacts(
+                        client=self.computation_client,
+                        blueprint=blueprint,
+                        draft=revised,
+                        container_digest=self.computation_container_digest,
+                        image_reference=self.computation_image_reference,
+                        frozen_result=frozen_result,
+                        native_engine_runner=self.native_engine_runner,
+                        runtime_status=computation_runtime_status,
+                    )
+                except ComputationClientError as exc:
+                    raise PipelineError(str(exc)) from exc
+                revised = artifacts.draft
+                computation_validation = artifacts.persistence
+                computation_engine_validation = artifacts.engine_validation
+            elif blueprint is not None and computation_preflight is not None:
+                computation_validation = validation_write(
+                    blueprint=blueprint,
+                    report=computation_preflight.report,
+                    container_digest=self.computation_container_digest,
+                    duration_ms=computation_preflight.duration_ms,
+                    engine_validation=None,
+                )
+            elif self.computation_mode != "off":
+                computation_validation = not_applicable_validation_write()
             _validate_question_grounding(
                 revised,
                 concept=concept,
@@ -280,26 +494,44 @@ class AssessmentPipeline:
                 AssessmentItemType.WEBWORK,
                 AssessmentItemType.IMATHAS,
             }:
-                assert revised.response.parameterized is not None
-                compiled = compile_parameterized_item(
-                    revised.response.parameterized, validation_seeds=25
-                )
-                engine_validation = {
-                    "engine": compiled.engine,
-                    "compiler_version": compiled.compiler_version,
-                    "source_sha256": compiled.source_sha256,
-                    "seed_count": len(compiled.previews),
-                    "previews": [
-                        {
-                            "seed": preview.seed,
-                            "variables": preview.variables,
-                            "prompt": preview.prompt,
-                            "answer": preview.answer,
-                            "explanation": preview.explanation,
-                        }
-                        for preview in compiled.previews
-                    ],
-                }
+                if computation_engine_validation is not None:
+                    engine_validation = computation_engine_validation
+                elif (
+                    computation_validation is not None
+                    and computation_validation.status == "validation_failed"
+                ):
+                    # A failed sidecar call cannot create or refresh native
+                    # engine-pass evidence for this exact draft revision.
+                    engine_validation = None
+                elif (
+                    blueprint is not None
+                    and computation_preflight is not None
+                    and computation_preflight.result is None
+                ):
+                    # Unsupported/failed computation evidence must not be
+                    # mistaken for a passed native-engine qualification record.
+                    engine_validation = None
+                else:
+                    assert revised.response.parameterized is not None
+                    compiled = compile_parameterized_item(
+                        revised.response.parameterized, validation_seeds=25
+                    )
+                    engine_validation = {
+                        "engine": compiled.engine,
+                        "compiler_version": compiled.compiler_version,
+                        "source_sha256": compiled.source_sha256,
+                        "seed_count": len(compiled.previews),
+                        "previews": [
+                            {
+                                "seed": preview.seed,
+                                "variables": preview.variables,
+                                "prompt": preview.prompt,
+                                "answer": preview.answer,
+                                "explanation": preview.explanation,
+                            }
+                            for preview in compiled.previews
+                        ],
+                    }
 
             hint_ladder = None
             if include_hint_ladder:
@@ -330,11 +562,12 @@ class AssessmentPipeline:
                 DraftWrite(
                     position=position,
                     concept=concept,
-                    raw=draft,
+                    raw=provider_draft,
                     critique=critique_result.value,
                     revised=revised,
                     hint_ladder=hint_ladder,
                     engine_validation=engine_validation,
+                    computation_validation=computation_validation,
                 )
             )
 
@@ -365,6 +598,7 @@ class AssessmentPipeline:
         if self.progress_callback is not None:
             progress = {
                 "concept_extraction": 20,
+                "computation_blueprint": 32,
                 "initial_draft": 40,
                 "critique": 58,
                 "revision": 76,
@@ -399,8 +633,13 @@ class AssessmentPipeline:
 class ReviewService:
     """FastAPI-facing review operations; intentionally contains no ADAPT client."""
 
-    def __init__(self, repository: DraftRepository) -> None:
+    def __init__(
+        self,
+        repository: DraftRepository,
+        settings: Settings | None = None,
+    ) -> None:
         self.repository = repository
+        self.settings = settings
 
     def list_queue(self) -> list[Draft]:
         return self.repository.list_drafts(status=ReviewStatus.READY_FOR_REVIEW)
@@ -416,6 +655,11 @@ class ReviewService:
         editor: str,
         notes: str = "",
     ) -> Draft:
+        if self.settings is not None and self.settings.computation_mode != "off":
+            raise ComputationEvidenceError(
+                "computation-enabled edits require the computation-aware "
+                "revalidation path"
+            )
         return self.repository.edit_draft(
             draft_id,
             updated_draft,
@@ -443,11 +687,22 @@ class ReviewService:
         decision: ReviewDecision,
         *,
         reviewer: str,
+        computation_binding: ComputationGateBinding | None = None,
     ) -> Draft:
+        if (
+            decision.status == ReviewStatus.READY_TO_PUBLISH
+            and self.settings is not None
+            and self.settings.computation_mode == "enforce"
+            and computation_binding is None
+        ):
+            raise ComputationEvidenceError(
+                "enforce-mode approval requires an atomic computation gate binding"
+            )
         return self.repository.apply_review_decision(
             draft_id,
             decision,
             reviewer=reviewer,
+            computation_binding=computation_binding,
         )
 
     def reject(self, draft_id: int, *, reviewer: str, notes: str = "") -> Draft:
@@ -547,7 +802,16 @@ def _validate_question_grounding(
         AssessmentItemType.IMATHAS,
     }:
         assert question.response.parameterized is not None
-        compile_parameterized_item(question.response.parameterized, validation_seeds=25)
+        if question.response.parameterized.compiler_profile == "legacy":
+            # Preserve the accepted BUILD-08 validation path exactly. Typed
+            # computation-owned specs were already compiled from their owning
+            # AST during server binding and are bound again to that exact
+            # artifact during persistence; reparsing their display strings
+            # through the legacy compiler changes both trust path and identity.
+            compile_parameterized_item(
+                question.response.parameterized,
+                validation_seeds=25,
+            )
 
 
 def _validate_hint_grounding(
@@ -850,22 +1114,90 @@ def _resolve_item_types(
     return tuple(selected[index % len(selected)] for index in range(item_count))
 
 
+def _resolve_computation_item_types(
+    requested: list[AssessmentItemType] | None,
+    *,
+    item_count: int,
+    profile: ComputationProfile | None,
+) -> tuple[AssessmentItemType, ...]:
+    if profile is None:
+        return _resolve_item_types(requested, item_count=item_count)
+    if item_count < 1 or item_count > 8:
+        raise ValueError("item_count must be between 1 and 8")
+    expected = item_type_for_delivery(profile.delivery)
+    selected = tuple(requested or ())
+    if selected and any(item != expected for item in selected):
+        raise ComputationWorkflowError(
+            "Item type selection does not match computation_profile.delivery."
+        )
+    return (expected,) * item_count
+
+
 def _request_pipeline_version(
     base_version: str,
     item_types: tuple[AssessmentItemType, ...],
     *,
     include_hint_ladder: bool,
+    computation_profile: ComputationProfile | None = None,
+    computation_mode: str = "off",
+    computation_image_reference: str = "unavailable",
+    computation_container_digest: str = "unavailable",
+    runtime_manifest_sha256: str | None = None,
+    runtime_ready_failure_code: str | None = None,
+    native_runner_id: str | None = None,
 ) -> str:
-    if item_types == (AssessmentItemType.MULTIPLE_CHOICE,) and not include_hint_ladder:
+    if (
+        item_types == (AssessmentItemType.MULTIPLE_CHOICE,)
+        and not include_hint_ladder
+        and computation_profile is None
+        and computation_mode == "off"
+    ):
         return base_version
-    options = json.dumps(
-        {
-            "item_types": [item.value for item in item_types],
-            "include_hint_ladder": include_hint_ladder,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    options_payload: dict[str, Any] = {
+        "item_types": [item.value for item in item_types],
+        "include_hint_ladder": include_hint_ladder,
+    }
+    if computation_profile is not None or computation_mode != "off":
+        computation_options: dict[str, Any] = {
+            "mode": computation_mode,
+            "pipeline_version": COMPUTATION_PIPELINE_VERSION,
+            "profile": (
+                computation_profile.model_dump(mode="json")
+                if computation_profile is not None
+                else None
+            ),
+        }
+        if computation_profile is not None:
+            computation_options["runtime"] = {
+                "image_reference": computation_image_reference,
+                "container_digest": computation_container_digest,
+                "runtime_manifest_sha256": runtime_manifest_sha256,
+                "ready_failure_code": runtime_ready_failure_code,
+                "promotion_sha256": computation_runtime_promotion_sha256(
+                    image_reference=computation_image_reference,
+                    container_digest=computation_container_digest,
+                ),
+                "registry_state_sha256": (
+                    computation_runtime_registry_state_sha256(
+                        computation_container_digest
+                    )
+                ),
+            }
+        if native_runner_id is not None:
+            computation_options["native_runner"] = {
+                "runner_id": native_runner_id,
+                "registry_sha256": native_runner_registry_sha256(),
+            }
+        if (
+            computation_profile is not None
+            and computation_profile.family.value == "algebraic"
+            and computation_profile.delivery.value in {"webwork", "imathas"}
+        ):
+            computation_options["formula_adapter_registry_sha256"] = (
+                formula_adapter_registry_sha256()
+            )
+        options_payload["computation"] = computation_options
+    options = json.dumps(options_payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(options.encode("utf-8")).hexdigest()[:16]
     return f"{base_version}-{digest}"
 
