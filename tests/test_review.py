@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
+from app.config import Settings
 from app.db import (
+    ComputationEvidenceError,
     DraftGroundingError,
     DraftRepository,
     DraftWrite,
@@ -248,6 +250,29 @@ def test_human_edit_cannot_break_source_or_concept_grounding(
 
     unchanged = repository.require_draft(draft_id)
     assert unchanged.current_json == before.current_json
+    assert unchanged.edit_count == 0
+
+
+def test_computation_enabled_service_edit_requires_revalidation_path(
+    reviewed_store,
+) -> None:
+    _database, repository, _service, draft_id = reviewed_store
+    service = ReviewService(
+        repository,
+        Settings(_env_file=None, computation_mode="assist"),
+    )
+
+    with pytest.raises(
+        ComputationEvidenceError,
+        match="computation-aware revalidation path",
+    ):
+        service.edit(
+            draft_id,
+            item("Clarify the computation-bearing question."),
+            editor="editor@example.edu",
+        )
+
+    unchanged = repository.require_draft(draft_id)
     assert unchanged.edit_count == 0
 
 

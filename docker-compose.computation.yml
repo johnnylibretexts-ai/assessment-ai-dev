@@ -1,0 +1,59 @@
+services:
+  assessment-ai:
+    environment:
+      ASSESSMENT_AI_COMPUTATION_IMAGE_REFERENCE: ${ASSESSMENT_COMPUTATION_IMAGE_REFERENCE:-assessment-computation:v0-local}
+      ASSESSMENT_AI_COMPUTATION_SOCKET_PATH: /run/assessment-computation/compute.sock
+    volumes:
+      - assessment_computation_socket:/run/assessment-computation:ro
+
+  assessment-computation:
+    profiles:
+      - computation
+    build:
+      context: .
+      dockerfile: Dockerfile.compute
+      target: runtime
+    # Qualification/canary operators must set this to an immutable
+    # registry reference such as registry/name@sha256:... . The local tag is
+    # deliberately useful only while mode remains off/assist.
+    image: ${ASSESSMENT_COMPUTATION_IMAGE_REFERENCE:-assessment-computation:v0-local}
+    container_name: assessment-computation
+    restart: unless-stopped
+    init: true
+    read_only: true
+    network_mode: none
+    volumes:
+      - assessment_computation_socket:/run/assessment-computation
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 64
+    mem_limit: 640m
+    cpus: "1.0"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import socket;
+          s=socket.socket(socket.AF_UNIX);
+          s.settimeout(3);
+          s.connect("/run/assessment-computation/compute.sock");
+          s.sendall(b"GET /readyz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+          line=s.recv(64).split(b"\r\n",1)[0];
+          assert b" 200 " in line
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  assessment_computation_socket:

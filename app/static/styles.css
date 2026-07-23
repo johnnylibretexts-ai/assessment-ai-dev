@@ -43,6 +43,7 @@ button.secondary { background: #566575; }
 .generate-form.is-generating input { background: #f8fafc; color: #435366; }
 .generation-options { margin-top: 18px; padding: 16px; }
 .generation-options legend { padding: 0 6px; font-weight: 800; }
+.computation-options { border-color: #9ccbe1; background: #f5fbfe; }
 .item-type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 2px 14px; }
 .check.compact { margin: 5px 0; text-transform: capitalize; }
 .job-panel { max-width: 760px; margin: 80px auto 0; text-align: center; }
@@ -99,6 +100,43 @@ code { padding: 2px 5px; border-radius: 5px; background: #eef3f7; }
 .highlight-segment.correct { border-radius: 4px; background: var(--success-bg); }
 .hint-review { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }
 .hint-rung { margin-top: 14px; padding: 14px; }
+.computation-panel { margin: 24px 0; padding: 18px; border: 2px solid #9ccbe1; border-radius: 11px; background: #f8fcfe; }
+.computation-panel h3, .computation-panel h4 { margin-top: 0; }
+.computation-panel-partially_validated, .computation-panel-unsupported { border-color: #d9b650; background: #fffdf2; }
+.computation-panel-validation_failed { border-color: #e58e8e; background: #fff8f8; }
+.computation-heading-row { align-items: flex-start; }
+.computation-status { flex: 0 0 auto; }
+.computation-status-validated { background: var(--success-bg); color: var(--success); }
+.computation-status-partially_validated, .computation-status-unsupported { background: var(--warning-bg); color: var(--warning); }
+.computation-status-validation_failed { background: var(--danger-bg); color: var(--danger); }
+.computation-status-not_applicable { background: #e7eef5; color: #32485c; }
+.computation-evidence-state { margin: 14px 0 0; color: #32485c; font-size: .9rem; }
+.computation-evidence-stale, .computation-evidence-warning { color: var(--warning); }
+.computation-scope-note { margin: 16px 0; padding: 13px 14px; border-left: 4px solid var(--brand); background: #eaf6fb; }
+.computation-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
+.computation-facts div, .computation-hashes div { min-width: 0; padding: 11px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.computation-facts dt, .computation-hashes dt { color: var(--muted); font-size: .73rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.computation-facts dd, .computation-hashes dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.computation-section { margin: 18px 0; }
+.computation-section h4 { margin-bottom: 6px; }
+.computation-section ul { margin-top: 6px; }
+.computation-checks caption { padding: 0 0 8px; font-weight: 800; text-align: left; }
+.computation-checks th[scope="row"] { min-width: 10rem; }
+.check-status { font-size: .78rem; font-weight: 800; text-transform: uppercase; }
+.check-status-passed { color: var(--success); }
+.check-status-failed { color: var(--danger); }
+.check-status-inconclusive, .check-status-unavailable, .check-status-unsupported { color: var(--warning); }
+.computation-limitations { padding: 13px 15px; border-radius: 8px; background: var(--warning-bg); color: var(--warning); }
+.computation-technical { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.computation-technical summary { cursor: pointer; font-weight: 800; }
+.computation-technical pre { max-height: 280px; overflow: auto; padding: 12px; border-radius: 8px; background: #eef3f7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.computation-hashes { display: grid; gap: 8px; }
+.computation-hashes code { word-break: break-all; }
+.attestation-list { padding: 0; list-style: none; }
+.attestation-list li { margin: 10px 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.attestation-list p { margin-bottom: 0; }
+.computation-attestation { margin-top: 18px; padding: 15px; border: 1px solid #d9b650; border-radius: 8px; background: #fff; }
+.computation-attestation textarea { margin: 7px 0 12px; }
 .review-form { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }
 fieldset { margin: 0 0 18px; border: 1px solid var(--line); border-radius: 9px; }
 .check { display: grid; grid-template-columns: auto 1fr; gap: 10px; margin: 12px 0; font-weight: 400; }
@@ -139,6 +177,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .source-pane { position: static; }
   .form-row { grid-template-columns: 1fr; }
   .two-column { grid-template-columns: 1fr; }
+  .computation-heading-row { align-items: flex-start; flex-direction: column; }
+  .computation-facts { grid-template-columns: 1fr; }
   .publication-facts { grid-template-columns: 1fr; }
   .site-header { align-items: flex-start; }
 }

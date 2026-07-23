@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -14,25 +16,56 @@ from pydantic import ValidationError
 
 from .adapt import AdaptClient, AdaptPublishingError
 from .catalog import chemistry_seed, source_license, suggested_topic
-from .config import Settings, get_settings
+from .computation import AssessmentComputationBlueprint, ComputationProfile
+from .computation_client import (
+    AssessmentComputationClient,
+    ComputationClientError,
+)
+from .computation_policy import (
+    ComputationPolicyError,
+    computation_runtime_is_qualified,
+    configured_computation_runtime,
+    require_computation_gate,
+)
+from .computation_workflow import (
+    ComputationWorkflowError,
+    blueprint_from_record,
+    is_computational_draft,
+    item_type_for_delivery,
+    report_view,
+    revalidate_draft_from_blueprint,
+    revalidate_edited_draft,
+    validate_requested_profile,
+)
+from .config import (
+    COMPUTATION_PROXY_TOKEN_HEADER,
+    Settings,
+    get_settings,
+)
 from .content import ContentAdapterError, build_content_adapter
 from .db import (
+    ComputationAttestationWrite,
+    ComputationEvidenceError,
+    ConcurrentDraftUpdateError,
     Draft,
     DraftNotFoundError,
     DraftRepository,
     PublicationState,
     ReviewTransitionError,
+    draft_content_sha256,
     init_database,
 )
-from .jobs import GenerationWorker
+from .jobs import GenerationWorker, validate_computation_profile_settings
 from .llm import LLMError, build_llm_client, generation_status
 from .media import HotspotMediaStore
+from .native_engine_runner import UnixSocketNativeEngineRunner
 from .pipeline import AssessmentPipeline, PipelineError, ReviewService
 from .publishing import (
     LicenseSelection,
     PublicationService,
     PublicationValidationError,
 )
+from .report_view import attach_native_seed_observations
 from .schemas import (
     AssessmentItemType,
     BloomLevel,
@@ -66,11 +99,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         database = init_database(resolved_settings.database_url)
         repository = DraftRepository(database)
         adapt_client = AdaptClient(resolved_settings)
+        runtime_binding = configured_computation_runtime(resolved_settings)
+        computation_client = (
+            AssessmentComputationClient(
+                resolved_settings.computation_socket_path,
+                expected_runtime_manifest_sha256=(
+                    runtime_binding.runtime_manifest_sha256
+                    if runtime_binding is not None
+                    else None
+                ),
+            )
+            if resolved_settings.computation_mode != "off"
+            else None
+        )
+        native_engine_runner = (
+            UnixSocketNativeEngineRunner(
+                resolved_settings.computation_native_runner_socket_path,
+                runner_id=resolved_settings.computation_native_runner_id,
+            )
+            if resolved_settings.computation_mode != "off"
+            and resolved_settings.computation_native_runner_configured
+            else None
+        )
         app.state.settings = resolved_settings
         app.state.database = database
         app.state.repository = repository
-        app.state.review = ReviewService(repository)
+        app.state.review = ReviewService(repository, resolved_settings)
         app.state.adapt_client = adapt_client
+        app.state.computation_client = computation_client
+        app.state.native_engine_runner = native_engine_runner
         app.state.publisher = PublicationService(
             resolved_settings, repository, adapt_client
         )
@@ -83,6 +140,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             repository,
             content_factory=app.state.content_factory,
             llm_factory=app.state.llm_factory,
+            computation_client=computation_client,
+            native_engine_runner=native_engine_runner,
         )
         app.state.generation_worker = worker
         worker.start()
@@ -90,6 +149,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
         finally:
             await worker.stop()
+            if computation_client is not None:
+                await computation_client.aclose()
+            if native_engine_runner is not None:
+                await native_engine_runner.aclose()
             await adapt_client.aclose()
             database.dispose()
 
@@ -132,6 +195,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 else "disabled",
                 "webwork": resolved_settings.webwork_status,
                 "imathas": resolved_settings.imathas_status,
+                **(
+                    {
+                        "assessment_computation": (
+                            {
+                                **resolved_settings.computation_health_config,
+                                "runtime_qualification": (
+                                    "promoted"
+                                    if computation_runtime_is_qualified(
+                                        resolved_settings
+                                    )
+                                    else "unqualified"
+                                ),
+                            }
+                        )
+                    }
+                    if resolved_settings.computation_mode != "off"
+                    else {}
+                ),
             }
         )
 
@@ -139,8 +220,41 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def readyz() -> JSONResponse:
         current_generation_status = generation_status(resolved_settings)
         ready = current_generation_status == "configured"
+        computation_status = "disabled"
+        if resolved_settings.computation_mode != "off":
+            if (
+                resolved_settings.computation_mode == "enforce"
+                and not computation_runtime_is_qualified(resolved_settings)
+            ):
+                computation_status = "unqualified"
+                ready = False
+            else:
+                computation_status = "unavailable"
+                computation_client = getattr(app.state, "computation_client", None)
+                if computation_client is not None:
+                    try:
+                        await computation_client.ready()
+                        computation_status = "ready"
+                    except ComputationClientError:
+                        ready = False
+        overall_status = (
+            "ready"
+            if ready
+            else (
+                f"computation_{computation_status}"
+                if computation_status in {"unavailable", "unqualified"}
+                else current_generation_status
+            )
+        )
         return JSONResponse(
-            {"status": "ready" if ready else current_generation_status},
+            {
+                "status": overall_status,
+                **(
+                    {"assessment_computation": computation_status}
+                    if resolved_settings.computation_mode != "off"
+                    else {}
+                ),
+            },
             status_code=200 if ready else 503,
         )
 
@@ -162,6 +276,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "advanced_items_enabled": resolved_settings.advanced_items_enabled,
                 "hint_generation_enabled": resolved_settings.hint_generation_enabled,
                 "item_type_options": [item.value for item in AssessmentItemType],
+                "computation_mode": resolved_settings.computation_mode,
+                "computation_families": resolved_settings.computation_families,
             },
         )
 
@@ -175,6 +291,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         item_types: list[str] = Form(default_factory=list),
         item_count: int = Form(4),
         include_hint_ladder: bool = Form(False),
+        computation_family: str | None = Form(None),
+        computation_delivery: str | None = Form(None),
     ) -> RedirectResponse:
         _require_same_origin(request, resolved_settings)
         _reviewer(request)
@@ -185,6 +303,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise ValueError("Dev sandbox sources are disabled for this service.")
             if not locator:
                 raise ValueError("Choose a public LibreTexts page to generate from.")
+            family = (computation_family or "").strip()
+            delivery = (computation_delivery or "").strip()
+            if bool(family) != bool(delivery):
+                raise ValueError(
+                    "Select both a computation family and delivery format, or neither."
+                )
+            computation_profile = (
+                ComputationProfile(family=family, delivery=delivery)
+                if family and delivery
+                else None
+            )
+            if computation_profile is not None:
+                validate_computation_profile_settings(
+                    resolved_settings,
+                    computation_profile,
+                )
             if resolved_settings.advanced_items_enabled:
                 generation_request = GenerateRequest(
                     source_type=selected_type,
@@ -193,6 +327,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     item_types=[AssessmentItemType(item) for item in item_types],
                     item_count=item_count,
                     include_hint_ladder=include_hint_ladder,
+                    computation_profile=computation_profile,
                 )
                 job = request.app.state.repository.create_generation_job(
                     source_type=selected_type.value,
@@ -212,9 +347,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     request.app.state.repository,
                     max_source_chars=resolved_settings.max_source_chars,
                     hotspot_media=HotspotMediaStore(resolved_settings),
+                    computation_client=request.app.state.computation_client,
+                    computation_mode=resolved_settings.computation_mode,
+                    computation_families=resolved_settings.computation_families,
+                    computation_container_digest=(
+                        resolved_settings.computation_container_digest
+                    ),
+                    computation_image_reference=(
+                        resolved_settings.computation_image_reference
+                    ),
+                    native_engine_runner=request.app.state.native_engine_runner,
                 )
-                outcome = await pipeline.generate(locator)
-        except (ContentAdapterError, LLMError, PipelineError, ValueError) as exc:
+                outcome = await pipeline.generate(
+                    locator,
+                    computation_profile=computation_profile,
+                )
+        except (
+            ComputationClientError,
+            ComputationWorkflowError,
+            ContentAdapterError,
+            LLMError,
+            PipelineError,
+            ValueError,
+        ) as exc:
             return _redirect_with_message("/", "error", str(exc))
         return RedirectResponse(
             f"/drafts/{outcome.draft_id}?notice=Draft+generated+and+revised",
@@ -249,7 +404,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/drafts/{draft_id}", response_class=HTMLResponse)
     async def draft_detail(request: Request, draft_id: int) -> HTMLResponse:
-        draft = _require_public_draft(request.app.state.repository, draft_id)
+        repository: DraftRepository = request.app.state.repository
+        draft = _require_public_draft(repository, draft_id)
+        computation = None
+        if resolved_settings.computation_mode != "off":
+            record = repository.get_current_computation_validation(draft.id)
+            attestations = (
+                repository.list_current_computation_attestations(
+                    draft.id,
+                    report_sha256=record.report_sha256,
+                )
+                if record is not None
+                else ()
+            )
+            specialist_subject = _trusted_computation_specialist_subject(
+                request,
+                resolved_settings,
+            )
+            computation = report_view(
+                record,
+                legacy_computational=is_computational_draft(draft.current),
+                attestations=attestations,
+                specialist_allowed=(
+                    record is not None
+                    and record.is_current
+                    and specialist_subject is not None
+                ),
+            )
+            computation = attach_native_seed_observations(
+                computation,
+                record.engine_evidence_json if record is not None else {},
+            )
         seed = chemistry_seed()
         topics_by_chapter = [
             {
@@ -264,7 +449,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             request,
             "draft.html",
             {
-                "draft": _draft_detail(draft),
+                "draft": _draft_detail(draft, computation=computation),
                 "notice": request.query_params.get("notice"),
                 "error": request.query_params.get("error"),
                 "bloom_options": [item.value for item in BloomLevel],
@@ -341,21 +526,52 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     )
                 updated = QuestionDraft(
                     concept_label=current.concept_label,
+                    context_type=current.context_type,
                     stem=str(stem),
+                    stimulus=current.stimulus,
+                    set_key=current.set_key,
                     choices=choices,
                     explanation=str(explanation),
                     bloom=BloomLevel(str(bloom)),
                     difficulty=Difficulty(str(difficulty)),
                     citation_paragraphs=current.citation_paragraphs,
                     needs_human_verification=current.needs_human_verification,
+                    specialist_review_required=current.specialist_review_required,
+                    targeted_misconception=current.targeted_misconception,
+                )
+            computation_validation = None
+            expected_edit_count = None
+            expected_draft_sha256 = None
+            if resolved_settings.computation_mode != "off":
+                expected_edit_count = stored.edit_count
+                expected_draft_sha256 = draft_content_sha256(stored.current_json)
+                computation_client = request.app.state.computation_client
+                if computation_client is None:
+                    raise ComputationWorkflowError(
+                        "The isolated assessment computation service is unavailable."
+                    )
+                updated, computation_validation = await revalidate_edited_draft(
+                    client=computation_client,
+                    current_record=repository.get_current_computation_validation(
+                        draft_id
+                    ),
+                    draft=updated,
+                    container_digest=resolved_settings.computation_container_digest,
+                    image_reference=resolved_settings.computation_image_reference,
+                    native_engine_runner=request.app.state.native_engine_runner,
                 )
             repository.edit_draft(
                 draft_id,
                 updated,
                 editor=_reviewer(request),
                 notes=reviewer_notes,
+                computation_validation=computation_validation,
+                expected_edit_count=expected_edit_count,
+                expected_draft_sha256=expected_draft_sha256,
             )
         except (
+            ComputationClientError,
+            ComputationWorkflowError,
             DraftNotFoundError,
             ValidationError,
             ValueError,
@@ -397,6 +613,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "error",
                 "A qualified specialist must confirm this item before approval.",
             )
+        computation_binding = None
+        if decision == ReviewStatus.READY_TO_PUBLISH.value:
+            try:
+                computation_decision = require_computation_gate(
+                    resolved_settings,
+                    request.app.state.repository,
+                    stored_draft,
+                    action="approval",
+                )
+                if resolved_settings.computation_mode == "enforce":
+                    computation_binding = computation_decision.atomic_binding(
+                        resolved_settings
+                    )
+            except ComputationPolicyError as exc:
+                return _redirect_with_message(
+                    f"/drafts/{draft_id}",
+                    "error",
+                    str(exc),
+                )
         try:
             review_decision = ReviewDecision(
                 status=ReviewStatus(decision),
@@ -408,6 +643,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 draft_id,
                 review_decision,
                 reviewer=_reviewer(request),
+                computation_binding=computation_binding,
             )
         except ValidationError:
             return _redirect_with_message(
@@ -429,6 +665,178 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return RedirectResponse(
             f"/drafts/{draft_id}?notice={label}",
             status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    @app.post("/drafts/{draft_id}/computation/attest")
+    async def attest_computation(
+        request: Request,
+        draft_id: int,
+        rationale: str = Form(...),
+    ) -> RedirectResponse:
+        _require_same_origin(request, resolved_settings)
+        repository: DraftRepository = request.app.state.repository
+        _require_public_draft(repository, draft_id)
+        try:
+            if resolved_settings.computation_mode == "off":
+                raise ValueError("Assessment computation is disabled.")
+            subject = _trusted_computation_specialist_subject(
+                request,
+                resolved_settings,
+            )
+            if subject is None:
+                raise ValueError(
+                    "An authenticated, allowlisted computation-specialist "
+                    "proxy subject is required."
+                )
+            normalized_rationale = rationale.strip()
+            if not 20 <= len(normalized_rationale) <= 4_000:
+                raise ValueError(
+                    "The computation-specialist rationale must be 20–4,000 characters."
+                )
+            validation = repository.get_current_computation_validation(draft_id)
+            if validation is None or validation.status not in {
+                "partially_validated",
+                "unsupported",
+            }:
+                raise ValueError(
+                    "Only a current partially validated or unsupported report "
+                    "can be attested."
+                )
+            repository.append_computation_attestation(
+                draft_id,
+                edit_count=validation.edit_count,
+                report_sha256=validation.report_sha256,
+                attestation=ComputationAttestationWrite(
+                    specialist_identity=subject,
+                    rationale=normalized_rationale,
+                    qualification_json=json.dumps(
+                        {
+                            "policy": "assessment-computation-specialist-v0",
+                            "trusted_proxy_subject": subject,
+                        },
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                ),
+            )
+        except (DraftNotFoundError, ValueError) as exc:
+            return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))
+        return _redirect_with_message(
+            f"/drafts/{draft_id}",
+            "notice",
+            "Computation-specialist attestation recorded",
+        )
+
+    @app.post("/drafts/{draft_id}/computation/revalidate")
+    async def revalidate_legacy_computation(
+        request: Request,
+        draft_id: int,
+        blueprint_json: str = Form(...),
+        expected_edit_count: int = Form(...),
+    ) -> RedirectResponse:
+        """Migrate one pre-v0 draft through the strict typed computation path."""
+
+        _require_same_origin(request, resolved_settings)
+        repository: DraftRepository = request.app.state.repository
+        reviewer = _reviewer(request)
+        try:
+            if resolved_settings.computation_mode == "off":
+                raise ValueError("Assessment computation is disabled.")
+            stored = _require_public_draft(repository, draft_id)
+            if not is_computational_draft(stored.current):
+                raise ValueError(
+                    "Only a legacy numerical, WeBWorK, or IMathAS draft can use "
+                    "explicit computation revalidation."
+                )
+            current_record = repository.get_current_computation_validation(draft_id)
+            if (
+                current_record is not None
+                and blueprint_from_record(current_record) is not None
+            ):
+                raise ValueError(
+                    "This draft already has a typed computation blueprint. Edit the "
+                    "draft to revalidate its current blueprint."
+                )
+            if expected_edit_count != stored.edit_count:
+                raise ConcurrentDraftUpdateError(
+                    "the draft changed before computation revalidation; reload it "
+                    "before retrying"
+                )
+            if len(blueprint_json.encode("utf-8")) > 64 * 1024:
+                raise ValueError(
+                    "The typed computation blueprint exceeds the 64 KiB limit."
+                )
+            blueprint_payload = _strict_json_object(blueprint_json)
+            blueprint = AssessmentComputationBlueprint.model_validate(blueprint_payload)
+            if (
+                blueprint.source_concept_label is not None
+                and blueprint.source_concept_label.strip().casefold()
+                != stored.current.concept_label.strip().casefold()
+            ):
+                raise ValueError(
+                    "The typed blueprint source concept must match the current draft."
+                )
+            blueprint = blueprint.model_copy(
+                update={"source_concept_label": stored.current.concept_label},
+                deep=True,
+            )
+            validate_requested_profile(
+                blueprint.profile,
+                mode=resolved_settings.computation_mode,
+                allowed_families=resolved_settings.computation_families,
+            )
+            validate_computation_profile_settings(
+                resolved_settings,
+                blueprint.profile,
+            )
+            if item_type_for_delivery(blueprint.profile.delivery) != (
+                stored.current.item_type
+            ):
+                raise ValueError(
+                    "The typed blueprint delivery must match the current draft type."
+                )
+            computation_client = request.app.state.computation_client
+            if computation_client is None:
+                raise ComputationWorkflowError(
+                    "The isolated assessment computation service is unavailable."
+                )
+            expected_draft_hash = draft_content_sha256(stored.current_json)
+            rebound, computation_validation = await revalidate_draft_from_blueprint(
+                client=computation_client,
+                blueprint=blueprint,
+                draft=stored.current,
+                container_digest=(resolved_settings.computation_container_digest),
+                image_reference=resolved_settings.computation_image_reference,
+                native_engine_runner=request.app.state.native_engine_runner,
+            )
+            repository.edit_draft(
+                draft_id,
+                rebound,
+                editor=reviewer,
+                notes="Explicit typed computation revalidation.",
+                computation_validation=computation_validation,
+                expected_edit_count=expected_edit_count,
+                expected_draft_sha256=expected_draft_hash,
+            )
+            notice = (
+                "Draft rebound to the typed computation blueprint; review checks "
+                "were reset"
+            )
+        except (
+            ComputationClientError,
+            ComputationEvidenceError,
+            ComputationWorkflowError,
+            DraftNotFoundError,
+            ReviewTransitionError,
+            ValidationError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))
+        return _redirect_with_message(
+            f"/drafts/{draft_id}",
+            "notice",
+            notice,
         )
 
     @app.post("/drafts/{draft_id}/hints/edit")
@@ -607,7 +1015,11 @@ def _draft_summary(draft: Draft) -> dict[str, Any]:
     }
 
 
-def _draft_detail(draft: Draft) -> dict[str, Any]:
+def _draft_detail(
+    draft: Draft,
+    *,
+    computation: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     current = draft.current
     paragraphs_by_index = {
         int(paragraph["index"]): paragraph for paragraph in draft.source.paragraphs_json
@@ -669,6 +1081,7 @@ def _draft_detail(draft: Draft) -> dict[str, Any]:
         "reviewer_notes": draft.reviewer_notes,
         "edit_count": draft.edit_count,
         "specialist_review_required": current.specialist_review_required,
+        "computation": computation,
         "engine_validation": {
             "engine": engine_validation.engine,
             "compiler_version": engine_validation.compiler_version,
@@ -742,6 +1155,28 @@ def _parse_citations(value: str) -> list[int]:
     return citations
 
 
+def _strict_json_object(value: str) -> dict[str, Any]:
+    def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in result:
+                raise ValueError("Typed blueprint JSON contains a duplicate key.")
+            result[key] = item
+        return result
+
+    def reject_nonfinite_constant(_value: str) -> None:
+        raise ValueError("Typed blueprint JSON contains a non-finite number.")
+
+    parsed = json.loads(
+        value,
+        object_pairs_hook=reject_duplicate_keys,
+        parse_constant=reject_nonfinite_constant,
+    )
+    if not isinstance(parsed, dict):
+        raise ValueError("Typed blueprint JSON must contain one object.")
+    return parsed
+
+
 def _require_public_draft(repository: DraftRepository, draft_id: int) -> Draft:
     draft = repository.get_draft(draft_id)
     if draft is None or draft.source.backend != "libretexts_public":
@@ -756,6 +1191,46 @@ def _reviewer(request: Request) -> str:
             status_code=403, detail="Trusted reviewer identity required"
         )
     return value[:255]
+
+
+def _trusted_computation_specialist_subject(
+    request: Request,
+    settings: Settings,
+) -> str | None:
+    """Return a proxy-authenticated allowlisted subject, or fail closed.
+
+    The proxy token is checked before the configurable subject header is read.
+    The general ``X-Reviewer`` identity remains intentionally separate.
+    """
+
+    if not settings.computation_specialist_proxy_ready:
+        return None
+    configured_secret = settings.computation_trusted_proxy_token
+    if configured_secret is None:
+        return None
+    expected = configured_secret.get_secret_value().encode("ascii")
+    presented = request.headers.get(COMPUTATION_PROXY_TOKEN_HEADER, "").encode(
+        "utf-8",
+        errors="surrogatepass",
+    )
+    expected_digest = hashlib.sha256(expected).digest()
+    presented_digest = hashlib.sha256(presented).digest()
+    if not hmac.compare_digest(presented_digest, expected_digest):
+        return None
+
+    subject = request.headers.get(
+        settings.computation_specialist_subject_header,
+        "",
+    ).strip()
+    if (
+        not subject
+        or len(subject) > 255
+        or any(character.isspace() or ord(character) < 32 for character in subject)
+    ):
+        return None
+    if subject not in settings.computation_specialist_subjects:
+        return None
+    return subject
 
 
 def _require_same_origin(request: Request, settings: Settings) -> None:

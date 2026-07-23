@@ -150,6 +150,35 @@ def test_gemini_can_make_generation_ready_without_ollama_key(
         assert client.get("/readyz").json() == {"status": "ready"}
 
 
+def test_enforce_readiness_fails_closed_without_promoted_runtime(
+    tmp_path: Path,
+) -> None:
+    configured = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path / 'unqualified.db'}",
+        allowed_origin="http://testserver",
+        llm_provider_order="gemini",
+        gemini_api_key=SecretStr("gemini-key"),
+        computation_mode="enforce",
+        computation_family_allowlist="numeric",
+        computation_image_reference=(
+            f"registry.example/assessment-computation@sha256:{'a' * 64}"
+        ),
+    )
+
+    with TestClient(create_app(configured)) as client:
+        health = client.get("/healthz").json()
+        assert health["assessment_computation"]["runtime_qualification"] == (
+            "unqualified"
+        )
+        readiness = client.get("/readyz")
+        assert readiness.status_code == 503
+        assert readiness.json() == {
+            "status": "computation_unqualified",
+            "assessment_computation": "unqualified",
+        }
+
+
 def test_generation_form_rejects_cross_origin_before_provider_calls(
     tmp_path: Path,
 ) -> None:
