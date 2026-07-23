@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -651,8 +652,8 @@ async def test_local_canary_executor_derives_receipt_from_command_artifacts(
     observer = root / "observer.json"
     script = root / "stage-wrapper"
     script.write_text(
-        """#!/usr/bin/python3
-import hashlib
+        f"#!{sys.executable}\n"
+        + """import hashlib
 import json
 import os
 import pathlib
@@ -810,8 +811,8 @@ async def test_local_canary_timeout_kills_the_exact_process_group(
     child_pid_path = root / "child.pid"
     script = root / "stage-wrapper"
     script.write_text(
-        """#!/usr/bin/python3
-import pathlib
+        f"#!{sys.executable}\n"
+        + """import pathlib
 import subprocess
 import sys
 import time

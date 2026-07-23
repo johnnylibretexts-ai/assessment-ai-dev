@@ -19,6 +19,8 @@ RUN pip install .
 FROM base AS test
 
 COPY tests ./tests
+COPY Dockerfile Dockerfile.compute docker-compose.computation.yml ./
+COPY deploy ./deploy
 RUN pip install '.[dev]' \
     && ruff check app tests \
     && ruff format --check app tests \
