@@ -314,6 +314,8 @@ class ExpressionNode(StrictModel):
                     "power exponent must be a rational literal whose numerator and "
                     f"denominator are at most {MAX_EXPONENT_MAGNITUDE}"
                 )
+            if exponent_value[0] == 0:
+                raise ValueError("zero exponents are outside assessment-computation-v0")
         return self
 
     @staticmethod
@@ -2182,14 +2184,22 @@ def _validate_structural_domains(
 
     sp = _require_sympy()
     denominators: list[ExpressionNode] = []
+    substituted_symbols = set(blueprint.substitutions)
 
     def visit(node: ExpressionNode) -> None:
         if node.kind in {ExpressionKind.DIV, ExpressionKind.MOD}:
             denominators.append(node.args[1])
         elif node.kind == ExpressionKind.POW:
             exponent = _literal_rational(node.args[1])
-            if exponent is not None and exponent[0] < 0:
-                denominators.append(node.args[0])
+            if exponent is not None:
+                if exponent[0] < 0:
+                    denominators.append(node.args[0])
+                base_symbols = _expression_stats(node.args[0])[2]
+                if exponent[1] != 1 and base_symbols - substituted_symbols:
+                    raise ComputationUnsupportedError(
+                        "variable-dependent fractional powers are outside "
+                        "assessment-computation-v0"
+                    )
         for child in node.args:
             visit(child)
 

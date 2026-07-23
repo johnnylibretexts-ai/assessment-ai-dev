@@ -91,6 +91,47 @@ def test_minimal_numeric_computation_and_model_dump() -> None:
     assert result.model_dump(mode="json")["operation"] == "evaluate"
 
 
+def test_zero_to_zero_power_is_rejected_by_the_typed_schema() -> None:
+    with pytest.raises(ValidationError, match="zero exponents"):
+        operation("pow", integer(0), integer(0))
+
+
+def test_variable_dependent_fractional_power_is_unsupported() -> None:
+    x = symbol("x")
+    blueprint = AssessmentComputationBlueprint(
+        profile=profile("numeric", "webwork"),
+        operation="evaluate",
+        expression=operation(
+            "pow",
+            operation(
+                "sub",
+                operation(
+                    "pow",
+                    operation("sub", x, integer(100)),
+                    integer(2),
+                ),
+                integer(1),
+            ),
+            rational(1, 2),
+        ),
+        variables=[
+            VariableSpec(
+                name="x",
+                domain="integer",
+                minimum=integer(0),
+                maximum=integer(1000),
+                step=integer(1),
+            )
+        ],
+    )
+
+    report = validate_computation(ComputationValidationRequest(blueprint=blueprint))
+
+    assert report.status == ValidationStatus.UNSUPPORTED
+    assert report.result is None
+    assert "variable-dependent fractional powers" in report.checks[-1].message
+
+
 def test_numeric_substitution_is_exact() -> None:
     blueprint = AssessmentComputationBlueprint(
         profile=profile("numeric"),

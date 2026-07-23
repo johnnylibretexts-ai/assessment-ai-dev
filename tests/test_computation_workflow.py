@@ -17,6 +17,7 @@ from app.computation import (
     ComputationResult,
     ComputationValidationRequest,
     ExpressionNode,
+    ValidationCheck,
     ValidationStatus,
     VariableSpec,
     compute_blueprint,
@@ -88,6 +89,28 @@ class _TimeoutValidationClient(InProcessAssessmentComputationClient):
         _request: ComputationValidationRequest,
     ) -> AssessmentValidationReport:
         raise ComputationTimeoutError("do not persist private timeout details")
+
+
+class _UnsupportedValidationClient(InProcessAssessmentComputationClient):
+    async def validate(
+        self,
+        request: ComputationValidationRequest,
+    ) -> AssessmentValidationReport:
+        report = await super().validate(request)
+        return report.model_copy(
+            update={
+                "status": ValidationStatus.UNSUPPORTED,
+                "result": None,
+                "checks": [
+                    ValidationCheck(
+                        code="supported_profile",
+                        status="inconclusive",
+                        message="The runtime no longer qualifies this operation.",
+                    )
+                ],
+            },
+            deep=True,
+        )
 
 
 def _symbol(name: str) -> ExpressionNode:
@@ -1605,6 +1628,59 @@ async def test_edit_timeout_appends_failed_evidence_with_safe_frozen_content(
         "status": "failed",
     }
     assert "private timeout details" not in current.report_json
+    database.dispose()
+
+
+@pytest.mark.asyncio
+async def test_edit_unsupported_report_rebinds_prior_frozen_result(
+    tmp_path: Path,
+) -> None:
+    database = init_database(f"sqlite:///{tmp_path / 'workflow-unsupported.db'}")
+    repository = DraftRepository(database)
+    blueprint = _numeric_blueprint()
+    initial = _draft(AssessmentItemType.NUMERICAL, numeric_answer=999)
+    artifacts = await build_computation_artifacts(
+        client=InProcessAssessmentComputationClient(),
+        blueprint=blueprint,
+        draft=initial,
+        container_digest=f"sha256:{'6' * 64}",
+    )
+    stored = repository.replace_generated_drafts(
+        page=_page(),
+        pipeline_version="workflow-unsupported-test-v0",
+        drafts=[
+            DraftWrite(
+                position=0,
+                concept=Concept(
+                    label="Computed quantity",
+                    description="A bounded numerical calculation.",
+                    source_paragraphs=[0],
+                ),
+                raw=initial,
+                critique=Critique(issues=[], revision_required=False),
+                revised=artifacts.draft,
+                computation_validation=artifacts.persistence,
+            )
+        ],
+        llm_calls=[],
+    )
+    current = repository.get_current_computation_validation(stored.draft_ids[0])
+    assert current is not None
+
+    rebound, evidence = await revalidate_edited_draft(
+        client=_UnsupportedValidationClient(),
+        current_record=current,
+        draft=_draft(
+            AssessmentItemType.NUMERICAL,
+            numeric_answer=-123,
+            stem="Compute the faculty-edited value.",
+        ),
+        container_digest=f"sha256:{'6' * 64}",
+    )
+
+    assert rebound.response.numeric_answer == pytest.approx(5.0)
+    assert evidence.status == ValidationStatus.UNSUPPORTED.value
+    assert json.loads(evidence.report_json).get("result") is None
     database.dispose()
 
 

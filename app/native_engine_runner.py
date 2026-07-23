@@ -468,7 +468,7 @@ class UnixSocketNativeEngineRunner:
             raise NativeRunnerProtocolError(
                 "The native engine runner returned an invalid receipt."
             ) from None
-        _verify_receipt(request, receipt, promotion)
+        verify_native_engine_receipt(request, receipt, promotion)
         return receipt
 
 
@@ -641,11 +641,13 @@ def native_runner_registry_sha256() -> str:
     )
 
 
-def _verify_receipt(
+def verify_native_engine_receipt(
     request: NativeEngineRunnerRequest,
     receipt: NativeEngineRunnerReceipt,
     promotion: QualifiedNativeEngineRunner,
 ) -> None:
+    """Verify one receipt against the exact request and qualified promotion."""
+
     expected = {
         "runner_id": request.runner_id,
         "runner_version": promotion.runner_version,
@@ -793,4 +795,5 @@ __all__ = [
     "qualified_native_engine_runner",
     "seed_observations_sha256",
     "seed_plan_sha256",
+    "verify_native_engine_receipt",
 ]

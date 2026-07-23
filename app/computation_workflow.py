@@ -62,6 +62,7 @@ from .native_engine_runner import (
     NativeRunnerUnavailableError,
     NativeRunnerUnqualifiedError,
     build_native_runner_request,
+    verify_native_engine_receipt,
 )
 from .native_engine_evidence import verify_native_engine_observations
 from .parameterized import (
@@ -516,6 +517,11 @@ async def build_computation_artifacts(
                     formula_adapter_promotion=formula_promotion_evidence,
                 )
                 native_receipt = await native_engine_runner.validate(runner_request)
+                verify_native_engine_receipt(
+                    runner_request,
+                    native_receipt,
+                    promotion,
+                )
                 verify_native_engine_observations(
                     blueprint=blueprint,
                     result=result,
@@ -700,7 +706,14 @@ async def revalidate_edited_draft(
             engine_validation=None,
         )
     if preflight.result is None:
-        return draft, validation_write(
+        prior_result = _result_from_record(current_record, blueprint=blueprint)
+        if prior_result is None:
+            raise ComputationClientError(
+                "Computation revalidation returned no frozen result and no prior "
+                "ground truth is available."
+            )
+        rebound, _compiled = bind_draft(blueprint, prior_result, draft)
+        return rebound, validation_write(
             blueprint=blueprint,
             report=preflight.report,
             container_digest=container_digest,

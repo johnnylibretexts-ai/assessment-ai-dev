@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from sqlalchemy import func, inspect, select
 
+import app.db as db_module
 from app.computation import (
     AssessmentComputationBlueprint,
     CheckStatus,
@@ -26,6 +29,7 @@ from app.db import (
     ComputationEvidenceError,
     ComputationValidationRecord,
     ComputationValidationWrite,
+    ConcurrentDraftUpdateError,
     Draft,
     DraftRepository,
     DraftWrite,
@@ -434,6 +438,108 @@ def test_append_is_idempotent_but_hash_rebinding_is_rejected(store) -> None:
         )
 
 
+def test_concurrent_identical_validation_appends_return_one_record(
+    store,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database, repository = store
+    draft_id = _seed(repository)
+    value = _validation("concurrent-duplicate")
+    barrier = threading.Barrier(2)
+    lock = threading.Lock()
+    calls = 0
+    original = db_module._new_computation_validation_record
+
+    def synchronized_candidate(*args, **kwargs):
+        nonlocal calls
+        candidate = original(*args, **kwargs)
+        with lock:
+            calls += 1
+            should_wait = calls <= 2
+        if should_wait:
+            barrier.wait(timeout=5)
+        return candidate
+
+    monkeypatch.setattr(
+        db_module,
+        "_new_computation_validation_record",
+        synchronized_candidate,
+    )
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(
+                repository.append_computation_validation,
+                draft_id,
+                edit_count=0,
+                record=value,
+            )
+            for _ in range(2)
+        ]
+        records = [future.result(timeout=10) for future in futures]
+
+    assert records[0].id == records[1].id
+    with database.session() as session:
+        assert (
+            session.scalar(
+                select(func.count()).select_from(ComputationValidationRecord)
+            )
+            == 1
+        )
+
+
+def test_validation_append_loses_concurrent_approval_race_closed(
+    store,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _database, repository = store
+    draft_id = _seed(repository, computation_validation=_validation("initial"))
+    repository.confirm_bloom(draft_id, reviewer="reviewer@example.edu")
+    repository.confirm_difficulty(draft_id, reviewer="reviewer@example.edu")
+    repository.transition_status(
+        draft_id,
+        ReviewStatus.READY_TO_PUBLISH,
+        reviewer="reviewer@example.edu",
+    )
+    reached = threading.Event()
+    release = threading.Event()
+    original = db_module._new_computation_validation_record
+
+    def paused_candidate(*args, **kwargs):
+        candidate = original(*args, **kwargs)
+        reached.set()
+        assert release.wait(timeout=5)
+        return candidate
+
+    monkeypatch.setattr(
+        db_module,
+        "_new_computation_validation_record",
+        paused_candidate,
+    )
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(
+            repository.append_computation_validation,
+            draft_id,
+            edit_count=0,
+            record=replace(
+                _validation("new-runtime"),
+                container_digest=f"sha256:{'2' * 64}",
+            ),
+        )
+        assert reached.wait(timeout=5)
+        repository.transition_status(
+            draft_id,
+            ReviewStatus.READY_TO_PUBLISH,
+            reviewer="second-reviewer@example.edu",
+            notes="Concurrent enforce approval.",
+        )
+        release.set()
+        with pytest.raises(ConcurrentDraftUpdateError):
+            future.result(timeout=10)
+
+    assert repository.require_draft(draft_id).status == ReviewStatus.READY_TO_PUBLISH
+    assert len(repository.list_computation_validations(draft_id)) == 1
+
+
 def test_same_report_can_refresh_runtime_evidence_and_revokes_prior_approval(
     store,
 ) -> None:
@@ -601,6 +707,59 @@ def test_attestation_requires_the_exact_current_edit_and_report(store) -> None:
         draft_id,
         report_sha256=current.report_sha256,
     ) == (first,)
+
+
+def test_concurrent_identical_attestations_return_one_record(
+    store,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database, repository = store
+    draft_id = _seed(repository, computation_validation=_validation())
+    current = repository.get_current_computation_validation(draft_id)
+    assert current is not None
+    value = ComputationAttestationWrite(
+        specialist_identity="specialist@example.edu",
+        rationale="The same exact specialist review was submitted twice.",
+    )
+    barrier = threading.Barrier(2)
+    lock = threading.Lock()
+    calls = 0
+    original = db_module._computation_attestation_sha256
+
+    def synchronized_hash(**kwargs):
+        nonlocal calls
+        digest = original(**kwargs)
+        with lock:
+            calls += 1
+            should_wait = calls <= 2
+        if should_wait:
+            barrier.wait(timeout=5)
+        return digest
+
+    monkeypatch.setattr(
+        db_module,
+        "_computation_attestation_sha256",
+        synchronized_hash,
+    )
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(
+                repository.append_computation_attestation,
+                draft_id,
+                edit_count=0,
+                report_sha256=current.report_sha256,
+                attestation=value,
+            )
+            for _ in range(2)
+        ]
+        records = [future.result(timeout=10) for future in futures]
+
+    assert records[0].id == records[1].id
+    with database.session() as session:
+        assert (
+            session.scalar(select(func.count()).select_from(ComputationAttestation))
+            == 1
+        )
 
 
 def test_publication_snapshot_is_immutable_and_exactly_bound(store) -> None:

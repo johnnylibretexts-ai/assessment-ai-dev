@@ -1598,6 +1598,49 @@ async def test_publication_blocks_before_external_calls_when_evidence_missing(
 
 
 @pytest.mark.asyncio
+async def test_enforce_publication_requires_approval_under_exact_binding(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path, mode="enforce")
+    database, repository = _repository(settings)
+    fake = _FakeAdapt()
+    try:
+        draft_id = _seed(
+            repository,
+            item_type=AssessmentItemType.NUMERICAL,
+            status="validated",
+        )
+        # This models an assist/off approval that existed before enforce mode.
+        _approve(repository, draft_id)
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+
+        with pytest.raises(
+            PublicationValidationError,
+            match="changed before publication reservation",
+        ):
+            await PublicationService(settings, repository, fake).publish(
+                draft_id,
+                publisher="reviewer@example.org",
+                topic_stable_id=topic.stable_id,
+                alignment_confirmed=True,
+            )
+
+        assert fake.resolve_calls == 1
+        assert fake.create_calls == 0
+        _approve(repository, draft_id, settings=settings)
+        published = await PublicationService(settings, repository, fake).publish(
+            draft_id,
+            publisher="reviewer@example.org",
+            topic_stable_id=topic.stable_id,
+            alignment_confirmed=True,
+        )
+        assert published.state == PublicationState.SUCCEEDED.value
+    finally:
+        database.dispose()
+
+
+@pytest.mark.asyncio
 async def test_enforce_publication_freezes_exact_validation_evidence(
     tmp_path: Path,
 ) -> None:
