@@ -382,6 +382,22 @@ class _ReceiptRunner:
         return None
 
 
+class _MismatchedReceiptRunner(_ReceiptRunner):
+    async def validate(
+        self,
+        request: NativeEngineRunnerRequest,
+    ) -> NativeEngineRunnerReceipt:
+        receipt = await super().validate(request)
+        payload = receipt.model_dump(
+            mode="json",
+            exclude={"receipt_sha256"},
+            exclude_none=False,
+        )
+        payload["request_sha256"] = "f" * 64
+        payload["receipt_sha256"] = runner_module._canonical_sha256(payload)
+        return NativeEngineRunnerReceipt.model_validate(payload)
+
+
 class _FinalValidationUnavailableClient(InProcessAssessmentComputationClient):
     async def validate(self, _request):
         raise ComputationUnavailableError("private final sidecar detail")
@@ -1095,6 +1111,35 @@ async def test_native_runner_unavailable_is_partial_but_timeout_fails_closed() -
     assert timeout.report.result is None
     assert json.loads(timeout.persistence.engine_evidence_json) == {}
     assert "private timeout detail" not in timeout.persistence.report_json
+
+
+@pytest.mark.asyncio
+async def test_workflow_rejects_protocol_runner_receipt_for_another_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    digest = f"sha256:{'c' * 64}"
+    image_reference = f"registry.example/assessment-computation@{digest}"
+    promotion = _promotion()
+    _promote(
+        monkeypatch,
+        promotion,
+        digest=digest,
+        image_reference=image_reference,
+    )
+
+    artifacts = await build_computation_artifacts(
+        client=InProcessAssessmentComputationClient(),
+        blueprint=_blueprint(),
+        draft=_provider_draft(),
+        container_digest=digest,
+        image_reference=image_reference,
+        native_engine_runner=_MismatchedReceiptRunner(promotion),
+    )
+
+    assert artifacts.report.status == ValidationStatus.VALIDATION_FAILED
+    assert artifacts.report.result is None
+    assert artifacts.engine_validation is None
+    assert json.loads(artifacts.persistence.engine_evidence_json) == {}
 
 
 @pytest.mark.asyncio
