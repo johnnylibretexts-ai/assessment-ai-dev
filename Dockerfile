@@ -19,12 +19,13 @@ RUN pip install .
 FROM base AS test
 
 COPY tests ./tests
-COPY Dockerfile Dockerfile.compute docker-compose.computation.yml ./
+COPY Dockerfile Dockerfile.compute docker-compose.computation.yml uv.lock ./
 COPY deploy ./deploy
 RUN pip install '.[dev]' \
     && ruff check app tests \
     && ruff format --check app tests \
-    && pytest -q
+    && pytest -q tests/test_computation_service.py \
+    && pytest -q tests --ignore=tests/test_computation_service.py
 
 FROM base AS runtime
 
