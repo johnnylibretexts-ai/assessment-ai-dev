@@ -1627,6 +1627,7 @@ class DraftRepository:
             .options(
                 selectinload(Draft.source),
                 selectinload(Draft.llm_calls),
+                selectinload(Draft.publications),
                 selectinload(Draft.hint_ladders),
                 selectinload(Draft.engine_validations),
             )

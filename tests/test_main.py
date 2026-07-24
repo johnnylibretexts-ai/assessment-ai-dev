@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -5,7 +6,7 @@ from pydantic import SecretStr
 
 from app.config import Settings
 from app.content import PublicLibreTextsContentAdapter
-from app.db import DraftRepository, DraftWrite
+from app.db import DraftRepository, DraftWrite, PublicationState
 from app.main import create_app
 from app.schemas import (
     BloomLevel,
@@ -19,6 +20,7 @@ from app.schemas import (
     NormalizedPage,
     Paragraph,
     QuestionDraft,
+    ReviewDecision,
     ReviewStatus,
     SourceInfo,
     SourceLicenseMetadata,
@@ -93,6 +95,55 @@ def seed(repository: DraftRepository, source_page: NormalizedPage | None = None)
         llm_calls=[],
     )
     return stored.draft_ids[0]
+
+
+def mark_published(
+    repository: DraftRepository,
+    draft_id: int,
+    *,
+    adapt_question_id: int = 125,
+) -> None:
+    draft = repository.require_draft(draft_id)
+    publication, created = repository.create_or_get_publication(
+        {
+            "draft_id": draft.id,
+            "edit_count": draft.edit_count,
+            "question_snapshot_json": draft.current_json,
+            "source_snapshot_json": {"source_id": draft.source_snapshot_id},
+            "reviewer_identity": "reviewer@example.org",
+            "approved_at": datetime.now(UTC),
+            "destination_folder_id": 42,
+            "destination_folder_name": "Assessment AI — Approved",
+            "author": "LibreTexts",
+            "public": True,
+            "license": "CC BY",
+            "license_version": "4.0",
+            "license_label": "CC BY 4.0",
+            "license_evidence_url": "https://example.invalid/license",
+            "framework_id": 7,
+            "framework_title": "Test framework",
+            "alignment_json": {
+                "topic": {
+                    "text": "Energy conservation",
+                    "stable_id": "energy",
+                }
+            },
+            "stable_topic_ids_json": ["energy"],
+            "hint_ladder_snapshot_json": None,
+            "publication_key": f"{draft.id:064x}",
+            "payload_hash": f"{adapt_question_id:064x}",
+            "payload_mapper_version": "test-1",
+            "qti_exporter_version": "test-1",
+        }
+    )
+    assert created is True
+    repository.update_publication(
+        publication.id,
+        state=PublicationState.SUCCEEDED,
+        adapt_question_id=adapt_question_id,
+        adapt_page_id=adapt_question_id,
+        finalized_at=datetime.now(UTC),
+    )
 
 
 def public_page() -> NormalizedPage:
@@ -688,3 +739,81 @@ def test_saved_hint_and_question_approvals_render_as_summaries(tmp_path: Path) -
         assert "Question approved" in detail.text
         assert "Approve saved hint version" not in detail.text
         assert "Approve question revision" not in detail.text
+
+
+def test_current_successful_publication_drives_queue_and_detail_state(
+    tmp_path: Path,
+) -> None:
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.apply_review_decision(
+            draft_id,
+            ReviewDecision(
+                status=ReviewStatus.READY_TO_PUBLISH,
+                bloom_confirmed=True,
+                difficulty_confirmed=True,
+            ),
+            reviewer="reviewer@example.org",
+        )
+        mark_published(app.state.repository, draft_id)
+
+        queue = client.get("/")
+        assert queue.status_code == 200
+        assert "Published to ADAPT" in queue.text
+        assert "Approved — not yet published" not in queue.text
+        assert "Current revision 0" in queue.text
+        assert "Published to ADAPT as question 125" in queue.text
+
+        detail = client.get(f"/drafts/{draft_id}")
+        assert detail.status_code == 200
+        assert "Approved — not yet published" not in detail.text
+        assert "Publication status" in detail.text
+        assert "ADAPT question ID: 125" in detail.text
+        assert "This publication is bound to the current draft revision." in detail.text
+        assert f'action="/drafts/{draft_id}/publish"' not in detail.text
+
+
+def test_earlier_publication_does_not_mark_a_new_revision_as_published(
+    tmp_path: Path,
+) -> None:
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.apply_review_decision(
+            draft_id,
+            ReviewDecision(
+                status=ReviewStatus.READY_TO_PUBLISH,
+                bloom_confirmed=True,
+                difficulty_confirmed=True,
+            ),
+            reviewer="reviewer@example.org",
+        )
+        mark_published(app.state.repository, draft_id)
+        app.state.repository.edit_draft(
+            draft_id,
+            question("Which revised statement about energy is accurate?"),
+            editor="editor@example.org",
+        )
+        app.state.repository.apply_review_decision(
+            draft_id,
+            ReviewDecision(
+                status=ReviewStatus.READY_TO_PUBLISH,
+                bloom_confirmed=True,
+                difficulty_confirmed=True,
+            ),
+            reviewer="reviewer@example.org",
+        )
+
+        queue = client.get("/")
+        assert queue.status_code == 200
+        assert "Approved — not yet published" in queue.text
+        assert "Current revision 1" in queue.text
+        assert "Revision 0 remains published to ADAPT as question 125." in queue.text
+
+        detail = client.get(f"/drafts/{draft_id}")
+        assert detail.status_code == 200
+        assert "Approved — not yet published" in detail.text
+        assert "Current revision 1 is not yet published." in detail.text
+        assert "Revision 0 remains published to ADAPT as question 125." in detail.text
+        assert "Earlier revision" in detail.text

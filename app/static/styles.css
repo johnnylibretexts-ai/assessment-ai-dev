@@ -69,9 +69,11 @@ code { padding: 2px 5px; border-radius: 5px; background: #eef3f7; }
 .card h3 { margin-bottom: 5px; }
 .card p { color: var(--muted); }
 .meta { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: .82rem; }
+.revision-state { margin: 10px 0 0; color: #32485c; font-size: .82rem; line-height: 1.4; }
+.revision-state span { color: var(--muted); }
 .status { display: inline-flex; border-radius: 999px; padding: 4px 9px; background: #e7eef5; color: #32485c; font-size: .73rem; font-weight: 800; text-transform: uppercase; }
 .status-ready_for_review, .status-draft { background: var(--warning-bg); color: var(--warning); }
-.status-ready_to_publish { background: var(--success-bg); color: var(--success); }
+.status-ready_to_publish, .status-published { background: var(--success-bg); color: var(--success); }
 .status-rejected { background: var(--danger-bg); color: var(--danger); }
 .empty-state { padding: 46px; border: 1px dashed #aebbc8; border-radius: 12px; text-align: center; color: var(--muted); background: rgb(255 255 255 / 60%); }
 .notice { margin: 20px 0; padding: 12px 15px; border-radius: 8px; background: #e0f2fe; color: #075985; }
