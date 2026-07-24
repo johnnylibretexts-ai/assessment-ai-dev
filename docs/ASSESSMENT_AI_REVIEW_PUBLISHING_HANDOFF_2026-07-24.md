@@ -133,6 +133,7 @@ fix/review-publishing-workflow
 Relevant commits:
 
 ```text
+43137d01a fix: load legacy IMathAS assignment questions
 f38a93a6e feat: provision assessment AI framework catalogs
 0201a1b6d fix: label question expansion controls
 ```
@@ -140,7 +141,7 @@ f38a93a6e feat: provision assessment AI framework catalogs
 The only valid implementation review range is:
 
 ```bash
-git diff 0201a1b6d..f38a93a6e
+git diff 0201a1b6d..43137d01a
 ```
 
 ADAPT’s fork `main` is not a safe automatic PR base for this review. Create a temporary
@@ -245,6 +246,28 @@ or replace it.
 
 Opening the editor does not create a new revision. A new revision exists only after a saved edit.
 
+### 6. Assignment 44 now loads legacy IMathAS records alongside the published QTI item
+
+After Draft 14 was published as ADAPT question 125, adding it to assignment 44 exposed an
+unrelated legacy-data defect. Assignment 44 already contained IMathAS questions 77 and 86 whose
+`technology_iframe` values were bare URLs rather than iframe HTML. The assignment formatter tried
+to call `getAttribute()` on a nonexistent iframe DOM node and returned HTTP 500 before rendering
+question 125.
+
+Commit `43137d01a` changes the IMathAS runtime to:
+
+- prefer the persisted positive `technology_id`;
+- rebuild the runtime URL from ADAPT's configured IMathAS service;
+- fall back to extracting an ID from older iframe HTML only when no persisted ID exists;
+- generate future demo IMathAS records with actual iframe HTML.
+
+No live question rows were rewritten. The exact authenticated assignment API now returns HTTP 200
+with all five records:
+
+```text
+75:qti, 76:qti, 77:imathas, 86:imathas, 125:qti
+```
+
 ## Main implementation map
 
 ### Assessment AI files
@@ -284,7 +307,10 @@ Full implementation statistics from `6bc57fe..ecddda4`:
 | File | Purpose |
 |---|---|
 | `app/Console/Commands/LibreTexts/ProvisionAssessmentAI.php` | Validate and provision every versioned framework seed atomically |
+| `app/Console/Commands/LibreTexts/SeedDemo.php` | Seed future IMathAS demos with valid iframe HTML |
+| `app/Question.php` | Resolve legacy IMathAS records from persisted IDs without parsing bare URLs as HTML |
 | `resources/frameworks/mathematical-methods-chemistry-v1.json` | Matching ADAPT framework seed |
+| `tests/Feature/QuestionsViewTest.php` | Legacy bare-URL and iframe-fallback assignment rendering tests |
 | `tests/Feature/LibreTexts/ProvisionAssessmentAITest.php` | Multi-catalog, idempotency, and validation tests |
 
 The ADAPT provisioning command now:
@@ -356,7 +382,7 @@ sha256:0c1ede5f83c71a7511a124249e7691a3c7b8c6d36a2d98d8a0ff329af8de4a1c
 Live source commit:
 
 ```text
-f38a93a6e
+43137d01a
 ```
 
 Current stable tag:
@@ -368,19 +394,19 @@ adapt-app:build08-shadow-0201a1b6
 Current live image:
 
 ```text
-sha256:d324f2bbe3b23f6e75ac182c8e2f3404ad7929ecde364ccfc322b0ab58e32532
+sha256:06e5f600c2d944b10ad9d837912daa8330ea651fb69e4f50b83946a0f65e56b5
 ```
 
 Rollback tag:
 
 ```text
-adapt-app:pre-review-workflow-abb52bc
+adapt-app:pre-imathas-runtime-d324f2b
 ```
 
 Rollback image:
 
 ```text
-sha256:abb52bc868551cca0c2fdcea8a3bbe6f03d8cc387955b8646bda8aeb25faf4a8
+sha256:d324f2bbe3b23f6e75ac182c8e2f3404ad7929ecde364ccfc322b0ab58e32532
 ```
 
 Required live ADAPT networks, both of which were preserved:
@@ -559,9 +585,11 @@ Completed checks:
 ```text
 PHP syntax checks                                         PASS
 ProvisionAssessmentAI focused PHPUnit                    2 tests, 22 assertions
+legacy IMathAS assignment PHPUnit                       2 tests, 7 assertions
 candidate image build                                    PASS
 live provisioning                                        PASS
 idempotent re-run                                        PASS
+authenticated assignment 44 API                         HTTP 200, 5 questions
 ```
 
 The focused PHPUnit test used an isolated disposable MySQL database, not the live ADAPT database.
@@ -629,14 +657,18 @@ Never point this test at the live database. Use a disposable MySQL service/datab
 ```bash
 cd <workspace-root>/.worktrees/adapt-review-publishing-workflow
 php -l app/Console/Commands/LibreTexts/ProvisionAssessmentAI.php
+php -l app/Console/Commands/LibreTexts/SeedDemo.php
+php -l app/Question.php
 php -l tests/Feature/LibreTexts/ProvisionAssessmentAITest.php
 vendor/bin/phpunit tests/Feature/LibreTexts/ProvisionAssessmentAITest.php
+vendor/bin/phpunit tests/Feature/QuestionsViewTest.php --filter=imathas_runtime
 ```
 
 Expected:
 
 ```text
-2 tests, 22 assertions
+ProvisionAssessmentAI: 2 tests, 22 assertions
+legacy IMathAS runtime: 2 tests, 7 assertions
 ```
 
 ### Cross-repository catalog check
@@ -787,7 +819,7 @@ entire PR from scratch, while `@coderabbitai review` reviews only new changes.
 
    ```bash
    git diff --stat 6bc57fe..fix/review-publishing-workflow
-   git diff --stat 0201a1b6d..f38a93a6e
+   git diff --stat 0201a1b6d..43137d01a
    ```
 
 3. Create separate PRs for Assessment AI and ADAPT.
@@ -817,6 +849,8 @@ Ask the human reviewer to focus the PR description on these risks:
 - duplicate publication is still idempotent under retries/concurrency;
 - framework identity and topic selection cannot be forged;
 - ADAPT provisioning validates all catalogs before its transaction and remains idempotent;
+- legacy IMathAS records cannot crash an entire assignment and stored URLs cannot override a
+  valid persisted technology ID;
 - no secret, upstream write, corpus mutation, or destructive deployment behavior was introduced.
 
 ### Triage findings
@@ -915,6 +949,12 @@ idempotency, preservation of existing IDs, and cross-catalog uniqueness.
 ```
 
 ```text
+@greptileai Trace the IMathAS assignment-rendering path for records with a persisted technology
+ID, a bare URL, valid iframe HTML, missing data, or conflicting URL/ID values. Can any legacy
+record crash the whole assignment or redirect runtime traffic away from the configured service?
+```
+
+```text
 @greptileai Look specifically for secret exposure, forbidden upstream writes, mutation of the
 read-only corpus, destructive Docker behavior, or assumptions that would clobber live overrides.
 ```
@@ -947,6 +987,7 @@ This work is ready to integrate only when all of the following are true:
 - Manual tests A through H above pass.
 - Draft 14 still shows current revision published with no duplicate publish button.
 - Draft 16 remains not published unless the user explicitly authorizes publication.
+- The authenticated assignment 44 question API returns HTTP 200 and includes question 125.
 - The corpus demo image and behavior remain unchanged.
 - The live Assessment AI and ADAPT health checks pass.
 - ADAPT still has both required Docker networks and the accepted hinting-v2 observe settings.
@@ -1036,13 +1077,13 @@ accepted override files:
 ```bash
 cd /opt/libretexts/adapt
 docker tag \
-  sha256:abb52bc868551cca0c2fdcea8a3bbe6f03d8cc387955b8646bda8aeb25faf4a8 \
+  sha256:d324f2bbe3b23f6e75ac182c8e2f3404ad7929ecde364ccfc322b0ab58e32532 \
   adapt-app:build08-shadow-0201a1b6
 docker compose \
   -f docker-compose.yml \
   -f /opt/libretexts/.build08-overrides/adapt-final-promotion.override.yml \
-  -f adapt-shadow-observe.override.yml \
-  -f adapt-engine-network.override.yml \
+  -f /opt/libretexts/.build08-overrides/adapt-shadow-observe.override.yml \
+  -f /opt/libretexts/.build08-overrides/adapt-engine-network.override.yml \
   up -d --no-deps --no-build --force-recreate app
 ```
 
@@ -1087,4 +1128,6 @@ Do not run `docker compose down`, and never run it with `-v`.
 - Only exact curated framework mappings can be published.
 - Assessment AI normal database is healthy; corpus demo is untouched.
 - ADAPT frameworks are provisioned idempotently.
+- Assignment 44 loads questions 75, 76, 77, 86, and published question 125 without an API error.
+- Legacy IMathAS bare URLs are resolved from their persisted technology IDs without rewriting data.
 - Live rollback images and pre-deploy backups remain available.
