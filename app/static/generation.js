@@ -11,6 +11,7 @@
   );
   const itemTypeHelp = document.querySelector("#item-type-help");
   const defaultItemTypeHelp = itemTypeHelp?.textContent || "";
+  const maxSelectedTypes = 8;
 
   if (!form || !submit || !status || !message || !sourceInput) return;
 
@@ -32,12 +33,18 @@
   const validateSelectedTypes = ({ raiseTotal = false } = {}) => {
     if (!generationMode || !itemCount || generationMode.value !== "selected") {
       itemCount?.setCustomValidity("");
+      itemTypes.forEach((checkbox) => {
+        checkbox.disabled = false;
+      });
       if (itemTypeHelp) itemTypeHelp.textContent = defaultItemTypeHelp;
       return;
     }
     const selected = selectedTypeCount();
+    itemTypes.forEach((checkbox) => {
+      checkbox.disabled = selected >= maxSelectedTypes && !checkbox.checked;
+    });
     const total = Number.parseInt(itemCount.value, 10);
-    if (raiseTotal && selected > total && selected <= 8) {
+    if (raiseTotal && selected > total && selected <= maxSelectedTypes) {
       itemCount.value = String(selected);
     }
     const resolvedTotal = Number.parseInt(itemCount.value, 10);
@@ -51,7 +58,10 @@
       itemTypeHelp.textContent =
         `${selected} type${selected === 1 ? "" : "s"} selected. ` +
         `The ${itemCount.value} total item${itemCount.value === "1" ? "" : "s"} ` +
-        "will include each selected type once before any type repeats.";
+        "will include each selected type once before any type repeats." +
+        (selected === maxSelectedTypes
+          ? " The maximum of 8 selected types has been reached."
+          : "");
     } else if (itemTypeHelp) {
       itemTypeHelp.textContent = defaultItemTypeHelp;
     }
