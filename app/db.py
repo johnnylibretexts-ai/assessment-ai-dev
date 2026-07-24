@@ -87,6 +87,7 @@ from .schemas import (
     QuestionDraft,
     ReviewDecision,
     ReviewStatus,
+    SourceLicenseMetadata,
 )
 from .source_policy import PublicSourceValidationError, canonicalize_public_identity
 
@@ -243,6 +244,10 @@ class SourceSnapshot(Base):
     canonical_url: Mapped[str] = mapped_column(String(4_096), nullable=False)
     backend: Mapped[str] = mapped_column(String(100), nullable=False)
     page_id: Mapped[str | None] = mapped_column(String(255))
+    license_code: Mapped[str | None] = mapped_column(String(40))
+    license_version: Mapped[str | None] = mapped_column(String(20))
+    license_label: Mapped[str | None] = mapped_column(String(120))
+    license_evidence_url: Mapped[str | None] = mapped_column(String(4_096))
     title: Mapped[str] = mapped_column(String(1_000), nullable=False)
     plaintext: Mapped[str] = mapped_column(Text, nullable=False)
     html_body: Mapped[str] = mapped_column(Text, nullable=False)
@@ -270,6 +275,21 @@ class SourceSnapshot(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+    @property
+    def license_metadata(self) -> SourceLicenseMetadata | None:
+        if not (
+            self.license_code
+            and self.license_label
+            and self.license_evidence_url
+        ):
+            return None
+        return SourceLicenseMetadata(
+            code=self.license_code,
+            version=self.license_version,
+            label=self.license_label,
+            evidence_url=self.license_evidence_url,
+        )
 
 
 class Draft(Base):
@@ -980,19 +1000,36 @@ class Database:
             self._apply_sqlite_additive_migrations()
 
     def _apply_sqlite_additive_migrations(self) -> None:
-        existing = {
+        publication_columns = {
             column["name"]
             for column in inspect(self.engine).get_columns("publications")
         }
-        additions = {
+        publication_additions = {
             "hint_ladder_snapshot_json": "JSON",
             "hints_synced_at": "DATETIME",
         }
+        source_columns = {
+            column["name"]
+            for column in inspect(self.engine).get_columns("source_snapshots")
+        }
+        source_additions = {
+            "license_code": "VARCHAR(40)",
+            "license_version": "VARCHAR(20)",
+            "license_label": "VARCHAR(120)",
+            "license_evidence_url": "VARCHAR(4096)",
+        }
         with self.engine.begin() as connection:
-            for name, data_type in additions.items():
-                if name not in existing:
+            for name, data_type in publication_additions.items():
+                if name not in publication_columns:
                     connection.execute(
                         text(f"ALTER TABLE publications ADD COLUMN {name} {data_type}")
+                    )
+            for name, data_type in source_additions.items():
+                if name not in source_columns:
+                    connection.execute(
+                        text(
+                            f"ALTER TABLE source_snapshots ADD COLUMN {name} {data_type}"
+                        )
                     )
 
     def dispose(self) -> None:
@@ -1073,6 +1110,23 @@ class DraftRepository:
         self._sessions = (
             sessions.session_factory if isinstance(sessions, Database) else sessions
         )
+
+    def update_source_license(
+        self,
+        source_id: int,
+        metadata: SourceLicenseMetadata,
+    ) -> None:
+        """Persist verified public page metadata for an existing source snapshot."""
+
+        with self._sessions.begin() as session:
+            source = session.get(SourceSnapshot, source_id)
+            if source is None:
+                raise DraftNotFoundError("Source snapshot not found")
+            source.license_code = metadata.code
+            source.license_version = metadata.version
+            source.license_label = metadata.label
+            source.license_evidence_url = metadata.evidence_url
+            source.updated_at = utc_now()
 
     def create_generation_job(
         self,
@@ -1275,6 +1329,18 @@ class DraftRepository:
                     canonical_url=page.source.canonical_url,
                     backend=page.source.backend,
                     page_id=page.source.page_id,
+                    license_code=page.source.license.code
+                    if page.source.license
+                    else None,
+                    license_version=page.source.license.version
+                    if page.source.license
+                    else None,
+                    license_label=page.source.license.label
+                    if page.source.license
+                    else None,
+                    license_evidence_url=page.source.license.evidence_url
+                    if page.source.license
+                    else None,
                     title=page.title,
                     plaintext=page.plaintext,
                     html_body=page.html_body,
@@ -1304,6 +1370,13 @@ class DraftRepository:
                 source.canonical_url = page.source.canonical_url
                 source.backend = page.source.backend
                 source.page_id = page.source.page_id
+                if page.source.license is not None:
+                    source.license_code = page.source.license.code
+                    source.license_version = page.source.license.version
+                    source.license_label = page.source.license.label
+                    source.license_evidence_url = (
+                        page.source.license.evidence_url
+                    )
                 source.title = page.title
                 source.plaintext = page.plaintext
                 source.html_body = page.html_body

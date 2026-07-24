@@ -40,8 +40,10 @@
               </select>
             </label>
             <label>
-              Number of items
-              <input type="number" name="item_count" value="4" min="1" max="8">
+              Total number of items
+              <input id="item-count" type="number" name="item_count" value="4"
+                     min="1" max="8" required
+                     aria-describedby="item-count-help item-type-help">
             </label>
           </div>
           <div class="item-type-grid" id="item-type-options" aria-describedby="item-type-help">
@@ -52,7 +54,8 @@
               </label>
             {% endfor %}
           </div>
-          <p id="item-type-help" class="help">Auto mix favors different interaction types appropriate for the source. Choose types to request specific formats.</p>
+          <p id="item-count-help" class="help">This is the total output, not the number generated for each selected type.</p>
+          <p id="item-type-help" class="help">Auto mix favors different interaction types appropriate for the source. When choosing types, the total must be at least the number of selected types so each requested type is created once before any type repeats.</p>
           {% if hint_generation_enabled %}
             <label class="check">
               <input type="checkbox" name="include_hint_ladder" value="true" checked>

@@ -16,7 +16,14 @@ from bs4 import BeautifulSoup
 from pydantic import SecretStr
 
 from .config import Settings
-from .schemas import NormalizedPage, Paragraph, SourceInfo, SourceType, TocNode
+from .schemas import (
+    NormalizedPage,
+    Paragraph,
+    SourceInfo,
+    SourceLicenseMetadata,
+    SourceType,
+    TocNode,
+)
 from .source_policy import (
     PublicSourceLocation,
     PublicSourceValidationError,
@@ -79,6 +86,14 @@ _BLOCK_TAGS = (
     "tr",
     "ul",
 )
+_LICENSE_LABELS = {
+    "publicdomain": "Public domain",
+    "ccby": "CC BY",
+    "ccbync": "CC BY-NC",
+    "ccbyncsa": "CC BY-NC-SA",
+    "ccbysa": "CC BY-SA",
+    "arr": "All rights reserved",
+}
 
 
 class ContentAdapterError(RuntimeError):
@@ -270,6 +285,70 @@ def _child_flag(value: Any) -> bool | None:
         if normalized in {"false", "no", "0"}:
             return False
     return None
+
+
+def _source_license_from_tags(
+    document: Mapping[str, Any], *, evidence_url: str
+) -> SourceLicenseMetadata | None:
+    """Return a verified license only when page tags are unambiguous and supported."""
+
+    raw_entries = document.get("tag", [])
+    if isinstance(raw_entries, Mapping):
+        entries = [raw_entries]
+    elif isinstance(raw_entries, list):
+        entries = [entry for entry in raw_entries if isinstance(entry, Mapping)]
+    else:
+        return None
+
+    values: set[str] = set()
+    for entry in entries:
+        value = _string_value(entry.get("@value")) or _string_value(
+            entry.get("title")
+        )
+        if value:
+            values.add(value.strip().casefold())
+
+    license_codes = {
+        value.removeprefix("license:")
+        for value in values
+        if value.startswith("license:")
+    }
+    versions = {
+        value.removeprefix("licenseversion:")
+        for value in values
+        if value.startswith("licenseversion:")
+    }
+    if len(license_codes) != 1 or len(versions) > 1:
+        return None
+
+    code = next(iter(license_codes))
+    base_label = _LICENSE_LABELS.get(code)
+    if base_label is None:
+        return None
+
+    version: str | None = None
+    if versions:
+        raw_version = next(iter(versions)).strip()
+        if re.fullmatch(r"\d{2}", raw_version):
+            version = f"{raw_version[0]}.{raw_version[1]}"
+        elif re.fullmatch(r"\d+(?:\.\d+)+", raw_version):
+            version = raw_version
+        else:
+            return None
+    if code.startswith("cc") and version is None:
+        return None
+
+    label = (
+        f"{base_label} {version}"
+        if version is not None and code.startswith("cc")
+        else base_label
+    )
+    return SourceLicenseMetadata(
+        code=code,
+        version=version,
+        label=label,
+        evidence_url=evidence_url,
+    )
 
 
 def _normalize_html(html_body: str) -> tuple[str, list[Paragraph]]:
@@ -651,6 +730,12 @@ class PublicLibreTextsContentAdapter:
 
         info = await self._put_json("info", source)
         contents = await self._put_json("contents", source, mode="view")
+        try:
+            tags = await self._put_json("tags", source)
+        except ContentAdapterError:
+            # License metadata enhances the publication boundary but must not make
+            # otherwise readable source content impossible to generate from.
+            tags = {}
 
         body = contents.get("body")
         if isinstance(body, str):
@@ -705,7 +790,24 @@ class PublicLibreTextsContentAdapter:
                 canonical_url=canonical_url,
                 path=source.identity,
                 page_id=_page_identifier(info.get("@id")),
+                license=_source_license_from_tags(
+                    tags,
+                    evidence_url=canonical_url,
+                ),
             ),
+        )
+
+    async def fetch_license(self, source_url: str) -> SourceLicenseMetadata | None:
+        """Read only page tags so existing source snapshots can be backfilled."""
+
+        try:
+            source = parse_public_source_url(source_url)
+        except PublicSourceValidationError as exc:
+            raise UnsafePublicSourceError(str(exc)) from exc
+        tags = await self._put_json("tags", source)
+        return _source_license_from_tags(
+            tags,
+            evidence_url=source.canonical_url,
         )
 
 

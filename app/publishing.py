@@ -770,7 +770,10 @@ class PublicationService:
         selected: LicenseSelection | None,
         manually_confirmed: bool,
     ) -> LicenseSelection:
-        mapped: SourceLicense | None = source_license(draft.source.canonical_url)
+        mapped: SourceLicense | None = source_license(
+            draft.source.canonical_url,
+            draft.source.license_metadata,
+        )
         if mapped is not None:
             if selected is not None and (
                 selected.code != mapped.code or selected.version != mapped.version

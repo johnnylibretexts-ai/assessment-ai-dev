@@ -15,6 +15,7 @@ from app.schemas import (
     Choice,
     Difficulty,
     GeneratedHintLadderDraft,
+    GenerateRequest,
     HintLadderDraft,
     HintRungDraft,
     HintRungType,
@@ -23,9 +24,40 @@ from app.schemas import (
     ParameterVariable,
     ParameterizedItemSpec,
     QuestionDraft,
+    SourceType,
 )
 from app.db import DraftRepository, DraftWrite, init_database
 from app.schemas import Concept, Critique, NormalizedPage, Paragraph, SourceInfo
+
+
+def test_selected_generation_count_is_total_across_requested_types() -> None:
+    with pytest.raises(ValidationError, match="total item count"):
+        GenerateRequest(
+            source_type=SourceType.PUBLIC,
+            source_locator="https://chem.libretexts.org/Bookshelves/Test/Page",
+            generation_mode="selected",
+            item_types=[
+                AssessmentItemType.MULTIPLE_CHOICE,
+                AssessmentItemType.TRUE_FALSE,
+                AssessmentItemType.NUMERICAL,
+                AssessmentItemType.MATCHING,
+            ],
+            item_count=1,
+        )
+
+    request = GenerateRequest(
+        source_type=SourceType.PUBLIC,
+        source_locator="https://chem.libretexts.org/Bookshelves/Test/Page",
+        generation_mode="selected",
+        item_types=[
+            AssessmentItemType.MULTIPLE_CHOICE,
+            AssessmentItemType.TRUE_FALSE,
+            AssessmentItemType.NUMERICAL,
+            AssessmentItemType.MATCHING,
+        ],
+        item_count=4,
+    )
+    assert request.item_count == len(request.item_types)
 
 
 def base_fields() -> dict[str, object]:

@@ -4,6 +4,13 @@
   const status = document.querySelector("#generation-status");
   const message = document.querySelector("#generation-status-message");
   const sourceInput = document.querySelector("#source_locator");
+  const generationMode = document.querySelector("#generation_mode");
+  const itemCount = document.querySelector("#item-count");
+  const itemTypes = Array.from(
+    document.querySelectorAll('input[name="item_types"]')
+  );
+  const itemTypeHelp = document.querySelector("#item-type-help");
+  const defaultItemTypeHelp = itemTypeHelp?.textContent || "";
 
   if (!form || !submit || !status || !message || !sourceInput) return;
 
@@ -13,11 +20,51 @@
   const messages = [
     "Reading the LibreTexts page",
     "Finding the clearest teachable concepts",
-    "Drafting a cited multiple-choice question",
+    "Drafting cited assessment items",
     "Checking the answer and distractors",
     "Revising the draft for human review",
   ];
   let messageTimer;
+
+  const selectedTypeCount = () =>
+    itemTypes.filter((checkbox) => checkbox.checked).length;
+
+  const validateSelectedTypes = ({ raiseTotal = false } = {}) => {
+    if (!generationMode || !itemCount || generationMode.value !== "selected") {
+      itemCount?.setCustomValidity("");
+      if (itemTypeHelp) itemTypeHelp.textContent = defaultItemTypeHelp;
+      return;
+    }
+    const selected = selectedTypeCount();
+    const total = Number.parseInt(itemCount.value, 10);
+    if (raiseTotal && selected > total && selected <= 8) {
+      itemCount.value = String(selected);
+    }
+    const resolvedTotal = Number.parseInt(itemCount.value, 10);
+    const invalid = selected > 0 && resolvedTotal < selected;
+    itemCount.setCustomValidity(
+      invalid
+        ? `Choose at least ${selected} total items to generate each selected type.`
+        : ""
+    );
+    if (itemTypeHelp && selected > 0) {
+      itemTypeHelp.textContent =
+        `${selected} type${selected === 1 ? "" : "s"} selected. ` +
+        `The ${itemCount.value} total item${itemCount.value === "1" ? "" : "s"} ` +
+        "will include each selected type once before any type repeats.";
+    } else if (itemTypeHelp) {
+      itemTypeHelp.textContent = defaultItemTypeHelp;
+    }
+  };
+
+  generationMode?.addEventListener("change", () => validateSelectedTypes());
+  itemCount?.addEventListener("input", () => validateSelectedTypes());
+  itemTypes.forEach((checkbox) => {
+    checkbox.addEventListener("change", () =>
+      validateSelectedTypes({ raiseTotal: true })
+    );
+  });
+  validateSelectedTypes();
 
   const reset = () => {
     window.clearInterval(messageTimer);

@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from app.config import Settings
+from app.content import PublicLibreTextsContentAdapter
 from app.db import DraftRepository, DraftWrite
 from app.main import create_app
 from app.schemas import (
@@ -17,6 +18,7 @@ from app.schemas import (
     QuestionDraft,
     ReviewStatus,
     SourceInfo,
+    SourceLicenseMetadata,
 )
 
 
@@ -346,6 +348,80 @@ def test_public_source_provenance_is_clickable_on_review_page(tmp_path: Path) ->
     assert ">Open original LibreTexts page</a>" in detail.text
     assert 'title="https://chem.libretexts.org/Bookshelves/Test/Page"' in detail.text
     assert "Paragraph 0" in detail.text
+
+
+def test_verified_page_license_is_stored_and_rendered_without_manual_fields(
+    tmp_path: Path,
+) -> None:
+    app = create_app(settings(tmp_path))
+    source_page = public_page()
+    source_page.source.license = SourceLicenseMetadata(
+        code="ccbyncsa",
+        version="4.0",
+        label="CC BY-NC-SA 4.0",
+        evidence_url=source_page.source.canonical_url,
+    )
+
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository, source_page)
+        approved = client.post(
+            f"/drafts/{draft_id}/review",
+            data={
+                "decision": "ready_to_publish",
+                "bloom_confirmed": "true",
+                "difficulty_confirmed": "true",
+            },
+            headers={
+                "Origin": "http://testserver",
+                "X-Reviewer": "reviewer@example.org",
+            },
+            follow_redirects=False,
+        )
+        assert approved.status_code == 303
+        detail = client.get(f"/drafts/{draft_id}")
+
+    stored = app.state.repository.require_draft(draft_id)
+    assert stored.source.license_metadata == source_page.source.license
+    assert "Source license: CC BY-NC-SA 4.0" in detail.text
+    assert "filled automatically" in detail.text
+    assert 'name="license_code"' not in detail.text
+    assert "outside the currently curated framework" in detail.text
+
+
+def test_existing_draft_license_is_backfilled_from_page_tags(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config = settings(tmp_path).model_copy(
+        update={"public_sources_enabled": True}
+    )
+    app = create_app(config)
+
+    async def fake_fetch_license(
+        _adapter: PublicLibreTextsContentAdapter,
+        source_url: str,
+    ) -> SourceLicenseMetadata:
+        return SourceLicenseMetadata(
+            code="ccbyncsa",
+            version="4.0",
+            label="CC BY-NC-SA 4.0",
+            evidence_url=source_url,
+        )
+
+    monkeypatch.setattr(
+        PublicLibreTextsContentAdapter,
+        "fetch_license",
+        fake_fetch_license,
+    )
+
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository, public_page())
+        detail = client.get(f"/drafts/{draft_id}")
+
+    stored = app.state.repository.require_draft(draft_id)
+    assert detail.status_code == 200
+    assert stored.source.license_metadata is not None
+    assert stored.source.license_metadata.label == "CC BY-NC-SA 4.0"
 
 
 def test_edit_and_independent_review_gates(tmp_path: Path) -> None:

@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from .adapt import AdaptClient, AdaptPublishingError
-from .catalog import chemistry_seed, source_license, suggested_topic
+from .catalog import SourceLicense, chemistry_seed, source_license, suggested_topic
 from .computation import AssessmentComputationBlueprint, ComputationProfile
 from .computation_client import (
     AssessmentComputationClient,
@@ -42,7 +42,11 @@ from .config import (
     Settings,
     get_settings,
 )
-from .content import ContentAdapterError, build_content_adapter
+from .content import (
+    ContentAdapterError,
+    PublicLibreTextsContentAdapter,
+    build_content_adapter,
+)
 from .db import (
     ComputationAttestationWrite,
     ComputationEvidenceError,
@@ -443,7 +447,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             }
             for chapter in seed["chapters"]
         ]
-        mapped_license = source_license(draft.source.canonical_url)
+        mapped_license = await _ensure_source_license(
+            request,
+            draft,
+            resolved_settings,
+        )
         suggestion = suggested_topic(draft.source.canonical_url)
         return templates.TemplateResponse(
             request,
@@ -936,7 +944,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> RedirectResponse:
         _require_same_origin(request, resolved_settings)
         reviewer = _reviewer(request)
-        _require_public_draft(request.app.state.repository, draft_id)
+        stored_draft = _require_public_draft(
+            request.app.state.repository,
+            draft_id,
+        )
+        await _ensure_source_license(request, stored_draft, resolved_settings)
         selected_license = None
         if license_code:
             selected_license = LicenseSelection(
@@ -1182,6 +1194,33 @@ def _require_public_draft(repository: DraftRepository, draft_id: int) -> Draft:
     if draft is None or draft.source.backend != "libretexts_public":
         raise HTTPException(status_code=404, detail="Draft not found")
     return draft
+
+
+async def _ensure_source_license(
+    request: Request,
+    draft: Draft,
+    settings: Settings,
+) -> SourceLicense | None:
+    mapped = source_license(
+        draft.source.canonical_url,
+        draft.source.license_metadata,
+    )
+    if mapped is not None or draft.source.backend != "libretexts_public":
+        return mapped
+
+    try:
+        async with PublicLibreTextsContentAdapter(settings) as content:
+            metadata = await content.fetch_license(draft.source.canonical_url)
+    except ContentAdapterError:
+        return None
+    if metadata is None:
+        return None
+
+    request.app.state.repository.update_source_license(
+        draft.source.id,
+        metadata,
+    )
+    return source_license(draft.source.canonical_url, metadata)
 
 
 def _reviewer(request: Request) -> str:
