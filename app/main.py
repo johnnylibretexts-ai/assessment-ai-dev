@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from .adapt import AdaptClient, AdaptPublishingError
-from .catalog import SourceLicense, chemistry_seed, source_license, suggested_topic
+from .catalog import SourceLicense, source_license
 from .computation import AssessmentComputationBlueprint, ComputationProfile
 from .computation_client import (
     AssessmentComputationClient,
@@ -57,6 +57,7 @@ from .db import (
     PublicationState,
     ReviewTransitionError,
     draft_content_sha256,
+    inspect_hint_grounding,
     init_database,
 )
 from .jobs import GenerationWorker, validate_computation_profile_settings
@@ -427,8 +428,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             {"job": payload},
         )
 
-    @app.get("/drafts/{draft_id}", response_class=HTMLResponse)
-    async def draft_detail(request: Request, draft_id: int) -> HTMLResponse:
+    async def render_draft_page(
+        request: Request,
+        draft_id: int,
+        *,
+        error: str | None = None,
+        active_form: str | None = None,
+        form_values: dict[str, Any] | None = None,
+        form_errors: dict[str, str] | None = None,
+        status_code: int = status.HTTP_200_OK,
+    ) -> HTMLResponse:
         repository: DraftRepository = request.app.state.repository
         draft = _require_public_draft(repository, draft_id)
         computation = None
@@ -460,35 +469,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 computation,
                 record.engine_evidence_json if record is not None else {},
             )
-        seed = chemistry_seed()
-        topics_by_chapter = [
-            {
-                "title": chapter["title"],
-                "topics": chapter["topics"],
-            }
-            for chapter in seed["chapters"]
-        ]
         mapped_license = await _ensure_source_license(
             request,
             draft,
             resolved_settings,
         )
-        suggestion = suggested_topic(draft.source.canonical_url)
+        publication_readiness = request.app.state.publisher.readiness(
+            draft.id,
+            license_resolved=mapped_license is not None,
+        ).model_dump()
+        publication_can_submit = publication_readiness["alignment"] is not None and all(
+            blocker["code"] == "license_unresolved"
+            for blocker in publication_readiness["blockers"]
+        )
         return templates.TemplateResponse(
             request,
             "draft.html",
             {
                 "draft": _draft_detail(draft, computation=computation),
                 "notice": request.query_params.get("notice"),
-                "error": request.query_params.get("error"),
+                "error": error or request.query_params.get("error"),
+                "active_form": active_form,
+                "form_values": form_values or {},
+                "form_errors": form_errors or {},
                 "bloom_options": [item.value for item in BloomLevel],
                 "difficulty_options": [item.value for item in Difficulty],
                 "adapt_publishing_status": resolved_settings.adapt_publishing_status,
                 "adapt_folder_name": resolved_settings.adapt_folder_name,
                 "adapt_public": resolved_settings.adapt_public,
                 "mapped_license": mapped_license,
-                "topic_groups": topics_by_chapter,
-                "suggested_topic_id": suggestion.stable_id if suggestion else None,
+                "publication_readiness": publication_readiness,
+                "publication_can_submit": publication_can_submit,
                 "manual_license_options": [
                     ("publicdomain", "Public domain"),
                     ("ccby", "CC BY"),
@@ -498,7 +509,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     ("arr", "All rights reserved"),
                 ],
             },
+            status_code=status_code,
         )
+
+    @app.get("/drafts/{draft_id}", response_class=HTMLResponse)
+    async def draft_detail(request: Request, draft_id: int) -> HTMLResponse:
+        return await render_draft_page(request, draft_id)
 
     @app.post("/drafts/{draft_id}/edit")
     async def edit_draft(
@@ -621,26 +637,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         difficulty_confirmed: bool = Form(False),
         specialist_confirmed: bool = Form(False),
         reviewer_notes: str = Form(""),
-    ) -> RedirectResponse:
+    ):
         _require_same_origin(request, resolved_settings)
         stored_draft = _require_public_draft(request.app.state.repository, draft_id)
+        review_values = {
+            "bloom_confirmed": bloom_confirmed,
+            "difficulty_confirmed": difficulty_confirmed,
+            "specialist_confirmed": specialist_confirmed,
+            "reviewer_notes": reviewer_notes,
+        }
         if decision == ReviewStatus.READY_TO_PUBLISH.value and (
             not bloom_confirmed or not difficulty_confirmed
         ):
-            return _redirect_with_message(
-                f"/drafts/{draft_id}",
-                "error",
-                REVIEW_CONFIRMATION_ERROR,
+            return await render_draft_page(
+                request,
+                draft_id,
+                error=REVIEW_CONFIRMATION_ERROR,
+                active_form="question_review",
+                form_values=review_values,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             )
         if (
             decision == ReviewStatus.READY_TO_PUBLISH.value
             and stored_draft.current.specialist_review_required
             and not specialist_confirmed
         ):
-            return _redirect_with_message(
-                f"/drafts/{draft_id}",
-                "error",
-                "A qualified specialist must confirm this item before approval.",
+            return await render_draft_page(
+                request,
+                draft_id,
+                error="A qualified specialist must confirm this item before approval.",
+                active_form="question_review",
+                form_values=review_values,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             )
         computation_binding = None
         if decision == ReviewStatus.READY_TO_PUBLISH.value:
@@ -656,10 +684,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         resolved_settings
                     )
             except ComputationPolicyError as exc:
-                return _redirect_with_message(
-                    f"/drafts/{draft_id}",
-                    "error",
-                    str(exc),
+                return await render_draft_page(
+                    request,
+                    draft_id,
+                    error=str(exc),
+                    active_form="question_review",
+                    form_values=review_values,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 )
         try:
             review_decision = ReviewDecision(
@@ -675,17 +706,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 computation_binding=computation_binding,
             )
         except ValidationError:
-            return _redirect_with_message(
-                f"/drafts/{draft_id}",
-                "error",
-                REVIEW_VALIDATION_ERROR,
+            return await render_draft_page(
+                request,
+                draft_id,
+                error=REVIEW_VALIDATION_ERROR,
+                active_form="question_review",
+                form_values=review_values,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             )
         except (
             DraftNotFoundError,
             ReviewTransitionError,
             ValueError,
         ) as exc:
-            return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))
+            return await render_draft_page(
+                request,
+                draft_id,
+                error=str(exc),
+                active_form="question_review",
+                form_values=review_values,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            )
         label = (
             "Draft+approved%3B+not+yet+published"
             if decision == "ready_to_publish"
@@ -879,9 +920,39 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         specific_text: str = Form(...),
         specific_citations: str = Form(...),
         reviewer_notes: str = Form(""),
-    ) -> RedirectResponse:
+    ):
         _require_same_origin(request, resolved_settings)
         draft = _require_public_draft(request.app.state.repository, draft_id)
+        hint_values = {
+            "conceptual_text": conceptual_text,
+            "conceptual_citations": conceptual_citations,
+            "strategic_text": strategic_text,
+            "strategic_citations": strategic_citations,
+            "specific_text": specific_text,
+            "specific_citations": specific_citations,
+            "reviewer_notes": reviewer_notes,
+        }
+        citation_values: dict[str, list[int]] = {}
+        citation_errors: dict[str, str] = {}
+        for rung, raw_value in (
+            ("conceptual", conceptual_citations),
+            ("strategic", strategic_citations),
+            ("specific", specific_citations),
+        ):
+            try:
+                citation_values[rung] = _parse_citations(raw_value)
+            except ValueError as exc:
+                citation_errors[rung] = str(exc)
+        if citation_errors:
+            return await render_draft_page(
+                request,
+                draft_id,
+                error="Hint edits were not saved. Correct the cited paragraphs below.",
+                active_form="hint_edit",
+                form_values=hint_values,
+                form_errors=citation_errors,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            )
         try:
             ladder = HintLadderDraft(
                 concept_label=draft.current.concept_label,
@@ -889,20 +960,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     HintRungDraft(
                         rung=HintRungType.CONCEPTUAL,
                         text=conceptual_text,
-                        citation_paragraphs=_parse_citations(conceptual_citations),
+                        citation_paragraphs=citation_values["conceptual"],
                     ),
                     HintRungDraft(
                         rung=HintRungType.STRATEGIC,
                         text=strategic_text,
-                        citation_paragraphs=_parse_citations(strategic_citations),
+                        citation_paragraphs=citation_values["strategic"],
                     ),
                     HintRungDraft(
                         rung=HintRungType.SPECIFIC,
                         text=specific_text,
-                        citation_paragraphs=_parse_citations(specific_citations),
+                        citation_paragraphs=citation_values["specific"],
                     ),
                 ],
             )
+            grounding = inspect_hint_grounding(draft.current, ladder)
+            if grounding:
+                return await render_draft_page(
+                    request,
+                    draft_id,
+                    error="Hint edits were not saved. Use only the question source paragraphs shown on this page.",
+                    active_form="hint_edit",
+                    form_values=hint_values,
+                    form_errors={
+                        issue.rung or "general": issue.message for issue in grounding
+                    },
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                )
             request.app.state.repository.save_hint_ladder(
                 draft_id,
                 ladder,
@@ -910,7 +994,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 notes=reviewer_notes,
             )
         except (ValidationError, ValueError) as exc:
-            return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))
+            return await render_draft_page(
+                request,
+                draft_id,
+                error=str(exc),
+                active_form="hint_edit",
+                form_values=hint_values,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            )
         return _redirect_with_message(
             f"/drafts/{draft_id}",
             "notice",
@@ -925,9 +1016,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         strategic_confirmed: bool = Form(False),
         specific_confirmed: bool = Form(False),
         reviewer_notes: str = Form(""),
-    ) -> RedirectResponse:
+    ):
         _require_same_origin(request, resolved_settings)
         _require_public_draft(request.app.state.repository, draft_id)
+        review_values = {
+            "conceptual_confirmed": conceptual_confirmed,
+            "strategic_confirmed": strategic_confirmed,
+            "specific_confirmed": specific_confirmed,
+            "reviewer_notes": reviewer_notes,
+        }
         confirmed = [
             rung
             for rung, value in (
@@ -946,7 +1043,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 notes=reviewer_notes,
             )
         except (DraftNotFoundError, ReviewTransitionError, ValueError) as exc:
-            return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))
+            return await render_draft_page(
+                request,
+                draft_id,
+                error=str(exc),
+                active_form="hint_review",
+                form_values=review_values,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            )
         return _redirect_with_message(
             f"/drafts/{draft_id}", "notice", "Hint ladder approved"
         )
@@ -962,7 +1066,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         license_label: str | None = Form(None),
         license_evidence_url: str | None = Form(None),
         license_confirmed: bool = Form(False),
-    ) -> RedirectResponse:
+    ):
         _require_same_origin(request, resolved_settings)
         reviewer = _reviewer(request)
         stored_draft = _require_public_draft(
@@ -978,6 +1082,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 label=(license_label or "").strip(),
                 evidence_url=(license_evidence_url or "").strip(),
             )
+        publish_values = {
+            "topic_stable_id": topic_stable_id,
+            "alignment_confirmed": alignment_confirmed,
+            "license_code": license_code or "",
+            "license_version": license_version or "",
+            "license_label": license_label or "",
+            "license_evidence_url": license_evidence_url or "",
+            "license_confirmed": license_confirmed,
+        }
         try:
             publication = await request.app.state.publisher.publish(
                 draft_id,
@@ -988,16 +1101,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 license_confirmed=license_confirmed,
             )
         except (PublicationValidationError, AdaptPublishingError, ValueError) as exc:
-            return _redirect_with_message(f"/drafts/{draft_id}", "error", str(exc))
+            return await render_draft_page(
+                request,
+                draft_id,
+                error=str(exc),
+                active_form="publish",
+                form_values=publish_values,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            )
         if publication.state == PublicationState.SUCCEEDED.value:
             return _redirect_with_message(
                 f"/drafts/{draft_id}", "notice", "Published to ADAPT"
             )
-        return _redirect_with_message(
-            f"/drafts/{draft_id}",
-            "error",
-            publication.error_message
+        return await render_draft_page(
+            request,
+            draft_id,
+            error=publication.error_message
             or "Publishing did not complete. Review the publication status below.",
+            active_form="publish",
+            form_values=publish_values,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
 
     @app.get("/drafts/{draft_id}/publications/{publication_id}/qti")
@@ -1081,6 +1204,12 @@ def _draft_detail(
     publications = sorted(draft.publications, key=lambda item: item.id, reverse=True)
     hint_record = draft.current_hint_ladder
     hint_ladder = hint_record.ladder if hint_record is not None else None
+    hint_grounding = (
+        inspect_hint_grounding(current, hint_ladder) if hint_ladder is not None else ()
+    )
+    hint_grounding_by_rung = {
+        issue.rung: issue.message for issue in hint_grounding if issue.rung
+    }
     engine_validation = draft.current_engine_validation
     return {
         "id": draft.id,
@@ -1122,6 +1251,8 @@ def _draft_detail(
         "bloom_confirmed": draft.bloom_confirmed,
         "difficulty_confirmed": draft.difficulty_confirmed,
         "reviewer_notes": draft.reviewer_notes,
+        "last_reviewed_by": draft.last_reviewed_by,
+        "last_reviewed_at": draft.last_reviewed_at,
         "edit_count": draft.edit_count,
         "specialist_review_required": current.specialist_review_required,
         "computation": computation,
@@ -1154,6 +1285,13 @@ def _draft_detail(
             "status": hint_record.status,
             "confirmations": hint_record.confirmations_json,
             "reviewer_notes": hint_record.reviewer_notes,
+            "reviewed_by": hint_record.reviewed_by,
+            "reviewed_at": hint_record.reviewed_at,
+            "needs_repair": bool(hint_grounding)
+            or any(rung.answer_leak_detected for rung in hint_ladder.rungs),
+            "allowed_citations_text": ", ".join(
+                str(item) for item in current.citation_paragraphs
+            ),
             "rungs": [
                 {
                     "rung": rung.rung.value,
@@ -1164,6 +1302,7 @@ def _draft_detail(
                         str(item) for item in rung.citation_paragraphs
                     ),
                     "answer_leak_detected": rung.answer_leak_detected,
+                    "grounding_error": hint_grounding_by_rung.get(rung.rung.value),
                 }
                 for rung in hint_ladder.rungs
             ],

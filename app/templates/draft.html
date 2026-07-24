@@ -1,6 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Draft {{ draft.id }}{% endblock %}
 {% block content %}
+  {% set publication_readiness = publication_readiness|default({'ready': false, 'alignment': none, 'blockers': []}, true) %}
+  {% set publication_can_submit = publication_can_submit|default(false, true) %}
+  {% set adapt_folder_name = adapt_folder_name|default('Not configured', true) %}
+  {% set adapt_public = adapt_public|default(false, true) %}
+  {% set adapt_publishing_status = adapt_publishing_status|default('disabled', true) %}
+  {% set mapped_license = mapped_license|default(none, true) %}
+  {% set manual_license_options = manual_license_options|default([], true) %}
+  {% set active_form = active_form|default(none, true) %}
+  {% set form_values = form_values|default({}, true) %}
+  {% set form_errors = form_errors|default({}, true) %}
   <nav class="back"><a href="/">← Back to queue</a></nav>
   {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
   {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
@@ -30,6 +40,32 @@
         <span><span class="status status-{{ draft.status }}">{{ draft.status_label }}</span> <span class="status">{{ draft.item_type_label }}</span> <span class="status">{{ draft.context_type.replace('_', ' ') }} context</span></span>
         <span class="muted">{{ draft.model_id }} · {{ draft.prompt_version }}</span>
       </div>
+      <section class="workflow-readiness" aria-labelledby="workflow-readiness-heading">
+        <h2 id="workflow-readiness-heading">Review and publishing status</h2>
+        <ol>
+          <li>
+            <strong>Question review</strong>
+            <span>{% if draft.status == 'ready_to_publish' %}Approved{% else %}Pending{% endif %}</span>
+          </li>
+          <li>
+            <strong>Hint review</strong>
+            <span>
+              {% if not draft.hint_ladder %}Missing
+              {% elif draft.hint_ladder.needs_repair %}Needs repair
+              {% elif draft.hint_ladder.status == 'approved' %}Approved
+              {% else %}Ready for review{% endif %}
+            </span>
+          </li>
+          <li>
+            <strong>Framework alignment</strong>
+            <span>{% if publication_readiness.alignment %}Exact topic mapped{% else %}Blocked{% endif %}</span>
+          </li>
+          <li>
+            <strong>Publication</strong>
+            <span>{% if publication_readiness.ready %}Ready{% else %}Blocked ({{ publication_readiness.blockers|length }}){% endif %}</span>
+          </li>
+        </ol>
+      </section>
       <p class="eyebrow">Revised AI draft</p>
       {% if draft.stimulus %}<div class="stimulus"><strong>Stimulus</strong><p class="math-content">{{ draft.display.stimulus }}</p></div>{% endif %}
       <h2 class="math-content">{{ draft.display.stem }}</h2>
@@ -542,116 +578,183 @@
         <section class="hint-review" aria-labelledby="hint-review-heading">
           <p class="eyebrow">Graduated hints</p>
           <h3 id="hint-review-heading">Three-rung hint ladder</h3>
-          <form method="post" action="/drafts/{{ draft.id }}/hints/edit">
+          <p class="help">
+            Save edits first. Saving creates a new hint version and resets hint
+            confirmations. Then verify and approve that saved version once.
+            Allowed source paragraphs for every hint:
+            <strong>{{ draft.hint_ladder.allowed_citations_text }}</strong>.
+          </p>
+          {% if draft.hint_ladder.status == 'approved' %}
+            <details class="edit-box">
+              <summary>Edit approved hints</summary>
+          {% endif %}
+          <form method="post" action="/drafts/{{ draft.id }}/hints/edit"
+                data-hint-edit-form>
             {% for rung in draft.hint_ladder.rungs %}
               <fieldset class="hint-rung">
                 <legend>{{ rung.rung|capitalize }} hint</legend>
                 <label for="hint-{{ rung.rung }}-text">Hint text</label>
-                <textarea id="hint-{{ rung.rung }}-text" class="math-raw" name="{{ rung.rung }}_text" rows="3" required>{{ rung.text }}</textarea>
+                <textarea id="hint-{{ rung.rung }}-text" class="math-raw" name="{{ rung.rung }}_text" rows="3" required>{% if active_form == 'hint_edit' %}{{ form_values.get(rung.rung ~ '_text', rung.text) }}{% else %}{{ rung.text }}{% endif %}</textarea>
                 <div class="math-preview math-content" data-math-preview-for="hint-{{ rung.rung }}-text" aria-label="Rendered {{ rung.rung }} hint preview">{{ rung.display_text }}</div>
-                <label>Cited paragraphs<input name="{{ rung.rung }}_citations" value="{{ rung.citations_text }}" required></label>
+                <label for="hint-{{ rung.rung }}-citations">Cited paragraphs</label>
+                <input id="hint-{{ rung.rung }}-citations"
+                       name="{{ rung.rung }}_citations"
+                       value="{% if active_form == 'hint_edit' %}{{ form_values.get(rung.rung ~ '_citations', rung.citations_text) }}{% else %}{{ rung.citations_text }}{% endif %}"
+                       aria-describedby="hint-{{ rung.rung }}-source"
+                       {% if form_errors.get(rung.rung) or rung.grounding_error %}aria-invalid="true" aria-errormessage="hint-{{ rung.rung }}-error"{% endif %}
+                       required>
+                <p id="hint-{{ rung.rung }}-source" class="help">
+                  Use one or more of: {{ draft.hint_ladder.allowed_citations_text }}.
+                </p>
+                {% if form_errors.get(rung.rung) %}
+                  <p id="hint-{{ rung.rung }}-error" class="error-text" role="alert">{{ form_errors.get(rung.rung) }}</p>
+                {% elif rung.grounding_error %}
+                  <p id="hint-{{ rung.rung }}-error" class="error-text" role="alert">{{ rung.grounding_error }}</p>
+                {% endif %}
                 {% if rung.answer_leak_detected %}<p class="error-text">The generator flagged possible answer leakage. Edit this rung before approval.</p>{% endif %}
               </fieldset>
             {% endfor %}
-            <label>Edit note<textarea name="reviewer_notes" rows="2"></textarea></label>
+            <label>Edit note<textarea name="reviewer_notes" rows="2">{% if active_form == 'hint_edit' %}{{ form_values.get('reviewer_notes', '') }}{% endif %}</textarea></label>
             <button type="submit">Save hint edits</button>
+            <p class="help" data-hint-dirty-message hidden>
+              Save these changes before approval.
+            </p>
           </form>
-          <form method="post" action="/drafts/{{ draft.id }}/hints/review" class="review-form">
-            {% for rung in draft.hint_ladder.rungs %}
-              <label class="check"><input type="checkbox" name="{{ rung.rung }}_confirmed" value="true" {% if draft.hint_ladder.confirmations.get(rung.rung) %}checked{% endif %}><span>I verified the {{ rung.rung }} hint, its citation, and that it does not reveal the answer.</span></label>
-            {% endfor %}
-            <label>Hint review notes<textarea name="reviewer_notes" rows="2">{{ draft.hint_ladder.reviewer_notes }}</textarea></label>
-            <button type="submit">Approve all three hints</button>
-            <p class="help">Hint approval is separate from question approval. Progressive student enforcement remains disabled.</p>
-          </form>
+          {% if draft.hint_ladder.status == 'approved' %}
+            </details>
+          {% endif %}
+          {% if draft.hint_ladder.status == 'approved' %}
+            <div class="approval-summary" role="status">
+              <strong>All three hints approved</strong>
+              {% if draft.hint_ladder.reviewed_by %}
+                <p>Approved by {{ draft.hint_ladder.reviewed_by }}{% if draft.hint_ladder.reviewed_at %} on {{ draft.hint_ladder.reviewed_at }}{% endif %}.</p>
+              {% endif %}
+              <p class="help">Editing any hint creates a new version that must be approved again.</p>
+            </div>
+          {% elif draft.hint_ladder.needs_repair %}
+            <div class="notice error" role="status">
+              Hint approval is unavailable until every citation uses the allowed
+              question-source paragraphs and all answer-leak flags are resolved.
+            </div>
+          {% else %}
+            <form method="post" action="/drafts/{{ draft.id }}/hints/review"
+                  class="review-form" data-hint-review-form>
+              {% for rung in draft.hint_ladder.rungs %}
+                <label class="check"><input type="checkbox" name="{{ rung.rung }}_confirmed" value="true" {% if active_form == 'hint_review' %}{% if form_values.get(rung.rung ~ '_confirmed') %}checked{% endif %}{% elif draft.hint_ladder.confirmations.get(rung.rung) %}checked{% endif %}><span>I verified the {{ rung.rung }} hint, its citation, and that it does not reveal the answer.</span></label>
+              {% endfor %}
+              <label>Hint review notes<textarea name="reviewer_notes" rows="2">{% if active_form == 'hint_review' %}{{ form_values.get('reviewer_notes', '') }}{% else %}{{ draft.hint_ladder.reviewer_notes }}{% endif %}</textarea></label>
+              <button type="submit" data-hint-approve disabled>Approve saved hint version</button>
+              <p class="help">All three checks are required. Hint approval is separate from question approval.</p>
+            </form>
+          {% endif %}
         </section>
       {% endif %}
 
-      <form method="post" action="/drafts/{{ draft.id }}/review" class="review-form">
-        <fieldset>
-          <legend>Required human checks</legend>
-          <label class="check">
-            <input type="checkbox" name="bloom_confirmed" value="true" {% if draft.bloom_confirmed %}checked{% endif %}>
-            <span><strong>Bloom level:</strong> {{ draft.bloom }} is accurate for the work the learner must do.</span>
-          </label>
-          {% if draft.specialist_review_required %}
-            <label class="check">
-              <input type="checkbox" name="specialist_confirmed" value="true">
-              <span><strong>Specialist review:</strong> I am qualified to verify this clinical or parameterized item and its scoring behavior.</span>
-            </label>
-          {% endif %}
-          <label class="check">
-            <input type="checkbox" name="difficulty_confirmed" value="true" {% if draft.difficulty_confirmed %}checked{% endif %}>
-            <span><strong>Difficulty:</strong> {{ draft.difficulty }} is accurate for the intended learner.</span>
-          </label>
-        </fieldset>
-        <label for="reviewer_notes">Reviewer notes</label>
-        <textarea id="reviewer_notes" name="reviewer_notes" rows="4">{{ draft.reviewer_notes }}</textarea>
-        <div class="button-row">
-          <button type="submit" name="decision" value="ready_to_publish">Approve draft</button>
-          <button class="secondary" type="submit" name="decision" value="rejected">Reject draft</button>
-        </div>
-        <p class="help">Approval records the human review decision. Publishing to ADAPT is a separate action below.</p>
-      </form>
-
       {% if draft.status == 'ready_to_publish' %}
-        <section class="publication-panel" aria-labelledby="publish-heading">
-          <p class="eyebrow">Publication</p>
-          <h3 id="publish-heading">Publish this approved revision</h3>
-          <dl class="publication-facts">
-            <div><dt>Destination</dt><dd>ADAPT shared question bank</dd></div>
-            <div><dt>Folder</dt><dd>{{ adapt_folder_name }}</dd></div>
-            <div><dt>Visibility</dt><dd>{% if adapt_public %}Public in ADAPT{% else %}Private{% endif %}</dd></div>
-          </dl>
+        <section class="approval-summary" aria-labelledby="question-approval-heading">
+          <h3 id="question-approval-heading">Question approved</h3>
+          {% if draft.last_reviewed_by %}
+            <p>Approved by {{ draft.last_reviewed_by }}{% if draft.last_reviewed_at %} on {{ draft.last_reviewed_at }}{% endif %}.</p>
+          {% endif %}
+          <p class="help">This approval applies to revision {{ draft.edit_count }}. Editing the question resets it.</p>
+        </section>
+      {% else %}
+        <form method="post" action="/drafts/{{ draft.id }}/review" class="review-form" data-question-review-form>
+          <fieldset>
+            <legend>Required human checks</legend>
+            <label class="check">
+              <input type="checkbox" name="bloom_confirmed" value="true" {% if active_form == 'question_review' %}{% if form_values.get('bloom_confirmed') %}checked{% endif %}{% elif draft.bloom_confirmed %}checked{% endif %}>
+              <span><strong>Bloom level:</strong> {{ draft.bloom }} is accurate for the work the learner must do.</span>
+            </label>
+            {% if draft.specialist_review_required %}
+              <label class="check">
+                <input type="checkbox" name="specialist_confirmed" value="true" {% if active_form == 'question_review' and form_values.get('specialist_confirmed') %}checked{% endif %}>
+                <span><strong>Specialist review:</strong> I am qualified to verify this clinical or parameterized item and its scoring behavior.</span>
+              </label>
+            {% endif %}
+            <label class="check">
+              <input type="checkbox" name="difficulty_confirmed" value="true" {% if active_form == 'question_review' %}{% if form_values.get('difficulty_confirmed') %}checked{% endif %}{% elif draft.difficulty_confirmed %}checked{% endif %}>
+              <span><strong>Difficulty:</strong> {{ draft.difficulty }} is accurate for the intended learner.</span>
+            </label>
+          </fieldset>
+          <label for="reviewer_notes">Reviewer notes</label>
+          <textarea id="reviewer_notes" name="reviewer_notes" rows="4">{% if active_form == 'question_review' %}{{ form_values.get('reviewer_notes', '') }}{% else %}{{ draft.reviewer_notes }}{% endif %}</textarea>
+          <div class="button-row">
+            <button type="submit" name="decision" value="ready_to_publish">Approve question revision</button>
+            <button class="secondary" type="submit" name="decision" value="rejected">Reject question revision</button>
+          </div>
+          <p class="help">Question approval is saved independently from hint approval. Publishing is the final, separate action.</p>
+        </form>
+      {% endif %}
+
+      <section class="publication-panel" aria-labelledby="publish-heading">
+        <p class="eyebrow">Publication</p>
+        <h3 id="publish-heading">Publication readiness</h3>
+        {% if publication_readiness.ready %}
+          <p class="notice">All required review evidence is saved. Publishing remains a separate action.</p>
+        {% else %}
+          <ul class="readiness-list" aria-label="Publication blockers">
+            {% for blocker in publication_readiness.blockers %}
+              <li><strong>Not ready:</strong> {{ blocker.message }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+        <dl class="publication-facts">
+          <div><dt>Destination</dt><dd>ADAPT shared question bank</dd></div>
+          <div><dt>Folder</dt><dd>{{ adapt_folder_name }}</dd></div>
+          <div><dt>Visibility</dt><dd>{% if adapt_public %}Public in ADAPT{% else %}Private{% endif %}</dd></div>
+        </dl>
+        {% if mapped_license %}
+          <div class="license-evidence">
+            <strong>Source license: {{ mapped_license.label }}</strong>
+            <p>This verified LibreTexts page metadata is filled automatically, enforced during publishing, and cannot be overridden.</p>
+            <a href="{{ mapped_license.evidence_url }}" target="_blank" rel="noopener noreferrer">Open license evidence</a>
+          </div>
+        {% endif %}
+        {% if publication_readiness.alignment %}
+          <div class="alignment-evidence">
+            <strong>Exact curated alignment</strong>
+            <p>{{ publication_readiness.alignment.framework_title }} · {{ publication_readiness.alignment.chapter_title }} · {{ publication_readiness.alignment.topic_title }}</p>
+            <p class="help">The source URL determines this topic. A merely similar topic cannot be selected.</p>
+          </div>
+        {% else %}
+          <div class="notice error">
+            This exact source is outside the currently curated framework catalog.
+            Publishing is unavailable; no substitute topic can be selected.
+          </div>
+        {% endif %}
+        {% if publication_readiness.alignment %}
           <form method="post" action="/drafts/{{ draft.id }}/publish">
-            {% if mapped_license %}
-              <div class="license-evidence">
-                <strong>Source license: {{ mapped_license.label }}</strong>
-                <p>This verified LibreTexts page metadata is filled automatically, enforced during publishing, and cannot be overridden.</p>
-                <a href="{{ mapped_license.evidence_url }}" target="_blank" rel="noopener noreferrer">Open license evidence</a>
-              </div>
-            {% else %}
+            <input type="hidden" name="topic_stable_id"
+                   value="{{ publication_readiness.alignment.topic_stable_id }}">
+            {% if not mapped_license %}
               <fieldset>
                 <legend>Source license</legend>
                 <p class="help">This page does not expose a supported license tag. Check the license shown on the source page before confirming this fallback.</p>
                 <label for="license-code">License</label>
                   <select id="license-code" name="license_code" required>
                     <option value="">Choose a license</option>
-                    {% for code, label in manual_license_options %}<option value="{{ code }}" data-license-label="{{ label }}">{{ label }}</option>{% endfor %}
+                    {% for code, label in manual_license_options %}<option value="{{ code }}" data-license-label="{{ label }}" {% if active_form == 'publish' and form_values.get('license_code') == code %}selected{% endif %}>{{ label }}</option>{% endfor %}
                   </select>
                 <label for="license-version">License version</label>
-                  <input id="license-version" name="license_version" placeholder="For example, 4.0">
+                  <input id="license-version" name="license_version" value="{% if active_form == 'publish' %}{{ form_values.get('license_version', '') }}{% endif %}" placeholder="For example, 4.0">
                 <label for="license-label">Display label</label>
-                  <input id="license-label" name="license_label" placeholder="For example, CC BY 4.0" required>
+                  <input id="license-label" name="license_label" value="{% if active_form == 'publish' %}{{ form_values.get('license_label', '') }}{% endif %}" placeholder="For example, CC BY 4.0" required>
                 <label for="license-evidence-url">Evidence URL</label>
                   <input id="license-evidence-url" name="license_evidence_url" type="url"
-                         value="{{ draft.source_url }}" required>
+                         value="{% if active_form == 'publish' %}{{ form_values.get('license_evidence_url', draft.source_url) }}{% else %}{{ draft.source_url }}{% endif %}" required>
                 <p class="help">The source page URL is filled in because its license footer is the publication evidence.</p>
                 <label class="check">
-                  <input type="checkbox" name="license_confirmed" value="true" required>
+                  <input type="checkbox" name="license_confirmed" value="true" {% if active_form == 'publish' and form_values.get('license_confirmed') %}checked{% endif %} required>
                   <span>I verified this license against the source.</span>
                 </label>
               </fieldset>
             {% endif %}
-            <label for="topic_stable_id">Curated Fundamentals of GOB Chemistry framework topic</label>
-            {% if not suggested_topic_id %}
-              <p class="notice error">This source is outside the currently curated framework. Do not choose a merely similar topic; publish only if one of the topics below genuinely matches the question.</p>
-            {% endif %}
-            <select id="topic_stable_id" name="topic_stable_id" required>
-              <option value="">Choose a topic</option>
-              {% for group in topic_groups %}
-                <optgroup label="{{ group.title }}">
-                  {% for topic in group.topics %}
-                    <option value="{{ topic.stable_id }}" {% if topic.stable_id == suggested_topic_id %}selected{% endif %}>{{ topic.title }}</option>
-                  {% endfor %}
-                </optgroup>
-              {% endfor %}
-            </select>
             <label class="check">
-              <input type="checkbox" name="alignment_confirmed" value="true" required>
-              <span>I confirmed that this framework topic accurately matches the question.</span>
+              <input type="checkbox" name="alignment_confirmed" value="true" {% if active_form == 'publish' and form_values.get('alignment_confirmed') %}checked{% endif %} required>
+              <span>I confirmed this exact source-to-topic alignment.</span>
             </label>
-            <button type="submit" {% if adapt_publishing_status != 'configured' %}disabled{% endif %}>Publish to ADAPT</button>
+            <button type="submit" {% if not publication_can_submit %}disabled{% endif %}>Publish approved revision to ADAPT</button>
             {% if adapt_publishing_status == 'disabled' %}
               <p class="help">ADAPT publishing is disabled during rollout verification.</p>
             {% elif adapt_publishing_status == 'misconfigured' %}
@@ -660,8 +763,8 @@
               <p class="help">Creates one public item in the shared question bank and an immutable QTI 3.0.1 package. It does not change the textbook or any assignment.</p>
             {% endif %}
           </form>
-        </section>
-      {% endif %}
+        {% endif %}
+      </section>
 
       {% if draft.publications %}
         <section class="publication-history" aria-labelledby="publication-history-heading">

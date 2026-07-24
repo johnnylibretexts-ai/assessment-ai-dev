@@ -1069,6 +1069,17 @@ class DraftGroundingError(ReviewTransitionError):
     pass
 
 
+@dataclass(frozen=True)
+class HintGroundingIssue:
+    """One reviewer-actionable mismatch for the exact question revision."""
+
+    code: str
+    message: str
+    rung: str | None = None
+    invalid_paragraphs: tuple[int, ...] = ()
+    allowed_paragraphs: tuple[int, ...] = ()
+
+
 class ComputationEvidenceError(ValueError):
     pass
 
@@ -1454,6 +1465,7 @@ class DraftRepository:
                     _json_value(draft_write.hint_ladder)
                 )
                 ladder = analyze_hint_leaks(draft_write.revised, ladder)
+                _validate_hint_ladder(draft_write.revised, ladder)
                 session.add(
                     HintLadderRecord(
                         draft_id=draft_ids_by_position[draft_write.position],
@@ -1690,6 +1702,15 @@ class DraftRepository:
                     ladder = HintLadderDraft.model_validate(
                         previous_hint_ladder.ladder_json
                     )
+                    grounding_issues = inspect_hint_grounding(validated, ladder)
+                    hint_status = (
+                        "needs_repair" if grounding_issues else "ready_for_review"
+                    )
+                    hint_note = "Question edited; hint approval reset."
+                    if grounding_issues:
+                        hint_note += " " + " ".join(
+                            issue.message for issue in grounding_issues
+                        )
                     session.add(
                         HintLadderRecord(
                             draft_id=draft.id,
@@ -1699,8 +1720,8 @@ class DraftRepository:
                             confirmations_json={
                                 rung.rung.value: False for rung in ladder.rungs
                             },
-                            status="ready_for_review",
-                            reviewer_notes="Question edited; hint approval reset.",
+                            status=hint_status,
+                            reviewer_notes=hint_note,
                         )
                     )
                 validation = (
@@ -4726,20 +4747,51 @@ def _validate_persisted_question(draft: Draft, question: QuestionDraft) -> None:
         )
 
 
-def _validate_hint_ladder(question: QuestionDraft, ladder: HintLadderDraft) -> None:
+def inspect_hint_grounding(
+    question: QuestionDraft,
+    ladder: HintLadderDraft,
+) -> tuple[HintGroundingIssue, ...]:
+    """Return every grounding problem without mutating review evidence."""
+
+    allowed = tuple(sorted(set(question.citation_paragraphs)))
+    issues: list[HintGroundingIssue] = []
     if (
         ladder.concept_label.strip().casefold()
         != question.concept_label.strip().casefold()
     ):
-        raise DraftGroundingError("a hint ladder cannot change the selected concept")
-    allowed = set(question.citation_paragraphs)
-    for rung in ladder.rungs:
-        unavailable = set(rung.citation_paragraphs) - allowed
-        if unavailable:
-            raise DraftGroundingError(
-                f"{rung.rung.value} hint cites paragraph(s) outside the item source: "
-                + ", ".join(str(index) for index in sorted(unavailable))
+        issues.append(
+            HintGroundingIssue(
+                code="concept_mismatch",
+                message="A hint ladder cannot change the selected concept.",
+                allowed_paragraphs=allowed,
             )
+        )
+    allowed_set = set(allowed)
+    for rung in ladder.rungs:
+        unavailable = tuple(sorted(set(rung.citation_paragraphs) - allowed_set))
+        if unavailable:
+            invalid_text = ", ".join(str(index) for index in unavailable)
+            allowed_text = ", ".join(str(index) for index in allowed)
+            issues.append(
+                HintGroundingIssue(
+                    code="citation_outside_item_source",
+                    rung=rung.rung.value,
+                    invalid_paragraphs=unavailable,
+                    allowed_paragraphs=allowed,
+                    message=(
+                        f"{rung.rung.value} hint cites paragraph(s) outside the "
+                        f"item source: {invalid_text}. Allowed paragraphs: "
+                        f"{allowed_text}."
+                    ),
+                )
+            )
+    return tuple(issues)
+
+
+def _validate_hint_ladder(question: QuestionDraft, ladder: HintLadderDraft) -> None:
+    issues = inspect_hint_grounding(question, ladder)
+    if issues:
+        raise DraftGroundingError(issues[0].message)
 
 
 def analyze_hint_leaks(

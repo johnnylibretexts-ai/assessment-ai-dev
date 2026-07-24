@@ -16,7 +16,12 @@ from app.adapt import (
     build_assessment_payload,
     build_external_engine_payload,
 )
-from app.catalog import SourceLicense, source_license
+from app.catalog import (
+    CuratedAlignment,
+    SourceLicense,
+    alignment_for_source,
+    source_license,
+)
 from app.computation_policy import (
     ComputationGateDecision,
     ComputationPolicyError,
@@ -41,6 +46,7 @@ from app.db import (
     approved_hint_ladder_snapshot,
     draft_content_sha256,
     hint_ladder_evidence_sha256,
+    inspect_hint_grounding,
     utc_now,
     validate_computation_evidence,
     validate_computation_engine_binding,
@@ -69,6 +75,42 @@ class PublicationValidationError(ValueError):
 
 
 @dataclass(frozen=True)
+class PublicationBlocker:
+    code: str
+    message: str
+
+
+@dataclass(frozen=True)
+class PublicationReadiness:
+    alignment: CuratedAlignment | None
+    blockers: tuple[PublicationBlocker, ...]
+
+    @property
+    def ready(self) -> bool:
+        return not self.blockers
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "ready": self.ready,
+            "alignment": (
+                {
+                    "framework_title": self.alignment.framework.title,
+                    "framework_source_url": self.alignment.framework.source_url,
+                    "topic_stable_id": self.alignment.topic.stable_id,
+                    "topic_title": self.alignment.topic.title,
+                    "chapter_title": self.alignment.topic.chapter_title,
+                }
+                if self.alignment is not None
+                else None
+            ),
+            "blockers": [
+                {"code": blocker.code, "message": blocker.message}
+                for blocker in self.blockers
+            ],
+        }
+
+
+@dataclass(frozen=True)
 class LicenseSelection:
     code: str
     version: str | None
@@ -88,34 +130,72 @@ class PublicationService:
         self._adapt = adapt
         self._imathas = IMathASBridgeClient(settings)
 
-    async def publish(
+    def readiness(
         self,
         draft_id: int,
         *,
-        publisher: str,
-        topic_stable_id: str,
-        alignment_confirmed: bool,
-        selected_license: LicenseSelection | None = None,
-        license_confirmed: bool = False,
-    ) -> Publication:
-        if self._settings.adapt_publishing_status != "configured":
-            raise PublicationValidationError(
-                "ADAPT publishing is not configured for this service."
-            )
+        license_resolved: bool,
+    ) -> PublicationReadiness:
         draft = self._repository.require_draft(draft_id)
-        if draft.status is not ReviewStatus.READY_TO_PUBLISH:
-            raise PublicationValidationError(
-                "Approve the draft before publishing it to ADAPT."
+        return self._local_readiness(
+            draft,
+            license_resolved=license_resolved,
+        )
+
+    def _local_readiness(
+        self,
+        draft: Draft,
+        *,
+        license_resolved: bool,
+    ) -> PublicationReadiness:
+        blockers: list[PublicationBlocker] = []
+        if draft.status != ReviewStatus.READY_TO_PUBLISH:
+            blockers.append(
+                PublicationBlocker(
+                    "question_not_approved",
+                    "Approve the current question revision.",
+                )
             )
-        try:
-            computation_decision = require_computation_gate(
-                self._settings,
-                self._repository,
-                draft,
-                action="publication",
-            )
-        except ComputationPolicyError as exc:
-            raise PublicationValidationError(str(exc)) from exc
+
+        hint_record = draft.current_hint_ladder
+        if self._settings.hint_publication_enabled:
+            if hint_record is None:
+                blockers.append(
+                    PublicationBlocker(
+                        "hints_missing",
+                        "Generate and review the three-rung hint ladder.",
+                    )
+                )
+            else:
+                grounding = inspect_hint_grounding(
+                    draft.current,
+                    hint_record.ladder,
+                )
+                if grounding:
+                    blockers.append(
+                        PublicationBlocker(
+                            "hints_need_repair",
+                            "Repair hint citations outside the current question "
+                            "source before approval.",
+                        )
+                    )
+                elif any(
+                    rung.answer_leak_detected for rung in hint_record.ladder.rungs
+                ):
+                    blockers.append(
+                        PublicationBlocker(
+                            "hints_need_repair",
+                            "Resolve possible answer leakage before hint approval.",
+                        )
+                    )
+                elif hint_record.status != "approved":
+                    blockers.append(
+                        PublicationBlocker(
+                            "hints_not_approved",
+                            "Approve all three current hint rungs.",
+                        )
+                    )
+
         if draft.current.item_type in {
             AssessmentItemType.WEBWORK,
             AssessmentItemType.IMATHAS,
@@ -126,9 +206,89 @@ class PublicationService:
                 or validation.status != "passed"
                 or validation.seed_count < 25
             ):
-                raise PublicationValidationError(
-                    "The parameterized item needs a successful 25-seed engine validation."
+                blockers.append(
+                    PublicationBlocker(
+                        "engine_validation_missing",
+                        "Complete a successful 25-seed engine validation.",
+                    )
                 )
+
+        try:
+            require_computation_gate(
+                self._settings,
+                self._repository,
+                draft,
+                action="publication",
+            )
+        except ComputationPolicyError as exc:
+            blockers.append(
+                PublicationBlocker(
+                    "computation_evidence_invalid",
+                    str(exc),
+                )
+            )
+
+        alignment = alignment_for_source(draft.source.canonical_url)
+        if alignment is None:
+            blockers.append(
+                PublicationBlocker(
+                    "framework_unmapped",
+                    "This source does not yet have a curated framework topic.",
+                )
+            )
+        if not license_resolved:
+            blockers.append(
+                PublicationBlocker(
+                    "license_unresolved",
+                    "Verify and select the source license.",
+                )
+            )
+        if self._settings.adapt_publishing_status != "configured":
+            blockers.append(
+                PublicationBlocker(
+                    "publishing_not_configured",
+                    "ADAPT publishing is not configured for this service.",
+                )
+            )
+        return PublicationReadiness(
+            alignment=alignment,
+            blockers=tuple(blockers),
+        )
+
+    async def publish(
+        self,
+        draft_id: int,
+        *,
+        publisher: str,
+        topic_stable_id: str,
+        alignment_confirmed: bool,
+        selected_license: LicenseSelection | None = None,
+        license_confirmed: bool = False,
+    ) -> Publication:
+        draft = self._repository.require_draft(draft_id)
+        license_selection = self._resolve_license(
+            draft,
+            selected=selected_license,
+            manually_confirmed=license_confirmed,
+        )
+        readiness = self._local_readiness(draft, license_resolved=True)
+        if readiness.blockers:
+            raise PublicationValidationError(readiness.blockers[0].message)
+        assert readiness.alignment is not None
+        expected_alignment = readiness.alignment
+        if topic_stable_id != expected_alignment.topic.stable_id:
+            raise PublicationValidationError(
+                "The selected framework topic does not match this source."
+            )
+        try:
+            computation_decision = require_computation_gate(
+                self._settings,
+                self._repository,
+                draft,
+                action="publication",
+            )
+        except ComputationPolicyError as exc:
+            raise PublicationValidationError(str(exc)) from exc
         compiled = None
         engine_binding = None
         if computation_decision.mode == "enforce":
@@ -144,14 +304,9 @@ class PublicationService:
             raise PublicationValidationError(
                 "Confirm the curated framework topic before publishing."
             )
-        license_selection = self._resolve_license(
-            draft,
-            selected=selected_license,
-            manually_confirmed=license_confirmed,
-        )
         alignment = await self._adapt.resolve_destination(
             license_code=license_selection.code,
-            topic_stable_id=topic_stable_id,
+            topic_stable_id=expected_alignment.topic.stable_id,
         )
         title = self._title(draft)
         destination = AdaptDestination(
@@ -926,6 +1081,13 @@ class PublicationService:
         if record is None:
             raise PublicationValidationError(
                 "Generate and approve the three-rung hint ladder before publishing."
+            )
+        grounding = inspect_hint_grounding(draft.current, record.ladder)
+        if grounding:
+            raise PublicationValidationError(grounding[0].message)
+        if any(rung.answer_leak_detected for rung in record.ladder.rungs):
+            raise PublicationValidationError(
+                "Resolve answer-leak flags before publishing the hint ladder."
             )
         if record.status != "approved":
             raise PublicationValidationError(
