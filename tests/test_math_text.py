@@ -222,3 +222,19 @@ def test_renderer_is_same_origin_safe_and_csp_allows_only_required_styles() -> N
     assert "connect-src 'self'" in caddy
     assert "style-src 'self' 'unsafe-inline'" in caddy
     assert "https:" not in caddy
+
+
+def test_corpus_renderer_is_display_only_and_excludes_machine_fields() -> None:
+    dockerfile = Path("Dockerfile.corpus").read_text()
+    bootstrap = Path("app/static/corpus-math-bootstrap.js").read_text()
+    base = Path("deploy/corpus/base.html").read_text()
+
+    assert "FROM ${CORPUS_BASE_IMAGE}" in dockerfile
+    assert "app/main.py" not in dockerfile
+    assert "app/db.py" not in dockerfile
+    assert "corpus-math-bootstrap.js" in base
+    assert 'element.querySelector("pre, code")' in bootstrap
+    assert 'element.matches("pre, code, select, textarea")' in bootstrap
+    assert "innerHTML" not in bootstrap
+    assert "textContent" in bootstrap
+    assert "SEGMENT_MARKER" in bootstrap

@@ -48,6 +48,11 @@ Deploy the image and CSP together. The CSP keeps `script-src 'self'`, `font-src 
 styles. The sealed corpus receives the same image independently, with its database checksum,
 credential absence, reset script, Basic Auth, and mutating-method blocks unchanged.
 
+Build the sealed demo with `Dockerfile.corpus`. Its renderer-only image layers the
+vendored assets, safe DOM annotations, preview behavior, and CSS over the
+accepted corpus base image without replacing the corpus application code or
+running newer schema initialization against its read-only database.
+
 Rollback restores the previous normal and corpus images plus their prior Caddy files. If a bounded
 draft repair must also be reversed, restore only those drafts from the pre-repair manifest through
 the audited edit boundary; never replace the whole live database or unrelated review/publication

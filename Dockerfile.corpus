@@ -1,0 +1,19 @@
+ARG CORPUS_BASE_IMAGE=assessment-ai:build08-xml-safe-8497aad
+
+FROM node:22.23.0-alpine3.23@sha256:35e2f96595091599e7c1fb0b61049e17d8478997b2aa13db51ad7995299fe55a AS mathjax-assets
+
+WORKDIR /build
+COPY package.json package-lock.json ./
+COPY scripts/vendor-mathjax.mjs ./scripts/vendor-mathjax.mjs
+RUN npm ci --ignore-scripts
+ENV MATHJAX_VENDOR_OUTPUT=/vendor/mathjax
+RUN npm run vendor:mathjax
+
+FROM ${CORPUS_BASE_IMAGE}
+
+COPY --from=mathjax-assets /vendor/mathjax /app/app/static/vendor/mathjax
+COPY app/static/mathjax-config.js /app/app/static/mathjax-config.js
+COPY app/static/math-preview.js /app/app/static/math-preview.js
+COPY app/static/corpus-math-bootstrap.js /app/app/static/corpus-math-bootstrap.js
+COPY app/static/styles.css /app/app/static/styles.css
+COPY deploy/corpus/base.html /app/app/templates/base.html
