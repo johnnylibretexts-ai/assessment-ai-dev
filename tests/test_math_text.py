@@ -11,6 +11,7 @@ from app.computation import ExpressionNode
 from app.computation_workflow import render_expression_tex
 from app.math_text import (
     SourceMathReferences,
+    canonicalize_server_owned_preview,
     strip_segment_markers,
     validate_generated_math_text,
 )
@@ -238,3 +239,28 @@ def test_corpus_renderer_is_display_only_and_excludes_machine_fields() -> None:
     assert "innerHTML" not in bootstrap
     assert "textContent" in bootstrap
     assert "SEGMENT_MARKER" in bootstrap
+
+
+def test_server_owned_engine_preview_gets_display_only_canonical_tex() -> None:
+    prompt = (
+        "Consider k1 = 6 where k1^2 - 4*k2 = 0. The solution is "
+        "y(x) = (a + b*x)*e^(alpha*x). Calculate alpha."
+    )
+    explanation = (
+        "The roots are alpha +/- i * beta and alpha = -k1 / 2. "
+        "Substituting k1 = 6 yields alpha = -6 / 2."
+    )
+
+    rendered_prompt = canonicalize_server_owned_preview(prompt)
+    rendered_explanation = canonicalize_server_owned_preview(explanation)
+    rendered_answer = canonicalize_server_owned_preview("-3.0")
+
+    for rendered in (rendered_prompt, rendered_explanation, rendered_answer):
+        validate_generated_math_text(rendered, field_name="engine_preview")
+    assert "e^(" not in rendered_prompt
+    assert "k1^2" not in rendered_prompt
+    assert r"\(y(x) = (a + bx)e^{\alpha x}\)" in rendered_prompt
+    assert r"\(k_1^2 - 4k_2 = 0\)" in rendered_prompt
+    assert r"\(\alpha \pm i\beta\)" in rendered_explanation
+    assert r"\(\alpha = -\frac{k_1}{2}\)" in rendered_explanation
+    assert rendered_answer == r"\(-3.0\)"

@@ -62,7 +62,7 @@ from .db import (
 from .jobs import GenerationWorker, validate_computation_profile_settings
 from .llm import LLMError, build_llm_client, generation_status
 from .media import HotspotMediaStore
-from .math_text import SourceMathReferences
+from .math_text import SourceMathReferences, canonicalize_server_owned_preview
 from .native_engine_runner import UnixSocketNativeEngineRunner
 from .pipeline import AssessmentPipeline, PipelineError, ReviewService
 from .publishing import (
@@ -1134,10 +1134,14 @@ def _draft_detail(
             "previews": [
                 {
                     **preview,
-                    "display_prompt": references.present(str(preview["prompt"])),
-                    "display_answer": references.present(str(preview["answer"])),
+                    "display_prompt": references.present(
+                        canonicalize_server_owned_preview(str(preview["prompt"]))
+                    ),
+                    "display_answer": references.present(
+                        canonicalize_server_owned_preview(str(preview["answer"]))
+                    ),
                     "display_explanation": references.present(
-                        str(preview["explanation"])
+                        canonicalize_server_owned_preview(str(preview["explanation"]))
                     ),
                 }
                 for preview in engine_validation.previews_json[:5]

@@ -31,7 +31,7 @@ RUN pip install .
 FROM base AS test
 
 COPY tests ./tests
-COPY Dockerfile Dockerfile.compute docker-compose.computation.yml uv.lock package.json package-lock.json ./
+COPY Dockerfile Dockerfile.corpus Dockerfile.compute docker-compose.computation.yml uv.lock package.json package-lock.json ./
 COPY deploy ./deploy
 RUN pip install '.[dev]' \
     && ruff check app tests \

@@ -52,6 +52,94 @@ def strip_segment_markers(value: str) -> str:
     return _SEGMENT_MARKER_RE.sub("", value)
 
 
+def canonicalize_server_owned_preview(value: str) -> str:
+    """Render legacy native-engine preview prose without mutating its evidence.
+
+    Fixed-seed previews are deterministic server output derived from immutable
+    WeBWorK/IMathAS templates. Older records predate the human-facing TeX
+    contract, so this bounded presentation adapter replaces their known ASCII
+    notation while the stored template, seed, answer, and evidence hashes stay
+    unchanged.
+    """
+
+    text = strip_segment_markers(value)
+    protected: dict[str, str] = {}
+
+    def protect(rendered: str) -> str:
+        token = f"\x00MATH{len(protected)}\x00"
+        protected[token] = rendered
+        return token
+
+    text = re.sub(
+        r"\\\((?:\\.|[^\\])*?\\\)|\\\[(?:\\.|[^\\])*?\\\]",
+        lambda match: protect(match.group(0)),
+        text,
+    )
+    text = re.sub(
+        r"\by\(x\)\s*=\s*\(a\s*\+\s*b\s*\*\s*x\)\s*\*\s*"
+        r"e\s*\^\s*\(\s*alpha\s*\*\s*x\s*\)",
+        lambda _: protect(r"\(y(x) = (a + bx)e^{\alpha x}\)"),
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\bk1(?:\*\*|\^)\s*2\s*-\s*4\s*\*\s*k2\s*(<=|>=|=|<|>)\s*0",
+        lambda match: protect(rf"\(k_1^2 - 4k_2 {match.group(1)} 0\)"),
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\balpha\s*\+/-\s*i\s*\*\s*beta\b",
+        lambda _: protect(r"\(\alpha \pm i\beta\)"),
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\balpha\s*=\s*-k1\s*/\s*2\b",
+        lambda _: protect(r"\(\alpha = -\frac{k_1}{2}\)"),
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\balpha\s*=\s*(-?\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)\b",
+        lambda match: protect(
+            rf"\(\alpha = \frac{{{match.group(1)}}}{{{match.group(2)}}}\)"
+        ),
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\bk([12])\s*=\s*(-?\d+(?:\.\d+)?)\b",
+        lambda match: protect(rf"\(k_{match.group(1)} = {match.group(2)}\)"),
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\be\s*\^\s*\(\s*alpha\s*\*\s*x\s*\)",
+        lambda _: protect(r"\(e^{\alpha x}\)"),
+        text,
+        flags=re.IGNORECASE,
+    )
+    for pattern, rendered in (
+        (r"\balpha\b", r"\(\alpha\)"),
+        (r"\bbeta\b", r"\(\beta\)"),
+        (r"\bk1\b", r"\(k_1\)"),
+        (r"\bk2\b", r"\(k_2\)"),
+    ):
+        text = re.sub(
+            pattern,
+            lambda _, replacement=rendered: protect(replacement),
+            text,
+            flags=re.IGNORECASE,
+        )
+    if re.fullmatch(r"\s*-?\d+(?:\.\d+)?\s*", text):
+        text = protect(rf"\({text.strip()}\)")
+
+    for token, rendered in protected.items():
+        text = text.replace(token, rendered)
+    return text
+
+
 def validate_generated_math_text(value: str, *, field_name: str) -> None:
     """Enforce the provider-facing math contract for one human-readable field."""
 
