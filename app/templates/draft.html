@@ -11,6 +11,8 @@
   {% set active_form = active_form|default(none, true) %}
   {% set form_values = form_values|default({}, true) %}
   {% set form_errors = form_errors|default({}, true) %}
+  {% set current_publication = draft.current_publication|default(none, true) %}
+  {% set latest_publication = draft.latest_publication|default(none, true) %}
   <nav class="back"><a href="/">← Back to queue</a></nav>
   {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
   {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
@@ -37,7 +39,7 @@
 
     <section class="panel review-pane">
       <div class="card-topline">
-        <span><span class="status status-{{ draft.status }}">{{ draft.status_label }}</span> <span class="status">{{ draft.item_type_label }}</span> <span class="status">{{ draft.context_type.replace('_', ' ') }} context</span></span>
+        <span><span class="status status-{{ draft.display_status|default(draft.status) }}">{{ draft.status_label }}</span> <span class="status">{{ draft.item_type_label }}</span> <span class="status">{{ draft.context_type.replace('_', ' ') }} context</span></span>
         <span class="muted">{{ draft.model_id }} · {{ draft.prompt_version }}</span>
       </div>
       <section class="workflow-readiness" aria-labelledby="workflow-readiness-heading">
@@ -62,7 +64,12 @@
           </li>
           <li>
             <strong>Publication</strong>
-            <span>{% if publication_readiness.ready %}Ready{% else %}Blocked ({{ publication_readiness.blockers|length }}){% endif %}</span>
+            <span>
+              {% if current_publication %}Published
+              {% elif latest_publication %}Current revision not published; revision {{ latest_publication.edit_count }} published
+              {% elif publication_readiness.ready %}Ready
+              {% else %}Blocked ({{ publication_readiness.blockers|length }}){% endif %}
+            </span>
           </li>
         </ol>
       </section>
@@ -689,8 +696,27 @@
 
       <section class="publication-panel" aria-labelledby="publish-heading">
         <p class="eyebrow">Publication</p>
-        <h3 id="publish-heading">Publication readiness</h3>
-        {% if publication_readiness.ready %}
+        <h3 id="publish-heading">{% if current_publication %}Publication status{% else %}Publication readiness{% endif %}</h3>
+        {% if current_publication %}
+          <div class="notice publication-success" role="status">
+            <strong>Published to ADAPT</strong>
+            {% if current_publication.adapt_question_id %}
+              <p>ADAPT question ID: {{ current_publication.adapt_question_id }}</p>
+            {% endif %}
+            {% if current_publication.finalized_at %}
+              <p>Published {{ current_publication.finalized_at }}.</p>
+            {% endif %}
+            <p>This publication is bound to the current draft revision. Editing the question creates a new revision that must be reviewed and published separately.</p>
+          </div>
+        {% elif latest_publication %}
+          <div class="notice publication-previous" role="status">
+            <strong>Current revision {{ draft.edit_count }} is not yet published.</strong>
+            <p>
+              Revision {{ latest_publication.edit_count }} remains published to ADAPT{% if latest_publication.adapt_question_id %} as question {{ latest_publication.adapt_question_id }}{% endif %}.
+              Publishing the current approved revision creates or updates only its own immutable publication record.
+            </p>
+          </div>
+        {% elif publication_readiness.ready %}
           <p class="notice">All required review evidence is saved. Publishing remains a separate action.</p>
         {% else %}
           <ul class="readiness-list" aria-label="Publication blockers">
@@ -723,7 +749,7 @@
             Publishing is unavailable; no substitute topic can be selected.
           </div>
         {% endif %}
-        {% if publication_readiness.alignment %}
+        {% if publication_readiness.alignment and not current_publication %}
           <form method="post" action="/drafts/{{ draft.id }}/publish">
             <input type="hidden" name="topic_stable_id"
                    value="{{ publication_readiness.alignment.topic_stable_id }}">
@@ -779,7 +805,10 @@
                   {% elif publication.state == 'failed' %}Publication failed
                   {% else %}Publication pending{% endif %}
                 </strong>
-                <span class="muted">Revision {{ publication.edit_count }}</span>
+                <span class="muted">
+                  Revision {{ publication.edit_count }}
+                  · {% if publication.is_current_edit %}Current revision{% else %}Earlier revision{% endif %}
+                </span>
               </div>
               {% if publication.adapt_question_id %}<p>ADAPT question ID: <strong>{{ publication.adapt_question_id }}</strong></p>{% endif %}
               <p>{{ publication.topic }} · {{ publication.license_label }}</p>

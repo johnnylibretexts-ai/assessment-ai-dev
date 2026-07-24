@@ -478,15 +478,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             draft.id,
             license_resolved=mapped_license is not None,
         ).model_dump()
-        publication_can_submit = publication_readiness["alignment"] is not None and all(
-            blocker["code"] == "license_unresolved"
-            for blocker in publication_readiness["blockers"]
+        current_publication = _current_successful_publication(draft)
+        publication_can_submit = (
+            current_publication is None
+            and publication_readiness["alignment"] is not None
+            and all(
+                blocker["code"] == "license_unresolved"
+                for blocker in publication_readiness["blockers"]
+            )
         )
+        draft_view = _draft_detail(draft, computation=computation)
         return templates.TemplateResponse(
             request,
             "draft.html",
             {
-                "draft": _draft_detail(draft, computation=computation),
+                "draft": draft_view,
                 "notice": request.query_params.get("notice"),
                 "error": error or request.query_params.get("error"),
                 "active_form": active_form,
@@ -1158,10 +1164,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 def _draft_summary(draft: Draft) -> dict[str, Any]:
     current = draft.current
     references = SourceMathReferences.from_html(draft.source.html_body)
+    current_publication = _current_successful_publication(draft)
+    latest_publication = _latest_successful_publication(draft)
+    display_status = (
+        "published" if current_publication is not None else draft.status.value
+    )
     return {
         "id": draft.id,
-        "status": draft.status.value,
-        "status_label": _status_label(draft.status.value),
+        "status": display_status,
+        "status_label": (
+            "Published to ADAPT"
+            if current_publication is not None
+            else _status_label(draft.status.value)
+        ),
         "source_title": draft.source.title,
         "source_type": _source_type(draft.source.backend),
         "stem": references.present(current.stem),
@@ -1169,6 +1184,9 @@ def _draft_summary(draft: Draft) -> dict[str, Any]:
         "context_type": current.context_type.value,
         "bloom": current.bloom.value,
         "difficulty": current.difficulty.value,
+        "edit_count": draft.edit_count,
+        "current_publication": _publication_display(current_publication),
+        "latest_publication": _publication_display(latest_publication),
     }
 
 
@@ -1202,6 +1220,8 @@ def _draft_detail(
     )
     critique = draft.critique_json
     publications = sorted(draft.publications, key=lambda item: item.id, reverse=True)
+    current_publication = _current_successful_publication(draft)
+    latest_publication = _latest_successful_publication(draft)
     hint_record = draft.current_hint_ladder
     hint_ladder = hint_record.ladder if hint_record is not None else None
     hint_grounding = (
@@ -1214,7 +1234,14 @@ def _draft_detail(
     return {
         "id": draft.id,
         "status": draft.status.value,
-        "status_label": _status_label(draft.status.value),
+        "display_status": (
+            "published" if current_publication is not None else draft.status.value
+        ),
+        "status_label": (
+            "Published to ADAPT"
+            if current_publication is not None
+            else _status_label(draft.status.value)
+        ),
         "source_title": draft.source.title,
         "source_path": draft.source.canonical_path,
         "source_type": _source_type(draft.source.backend),
@@ -1325,6 +1352,8 @@ def _draft_detail(
             }
             for publication in publications
         ],
+        "current_publication": _publication_display(current_publication),
+        "latest_publication": _publication_display(latest_publication),
     }
 
 
@@ -1376,6 +1405,46 @@ def _status_label(status_value: str) -> str:
     if status_value == ReviewStatus.READY_TO_PUBLISH.value:
         return "Approved — not yet published"
     return status_value.replace("_", " ")
+
+
+def _current_successful_publication(draft: Draft):
+    return max(
+        (
+            publication
+            for publication in draft.publications
+            if publication.edit_count == draft.edit_count
+            and publication.state == PublicationState.SUCCEEDED.value
+        ),
+        key=lambda publication: publication.id,
+        default=None,
+    )
+
+
+def _latest_successful_publication(draft: Draft):
+    return max(
+        (
+            publication
+            for publication in draft.publications
+            if publication.state == PublicationState.SUCCEEDED.value
+        ),
+        key=lambda publication: (publication.edit_count, publication.id),
+        default=None,
+    )
+
+
+def _publication_display(publication):
+    if publication is None:
+        return None
+    return {
+        "id": publication.id,
+        "edit_count": publication.edit_count,
+        "adapt_question_id": publication.adapt_question_id,
+        "adapt_page_id": publication.adapt_page_id,
+        "framework_title": publication.framework_title,
+        "topic": publication.alignment_json.get("topic", {}).get("text"),
+        "license_label": publication.license_label,
+        "finalized_at": publication.finalized_at,
+    }
 
 
 def _item_type_label(item_type: str) -> str:

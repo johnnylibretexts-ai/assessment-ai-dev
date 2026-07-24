@@ -126,6 +126,16 @@
               <span class="status status-{{ draft.status }}">{{ draft.status_label }}</span>
               <span class="muted">{{ draft.source_type }} · #{{ draft.id }}</span>
             </div>
+            <p class="revision-state">
+              <strong>Current revision {{ draft.edit_count }}</strong>
+              {% if draft.current_publication %}
+                · Published to ADAPT{% if draft.current_publication.adapt_question_id %} as question {{ draft.current_publication.adapt_question_id }}{% endif %}
+              {% elif draft.latest_publication %}
+                · Not yet published
+                <br>
+                <span>Revision {{ draft.latest_publication.edit_count }} remains published to ADAPT{% if draft.latest_publication.adapt_question_id %} as question {{ draft.latest_publication.adapt_question_id }}{% endif %}.</span>
+              {% endif %}
+            </p>
             <h3>{{ draft.source_title }}</h3>
             <p class="math-content">{{ draft.stem }}</p>
             <div class="meta">

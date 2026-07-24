@@ -408,9 +408,11 @@ def test_publish_route_is_idempotent_and_qti_download_is_protected(
             assert "imsmanifest.xml" in archive.namelist()
 
         detail = client.get(f"/drafts/{draft_id}")
-        assert "Approved — not yet published" in detail.text
+        assert "Approved — not yet published" not in detail.text
         assert "Published to ADAPT" in detail.text
-        assert "ADAPT question ID" in detail.text
+        assert "ADAPT question ID: 501" in detail.text
+        assert "This publication is bound to the current draft revision." in detail.text
+        assert f'action="/drafts/{draft_id}/publish"' not in detail.text
         assert "Download QTI 3.0" in detail.text
 
 
