@@ -50,12 +50,12 @@
             {% for item_type in item_type_options %}
               <label class="check compact">
                 <input type="checkbox" name="item_types" value="{{ item_type }}">
-                <span>{{ item_type.replace('_', ' ') }}</span>
+                <span>{{ item_type_labels.get(item_type, item_type.replace('_', ' ')|title) }}</span>
               </label>
             {% endfor %}
           </div>
           <p id="item-count-help" class="help">This is the total output, not the number generated for each selected type.</p>
-          <p id="item-type-help" class="help">Auto mix favors different interaction types appropriate for the source. When choosing types, select up to 8 formats; the total must be at least the number selected so each requested type is created once before any type repeats.</p>
+          <p id="item-type-help" class="help">Auto mix favors different interaction types appropriate for the source. When choosing types, select up to 8 formats; the total must be at least the number selected so each requested type is created once before any type repeats. “Select All That Apply” is a question format, not a control that checks every format.</p>
           {% if hint_generation_enabled %}
             <label class="check">
               <input type="checkbox" name="include_hint_ladder" value="true" checked>
@@ -129,7 +129,7 @@
             <h3>{{ draft.source_title }}</h3>
             <p>{{ draft.stem }}</p>
             <div class="meta">
-              <span>Type: {{ draft.item_type.replace('_', ' ') }}</span>
+              <span>Type: {{ item_type_labels.get(draft.item_type, draft.item_type.replace('_', ' ')|title) }}</span>
               <span>Context: {{ draft.context_type.replace('_', ' ') }}</span>
               <span>Bloom: {{ draft.bloom }}</span>
               <span>Difficulty: {{ draft.difficulty }}</span>
