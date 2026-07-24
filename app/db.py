@@ -278,11 +278,7 @@ class SourceSnapshot(Base):
 
     @property
     def license_metadata(self) -> SourceLicenseMetadata | None:
-        if not (
-            self.license_code
-            and self.license_label
-            and self.license_evidence_url
-        ):
+        if not (self.license_code and self.license_label and self.license_evidence_url):
             return None
         return SourceLicenseMetadata(
             code=self.license_code,
@@ -1374,9 +1370,7 @@ class DraftRepository:
                     source.license_code = page.source.license.code
                     source.license_version = page.source.license.version
                     source.license_label = page.source.license.label
-                    source.license_evidence_url = (
-                        page.source.license.evidence_url
-                    )
+                    source.license_evidence_url = page.source.license.evidence_url
                 source.title = page.title
                 source.plaintext = page.plaintext
                 source.html_body = page.html_body

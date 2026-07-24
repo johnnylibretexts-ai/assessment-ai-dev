@@ -1,3 +1,14 @@
+FROM node:22.23.0-alpine3.23@sha256:35e2f96595091599e7c1fb0b61049e17d8478997b2aa13db51ad7995299fe55a AS mathjax-assets
+
+WORKDIR /build
+
+COPY package.json package-lock.json ./
+COPY scripts/vendor-mathjax.mjs ./scripts/vendor-mathjax.mjs
+RUN npm ci --ignore-scripts
+
+ENV MATHJAX_VENDOR_OUTPUT=/vendor/mathjax
+RUN npm run vendor:mathjax
+
 FROM python:3.12-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -13,13 +24,14 @@ RUN groupadd --gid 10001 assessment-ai \
 
 COPY pyproject.toml README.md ./
 COPY app ./app
+COPY --from=mathjax-assets /vendor/mathjax ./app/static/vendor/mathjax
 COPY evaluation ./evaluation
 RUN pip install .
 
 FROM base AS test
 
 COPY tests ./tests
-COPY Dockerfile Dockerfile.compute docker-compose.computation.yml uv.lock ./
+COPY Dockerfile Dockerfile.compute docker-compose.computation.yml uv.lock package.json package-lock.json ./
 COPY deploy ./deploy
 RUN pip install '.[dev]' \
     && ruff check app tests \

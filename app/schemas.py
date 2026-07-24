@@ -7,6 +7,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from .computation import ComputationProfile
+from .math_text import (
+    validate_critique_math,
+    validate_hint_math,
+    validate_question_math,
+)
 
 
 class Paragraph(BaseModel):
@@ -382,6 +387,7 @@ class GeneratedHintLadderDraft(HintLadderDraft):
                 "generated hint ladder self-reports answer leakage in: "
                 + ", ".join(leaking)
             )
+        validate_hint_math(self)
         return self
 
 
@@ -554,6 +560,15 @@ class QuestionDraft(BaseModel):
         return self
 
 
+class GeneratedQuestionDraft(QuestionDraft):
+    """Strict provider contract; stored legacy reviewer drafts remain loadable."""
+
+    @model_validator(mode="after")
+    def require_canonical_math(self) -> "GeneratedQuestionDraft":
+        validate_question_math(self)
+        return self
+
+
 COMPUTATION_TASK_SLOT = "[[computed_task]]"
 COMPUTATION_RESULT_SLOT = "[[computed_result]]"
 
@@ -581,6 +596,15 @@ class ComputationQuestionDraft(QuestionDraft):
         return self
 
 
+class GeneratedComputationQuestionDraft(ComputationQuestionDraft):
+    """Computation prose slots plus the strict human-facing math contract."""
+
+    @model_validator(mode="after")
+    def require_canonical_math(self) -> "GeneratedComputationQuestionDraft":
+        validate_question_math(self)
+        return self
+
+
 def _xml_text_tree_is_valid(value: object) -> bool:
     if isinstance(value, str):
         return all(
@@ -605,6 +629,13 @@ class Critique(BaseModel):
     distractor_flags: list[str] = Field(default_factory=list, max_length=12)
     revision_instructions: list[str] = Field(default_factory=list, max_length=12)
     revision_required: bool
+
+
+class GeneratedCritique(Critique):
+    @model_validator(mode="after")
+    def require_canonical_math(self) -> "GeneratedCritique":
+        validate_critique_math(self)
+        return self
 
 
 class ReviewStatus(StrEnum):
@@ -637,9 +668,8 @@ class GenerateRequest(BaseModel):
             raise ValueError("choose at least one item type")
         if len(self.item_types) != len(set(self.item_types)):
             raise ValueError("item type selections must not contain duplicates")
-        if (
-            self.generation_mode == "selected"
-            and self.item_count < len(self.item_types)
+        if self.generation_mode == "selected" and self.item_count < len(
+            self.item_types
         ):
             raise ValueError(
                 "total item count must be at least the number of selected item types"

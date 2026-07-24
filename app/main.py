@@ -62,6 +62,7 @@ from .db import (
 from .jobs import GenerationWorker, validate_computation_profile_settings
 from .llm import LLMError, build_llm_client, generation_status
 from .media import HotspotMediaStore
+from .math_text import SourceMathReferences
 from .native_engine_runner import UnixSocketNativeEngineRunner
 from .pipeline import AssessmentPipeline, PipelineError, ReviewService
 from .publishing import (
@@ -1033,13 +1034,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 def _draft_summary(draft: Draft) -> dict[str, Any]:
     current = draft.current
+    references = SourceMathReferences.from_html(draft.source.html_body)
     return {
         "id": draft.id,
         "status": draft.status.value,
         "status_label": _status_label(draft.status.value),
         "source_title": draft.source.title,
         "source_type": _source_type(draft.source.backend),
-        "stem": current.stem,
+        "stem": references.present(current.stem),
         "item_type": current.item_type.value,
         "context_type": current.context_type.value,
         "bloom": current.bloom.value,
@@ -1053,8 +1055,14 @@ def _draft_detail(
     computation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     current = draft.current
+    references = SourceMathReferences.from_html(draft.source.html_body)
+    display = _question_display(current, references)
     paragraphs_by_index = {
-        int(paragraph["index"]): paragraph for paragraph in draft.source.paragraphs_json
+        int(paragraph["index"]): {
+            **paragraph,
+            "display_text": references.present(str(paragraph["text"])),
+        }
+        for paragraph in draft.source.paragraphs_json
     }
     cited = [
         paragraphs_by_index[index]
@@ -1090,6 +1098,7 @@ def _draft_detail(
         "cited_paragraphs": cited,
         "concept_label": current.concept_label,
         "stem": current.stem,
+        "display": display,
         "item_type": current.item_type.value,
         "item_type_label": _item_type_label(current.item_type.value),
         "context_type": current.context_type.value,
@@ -1103,7 +1112,9 @@ def _draft_detail(
         "explanation": current.explanation,
         "bloom": current.bloom.value,
         "difficulty": current.difficulty.value,
-        "critique_issues": critique.get("issues", []),
+        "critique_issues": [
+            references.present(str(issue)) for issue in critique.get("issues", [])
+        ],
         "model_id": revision_call.model_id if revision_call else "unknown model",
         "prompt_version": revision_call.prompt_version
         if revision_call
@@ -1120,7 +1131,17 @@ def _draft_detail(
             "source_sha256": engine_validation.source_sha256,
             "seed_count": engine_validation.seed_count,
             "status": engine_validation.status,
-            "previews": engine_validation.previews_json[:5],
+            "previews": [
+                {
+                    **preview,
+                    "display_prompt": references.present(str(preview["prompt"])),
+                    "display_answer": references.present(str(preview["answer"])),
+                    "display_explanation": references.present(
+                        str(preview["explanation"])
+                    ),
+                }
+                for preview in engine_validation.previews_json[:5]
+            ],
         }
         if engine_validation is not None
         else None,
@@ -1133,6 +1154,7 @@ def _draft_detail(
                 {
                     "rung": rung.rung.value,
                     "text": rung.text,
+                    "display_text": references.present(rung.text),
                     "citation_paragraphs": rung.citation_paragraphs,
                     "citations_text": ", ".join(
                         str(item) for item in rung.citation_paragraphs
@@ -1161,6 +1183,50 @@ def _draft_detail(
             for publication in publications
         ],
     }
+
+
+def _question_display(
+    question: QuestionDraft,
+    references: SourceMathReferences,
+) -> dict[str, Any]:
+    display = question.model_dump(mode="json")
+    for field in ("stem", "stimulus", "explanation", "targeted_misconception"):
+        value = display.get(field)
+        if isinstance(value, str):
+            display[field] = references.present(value)
+    for choice in display["choices"]:
+        choice["text"] = references.present(choice["text"])
+        if choice.get("feedback"):
+            choice["feedback"] = references.present(choice["feedback"])
+
+    response = display["response"]
+    for pair in response["matching_pairs"]:
+        pair["prompt"] = references.present(pair["prompt"])
+        pair["target"] = references.present(pair["target"])
+    if response.get("image_alt"):
+        response["image_alt"] = references.present(response["image_alt"])
+    for region in response["hotspot_regions"]:
+        region["label"] = references.present(region["label"])
+    for segment in response["highlight_segments"]:
+        segment["text"] = references.present(segment["text"])
+    for column in response["matrix_columns"]:
+        column["text"] = references.present(column["text"])
+        if column.get("feedback"):
+            column["feedback"] = references.present(column["feedback"])
+    for row in response["matrix_rows"]:
+        row["text"] = references.present(row["text"])
+    for field in (
+        "bow_tie_actions",
+        "bow_tie_condition",
+        "bow_tie_parameters",
+    ):
+        group = response.get(field)
+        if group:
+            for choice in group["choices"]:
+                choice["text"] = references.present(choice["text"])
+                if choice.get("feedback"):
+                    choice["feedback"] = references.present(choice["feedback"])
+    return display
 
 
 def _status_label(status_value: str) -> str:

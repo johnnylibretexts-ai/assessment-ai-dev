@@ -302,9 +302,7 @@ def _source_license_from_tags(
 
     values: set[str] = set()
     for entry in entries:
-        value = _string_value(entry.get("@value")) or _string_value(
-            entry.get("title")
-        )
+        value = _string_value(entry.get("@value")) or _string_value(entry.get("title"))
         if value:
             values.add(value.strip().casefold())
 

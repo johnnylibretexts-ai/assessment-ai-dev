@@ -269,9 +269,7 @@ def test_invalid_choose_types_requests_return_friendly_errors(
             "/generate",
             data={
                 "source_type": "public",
-                "source_locator": (
-                    "https://chem.libretexts.org/Bookshelves/Test/Page"
-                ),
+                "source_locator": ("https://chem.libretexts.org/Bookshelves/Test/Page"),
                 "generation_mode": "selected",
                 "item_count": "8",
                 "item_types": [
@@ -300,9 +298,7 @@ def test_invalid_choose_types_requests_return_friendly_errors(
             "/generate",
             data={
                 "source_type": "public",
-                "source_locator": (
-                    "https://chem.libretexts.org/Bookshelves/Test/Page"
-                ),
+                "source_locator": ("https://chem.libretexts.org/Bookshelves/Test/Page"),
                 "generation_mode": "selected",
                 "item_count": "1",
                 "item_types": [
@@ -466,9 +462,7 @@ def test_existing_draft_license_is_backfilled_from_page_tags(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    config = settings(tmp_path).model_copy(
-        update={"public_sources_enabled": True}
-    )
+    config = settings(tmp_path).model_copy(update={"public_sources_enabled": True})
     app = create_app(config)
 
     async def fake_fetch_license(

@@ -51,6 +51,9 @@ from app.schemas import (
     ComputationQuestionDraft,
     Critique,
     Difficulty,
+    GeneratedComputationQuestionDraft,
+    GeneratedCritique,
+    GeneratedQuestionDraft,
     GenerateRequest,
     ItemResponse,
     NormalizedPage,
@@ -316,7 +319,8 @@ class FakeLLM:
         if not self.responses:
             raise AssertionError("fake LLM response queue exhausted")
         value = self.responses.pop(0)
-        assert isinstance(value, schema)
+        if not isinstance(value, schema):
+            value = schema.model_validate(value.model_dump(mode="json"))
         raw = json.dumps(value.model_dump(mode="json"), sort_keys=True)
         attempt = LLMAttemptMetadata(
             attempt=1,
@@ -706,9 +710,9 @@ async def test_off_mode_preserves_exact_legacy_sequence_output_and_no_report(
 
     assert [schema for _, schema, _ in llm.calls] == [
         ConceptBatch,
-        QuestionDraft,
-        Critique,
-        QuestionDraft,
+        GeneratedQuestionDraft,
+        GeneratedCritique,
+        GeneratedQuestionDraft,
     ]
     assert len(llm.calls) == 4
     assert outcome.pipeline_version == PIPELINE_VERSION
@@ -765,9 +769,9 @@ async def test_assist_profile_is_blueprint_first_and_server_binds_ground_truth(
     assert [schema for _, schema, _ in llm.calls] == [
         ConceptBatch,
         AssessmentComputationBlueprint,
-        ComputationQuestionDraft,
-        Critique,
-        ComputationQuestionDraft,
+        GeneratedComputationQuestionDraft,
+        GeneratedCritique,
+        GeneratedComputationQuestionDraft,
     ]
     source = repository.get_source(outcome.source_id)
     assert source is not None
@@ -792,7 +796,7 @@ async def test_assist_profile_is_blueprint_first_and_server_binds_ground_truth(
     assert stored.current.stem.startswith("Provider revised stem.")
     assert 'For the source concept "Adding quantities":' in stored.current.stem
     assert stored.current.explanation.startswith("Use the source-grounded framing.")
-    assert stored.current.explanation.endswith("Computed result: 5.")
+    assert stored.current.explanation.endswith(r"Computed result: \(5\).")
     assert stored.current.targeted_misconception == (
         "Learners may choose an operation from surface wording."
     )
@@ -1099,7 +1103,7 @@ async def test_generation_sidecar_preflight_failure_persists_failed_report(
     assert all(
         "unresolved_computation" in prompt
         for prompt, schema, _version in llm.calls
-        if schema in {QuestionDraft, Critique}
+        if schema in {GeneratedQuestionDraft, GeneratedCritique}
     )
 
 
@@ -1181,9 +1185,9 @@ async def test_assist_without_profile_adds_not_applicable_without_provider_call(
 
     assert [schema for _, schema, _ in llm.calls] == [
         ConceptBatch,
-        QuestionDraft,
-        Critique,
-        QuestionDraft,
+        GeneratedQuestionDraft,
+        GeneratedCritique,
+        GeneratedQuestionDraft,
     ]
     report = repository.get_current_computation_validation(outcome.draft_id)
     assert report is not None
@@ -1233,7 +1237,7 @@ async def test_unqualified_formula_persists_unsupported_without_engine_pass(
     assert all(
         "unresolved_computation" in prompt
         for prompt, schema, _version in llm.calls
-        if schema in {QuestionDraft, Critique}
+        if schema in {GeneratedQuestionDraft, GeneratedCritique}
     )
 
 

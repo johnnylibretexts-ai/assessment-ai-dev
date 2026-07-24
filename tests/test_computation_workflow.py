@@ -372,10 +372,10 @@ def test_unit_binding_overwrites_magnitude_and_appends_fixed_target_unit() -> No
     assert compiled is None
     assert bound.response.numeric_answer == pytest.approx(1.5)
     assert bound.stem == (
-        "Convert the stated length. "
-        "Convert 150 cm to m. Enter the numerical magnitude in m."
+        r"Convert the stated length. Convert \(150\) from \(\mathrm{cm}\) "
+        r"to \(\mathrm{m}\). Enter the numerical magnitude in \(\mathrm{m}\)."
     )
-    assert bound.explanation.endswith("Computed result: 1.5 m.")
+    assert bound.explanation.endswith(r"Computed result: \(\frac{3}{2}\,\mathrm{m}\).")
     assert "Provider supplied" in bound.explanation
 
 
@@ -800,7 +800,12 @@ def test_rebind_preserves_reviewed_pedagogy_and_rejects_answer_drift() -> None:
     assert rebound.response.numeric_tolerance == 0
 
     drifted = rebound.model_copy(
-        update={"stem": rebound.stem.replace("(2 + 3)", "(2 + 4)")},
+        update={
+            "stem": rebound.stem.replace(
+                r"\left(2 + 3\right)",
+                r"\left(2 + 4\right)",
+            )
+        },
         deep=True,
     )
     with pytest.raises(ComputationWorkflowError, match="server-owned"):
@@ -863,7 +868,8 @@ def test_multiple_choice_feedback_prose_survives_server_correctness_binding() ->
                 variables=[VariableSpec(name="x")],
                 substitutions={"x": _integer(2)},
             ),
-            "Given x = 2. Evaluate (x + 1).",
+            r"Given \(\mathrm{x} = 2\). "
+            r"Evaluate \(\left(\mathrm{x} + 1\right)\).",
             3,
         ),
         (
@@ -878,7 +884,9 @@ def test_multiple_choice_feedback_prose_survives_server_correctness_binding() ->
                 solve_for="x",
                 variables=[VariableSpec(name="x", assumptions=["positive"])],
             ),
-            "Given x is positive. Solve (x ** 2) = 1 for x.",
+            r"Given \(\mathrm{x}\) is positive. "
+            r"Solve \[\left(\mathrm{x}\right)^{2} = 1\] "
+            r"for \(\mathrm{x}\).",
             1,
         ),
     ],

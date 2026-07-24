@@ -127,7 +127,7 @@
               <span class="muted">{{ draft.source_type }} · #{{ draft.id }}</span>
             </div>
             <h3>{{ draft.source_title }}</h3>
-            <p>{{ draft.stem }}</p>
+            <p class="math-content">{{ draft.stem }}</p>
             <div class="meta">
               <span>Type: {{ item_type_labels.get(draft.item_type, draft.item_type.replace('_', ' ')|title) }}</span>
               <span>Context: {{ draft.context_type.replace('_', ' ') }}</span>

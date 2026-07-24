@@ -89,7 +89,7 @@ from .schemas import (
 
 COMPUTATION_PIPELINE_VERSION = "assessment-computation-pipeline-v0"
 BLUEPRINT_PROMPT_VERSION = "assessment-computation-blueprint-v0"
-COMPUTATION_PROSE_PROMPT_VERSION = "assessment-computation-prose-slots-v0"
+COMPUTATION_PROSE_PROMPT_VERSION = "assessment-computation-prose-slots-v1"
 _COMPUTATIONAL_ITEM_TYPES = frozenset(
     {
         AssessmentItemType.NUMERICAL,
@@ -1125,6 +1125,63 @@ def render_expression(node: ExpressionNode) -> str:
         f"({render_expression(node.args[0])} {operator} "
         f"{render_expression(node.args[1])})"
     )
+
+
+def render_expression_tex(node: ExpressionNode) -> str:
+    """Render a typed expression AST as deterministic presentation TeX."""
+
+    if node.kind == ExpressionKind.INTEGER:
+        return str(node.integer)
+    if node.kind == ExpressionKind.RATIONAL:
+        return rf"\frac{{{node.numerator}}}{{{node.denominator}}}"
+    if node.kind == ExpressionKind.DECIMAL:
+        return str(node.decimal)
+    if node.kind == ExpressionKind.CONSTANT:
+        constant = str(node.constant)
+        return {"pi": r"\pi", "e": r"\mathrm{e}"}.get(constant, constant)
+    if node.kind == ExpressionKind.SYMBOL:
+        return _symbol_tex(str(node.symbol))
+    if node.kind == ExpressionKind.NEG:
+        return rf"-\left({render_expression_tex(node.args[0])}\right)"
+    left = render_expression_tex(node.args[0])
+    right = render_expression_tex(node.args[1])
+    if node.kind == ExpressionKind.ADD:
+        return rf"\left({left} + {right}\right)"
+    if node.kind == ExpressionKind.SUB:
+        return rf"\left({left} - {right}\right)"
+    if node.kind == ExpressionKind.MUL:
+        return rf"\left({left} \mathbin{{\cdot}} {right}\right)"
+    if node.kind == ExpressionKind.DIV:
+        return rf"\frac{{{left}}}{{{right}}}"
+    if node.kind == ExpressionKind.POW:
+        return rf"\left({left}\right)^{{{right}}}"
+    if node.kind == ExpressionKind.MOD:
+        return rf"\left({left} \bmod {right}\right)"
+    raise ComputationWorkflowError(f"Unsupported expression kind: {node.kind}")
+
+
+def _symbol_tex(symbol: str) -> str:
+    base, separator, suffix = symbol.partition("_")
+    greek = {
+        "alpha",
+        "beta",
+        "gamma",
+        "delta",
+        "epsilon",
+        "theta",
+        "lambda",
+        "mu",
+        "pi",
+        "rho",
+        "sigma",
+        "tau",
+        "phi",
+        "chi",
+        "psi",
+        "omega",
+    }
+    rendered_base = rf"\{base}" if base in greek else rf"\mathrm{{{base}}}"
+    return rf"{rendered_base}_{{\mathrm{{{suffix}}}}}" if separator else rendered_base
 
 
 def validation_write(
@@ -2531,18 +2588,19 @@ def _qualitative_prose_is_safe(
 
 
 def _computed_stem(blueprint: AssessmentComputationBlueprint) -> str:
-    expression = render_expression(blueprint.expression)
+    expression = rf"\({render_expression_tex(blueprint.expression)}\)"
     operation = blueprint.operation
     if operation == ComputationOperation.CONVERT_UNIT:
         stem = (
-            f"Convert {expression} {blueprint.source_unit} to "
-            f"{blueprint.target_unit}. Enter the numerical magnitude in "
-            f"{blueprint.target_unit}."
+            f"Convert {expression} from {_unit_tex(blueprint.source_unit)} to "
+            f"{_unit_tex(blueprint.target_unit)}. Enter the numerical magnitude "
+            f"in {_unit_tex(blueprint.target_unit)}."
         )
     elif operation == ComputationOperation.SOLVE:
         stem = (
-            f"Solve {expression} = {render_expression(blueprint.equation_rhs)} "
-            f"for {blueprint.solve_for}."
+            f"Solve \\[{render_expression_tex(blueprint.expression)} = "
+            f"{render_expression_tex(blueprint.equation_rhs)}\\] "
+            f"for \\({_symbol_tex(str(blueprint.solve_for))}\\)."
         )
     elif operation == ComputationOperation.EXPAND:
         stem = f"Give the expanded form of {expression}."
@@ -2564,7 +2622,7 @@ def _computed_stem(blueprint: AssessmentComputationBlueprint) -> str:
         else:
             stem = f"Evaluate {expression}."
     givens: list[str] = [
-        f"{name} = {render_expression(value)}"
+        rf"\({_symbol_tex(name)} = {render_expression_tex(value)}\)"
         for name, value in sorted(blueprint.substitutions.items())
     ]
     for variable in blueprint.variables:
@@ -2575,7 +2633,9 @@ def _computed_stem(blueprint: AssessmentComputationBlueprint) -> str:
             assumption.value.replace("_", " ") for assumption in variable.assumptions
         )
         if descriptors:
-            givens.append(f"{variable.name} is " + " and ".join(descriptors))
+            givens.append(
+                rf"\({_symbol_tex(variable.name)}\) is " + " and ".join(descriptors)
+            )
     if givens:
         stem = f"Given {'; '.join(givens)}. {stem}"
     if blueprint.source_concept_label is not None:
@@ -2586,18 +2646,48 @@ def _computed_stem(blueprint: AssessmentComputationBlueprint) -> str:
 
 
 def _computed_result_sentence(result: ComputationResult) -> str:
-    value = (
-        result.numeric_value
-        if result.target_unit and result.numeric_value is not None
-        else (
-            result.exact_value
-            or result.canonical_expression
-            or ", ".join(result.solutions)
-            or str(result.equivalent).lower()
+    if result.answer_expression is not None:
+        value = render_expression_tex(result.answer_expression)
+    elif result.solution_expressions:
+        value = ", ".join(
+            render_expression_tex(item) for item in result.solution_expressions
         )
+    else:
+        raw = (
+            result.numeric_value
+            if result.target_unit and result.numeric_value is not None
+            else (
+                result.exact_value
+                or result.canonical_expression
+                or ", ".join(result.solutions)
+                or str(result.equivalent).lower()
+            )
+        )
+        value = rf"\mathrm{{{_tex_literal(raw)}}}"
+    unit = f"\\,{_unit_tex_value(result.target_unit)}" if result.target_unit else ""
+    return rf"Computed result: \({value}{unit}\)."
+
+
+def _unit_tex(unit: str | None) -> str:
+    if not unit:
+        return "the requested unit"
+    return rf"\({_unit_tex_value(unit)}\)"
+
+
+def _unit_tex_value(unit: str) -> str:
+    return rf"\mathrm{{{_tex_literal(unit)}}}"
+
+
+def _tex_literal(value: str) -> str:
+    return (
+        value.replace("\\", r"\backslash ")
+        .replace("{", r"\{")
+        .replace("}", r"\}")
+        .replace("_", r"\_")
+        .replace("%", r"\%")
+        .replace("#", r"\#")
+        .replace("&", r"\&")
     )
-    unit = f" {result.target_unit}" if result.target_unit else ""
-    return f"Computed result: {value}{unit}."
 
 
 def _blueprint_hash(blueprint: AssessmentComputationBlueprint) -> str:
