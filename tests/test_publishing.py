@@ -16,7 +16,7 @@ from app.adapt import (
     FrameworkItem,
     ResolvedAlignment,
 )
-from app.catalog import suggested_topic
+from app.catalog import alignment_for_source, suggested_topic
 from app.config import Settings
 from app.db import (
     DraftRepository,
@@ -58,6 +58,13 @@ ISOTOPES_URL = (
     "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/"
     "Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/"
     "02%3A_Atoms_and_the_Periodic_Table/2.03%3A_Isotopes_and_Atomic_Weight"
+)
+MATHEMATICAL_METHODS_URL = (
+    "https://chem.libretexts.org/Bookshelves/"
+    "Physical_and_Theoretical_Chemistry_Textbook_Maps/"
+    "Mathematical_Methods_in_Chemistry_%28Levitus%29/"
+    "05%3A_Second_Order_Ordinary_Differential_Equations/"
+    "5.01%3A_Second_Order_Ordinary_Differential_Equations"
 )
 
 
@@ -312,6 +319,37 @@ def publishing_headers() -> dict[str, str]:
         "Origin": "http://testserver",
         "X-Reviewer": "reviewer@example.org",
     }
+
+
+@pytest.mark.asyncio
+async def test_publish_rejects_a_forged_topic_from_another_framework(
+    tmp_path: Path,
+) -> None:
+    config = configured_settings(tmp_path)
+    app = create_app(config)
+    fake = FakeAdapt()
+    with TestClient(app):
+        draft_id = seed_approved(app.state.repository)
+        forged = alignment_for_source(MATHEMATICAL_METHODS_URL)
+        assert forged is not None
+
+        with pytest.raises(
+            PublicationValidationError,
+            match="does not match this source",
+        ):
+            await PublicationService(
+                config,
+                app.state.repository,
+                fake,
+            ).publish(
+                draft_id,
+                publisher="reviewer@example.org",
+                topic_stable_id=forged.topic.stable_id,
+                alignment_confirmed=True,
+            )
+
+        assert fake.resolve_calls == 0
+        assert fake.create_calls == 0
 
 
 def test_publish_route_is_idempotent_and_qti_download_is_protected(

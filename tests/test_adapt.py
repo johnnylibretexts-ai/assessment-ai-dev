@@ -14,7 +14,7 @@ from app.adapt import (
     build_assessment_payload,
     build_mcq_payload,
 )
-from app.catalog import chemistry_seed, suggested_topic
+from app.catalog import suggested_topic
 from app.config import Settings
 from app.schemas import (
     AssessmentItemType,
@@ -290,16 +290,30 @@ async def test_adapt_client_caches_jwt_and_reauthenticates_once_after_401(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source_url",
+    [
+        (
+            "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/"
+            "Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/"
+            "02%3A_Atoms_and_the_Periodic_Table/2.03%3A_Isotopes_and_Atomic_Weight"
+        ),
+        (
+            "https://chem.libretexts.org/Bookshelves/"
+            "Physical_and_Theoretical_Chemistry_Textbook_Maps/"
+            "Mathematical_Methods_in_Chemistry_%28Levitus%29/"
+            "05%3A_Second_Order_Ordinary_Differential_Equations/"
+            "5.01%3A_Second_Order_Ordinary_Differential_Equations"
+        ),
+    ],
+)
 async def test_adapt_client_validates_owned_folder_license_framework_and_text(
     tmp_path: Path,
+    source_url: str,
 ) -> None:
-    topic = suggested_topic(
-        "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/"
-        "Fundamentals_of_General_Organic_and_Biological_Chemistry_%28LibreTexts%29/"
-        "02%3A_Atoms_and_the_Periodic_Table/2.03%3A_Isotopes_and_Atomic_Weight"
-    )
+    topic = suggested_topic(source_url)
     assert topic is not None
-    framework = chemistry_seed()["framework"]
+    framework = topic.framework
 
     def handler(request: httpx.Request) -> httpx.Response:
         responses = {
@@ -319,8 +333,8 @@ async def test_adapt_client_validates_owned_folder_license_framework_and_text(
                 "frameworks": [
                     {
                         "id": 7,
-                        "title": framework["title"],
-                        "source_url": framework["source_url"],
+                        "title": framework.title,
+                        "source_url": framework.source_url,
                     }
                 ],
             },

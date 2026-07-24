@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "framework": {
+    "title": "Mathematical Methods in Chemistry (Levitus)",
+    "author": "Marcia Levitus",
+    "descriptor_type": "Learning Objective",
+    "description": "Curated chapter and page-topic alignment for the LibreTexts Mathematical Methods in Chemistry book. Version 1 covers the second-order ordinary differential equations chapter.",
+    "license": "ccbyncsa",
+    "license_version": "4.0",
+    "source_url": "https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Mathematical_Methods_in_Chemistry_%28Levitus%29"
+  },
+  "stable_id_namespace": "2818c0aa-e9c7-5838-8c16-6521e9bd5cb0",
+  "chapters": [
+    {
+      "order": 5,
+      "title": "5: Second Order Ordinary Differential Equations",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Mathematical_Methods_in_Chemistry_%28Levitus%29/05%3A_Second_Order_Ordinary_Differential_Equations",
+      "stable_id": "8058016d-6bb6-52bf-a8ea-bbf5bbdff75b",
+      "topics": [
+        {
+          "order": 1,
+          "title": "5.1: Second Order Ordinary Differential Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Mathematical_Methods_in_Chemistry_%28Levitus%29/05%3A_Second_Order_Ordinary_Differential_Equations/5.01%3A_Second_Order_Ordinary_Differential_Equations",
+          "stable_id": "bce4069a-7626-552f-bb14-4b09d4154c00"
+        },
+        {
+          "order": 2,
+          "title": "5.2: Second Order Ordinary Differential Equations - Oscillations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Mathematical_Methods_in_Chemistry_%28Levitus%29/05%3A_Second_Order_Ordinary_Differential_Equations/5.02%3A_Second_Order_Ordinary_Differential_Equations_-_Oscillations",
+          "stable_id": "1c95bce5-bc44-591a-9ebf-82b70e16aa32"
+        },
+        {
+          "order": 3,
+          "title": "5.3: Second Order Ordinary Differential Equations with Boundary Conditions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Mathematical_Methods_in_Chemistry_%28Levitus%29/05%3A_Second_Order_Ordinary_Differential_Equations/5.03%3A_Second_Order_Ordinary_Differential_Equations_with_Boundary_Conditions",
+          "stable_id": "45947d35-bb7e-5f4c-a960-74f2f08c8616"
+        },
+        {
+          "order": 4,
+          "title": "5.4: An example in Quantum Mechanics",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Mathematical_Methods_in_Chemistry_%28Levitus%29/05%3A_Second_Order_Ordinary_Differential_Equations/5.04%3A_An_example_in_Quantum_Mechanics",
+          "stable_id": "103cc523-a108-5cb4-a72e-c3a5859edfcd"
+        },
+        {
+          "order": 5,
+          "title": "5.5: Problems",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Mathematical_Methods_in_Chemistry_%28Levitus%29/05%3A_Second_Order_Ordinary_Differential_Equations/5.05%3A_Problems",
+          "stable_id": "20d3b1ea-4a14-54fe-9c8e-0c8af75511c1"
+        }
+      ]
+    }
+  ]
+}

@@ -13,6 +13,9 @@ from app.schemas import (
     Concept,
     Critique,
     Difficulty,
+    HintLadderDraft,
+    HintRungDraft,
+    HintRungType,
     NormalizedPage,
     Paragraph,
     QuestionDraft,
@@ -537,18 +540,12 @@ def test_edit_and_independent_review_gates(tmp_path: Path) -> None:
             },
             follow_redirects=False,
         )
-        assert blocked.status_code == 303
-        blocked_location = blocked.headers["location"]
-        assert "error=" in blocked_location
-        assert (
-            "Confirm+both+the+Bloom+level+and+difficulty+before+approving+this+draft."
-        ) in blocked_location
-        assert "validation" not in blocked_location.casefold()
-        assert "pydantic" not in blocked_location.casefold()
-        blocked_page = client.get(blocked_location)
+        assert blocked.status_code == 422
+        blocked_page = blocked
         assert (
             "Confirm both the Bloom level and difficulty before approving this draft."
         ) in blocked_page.text
+        assert "Looks good." in blocked_page.text
         assert "input_value" not in blocked_page.text
         assert "pydantic.dev" not in blocked_page.text
         assert (
@@ -575,3 +572,119 @@ def test_edit_and_independent_review_gates(tmp_path: Path) -> None:
         assert stored.status == ReviewStatus.READY_TO_PUBLISH
         assert stored.bloom_confirmed is True
         assert stored.difficulty_confirmed is True
+
+
+def test_hint_validation_preserves_posted_edits_and_persisted_version(
+    tmp_path: Path,
+) -> None:
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        ladder = HintLadderDraft(
+            concept_label="Energy conservation",
+            rungs=[
+                HintRungDraft(
+                    rung=rung,
+                    text=f"Saved {rung.value} hint.",
+                    citation_paragraphs=[0],
+                )
+                for rung in HintRungType
+            ],
+        )
+        original = app.state.repository.save_hint_ladder(
+            draft_id,
+            ladder,
+            editor="reviewer@example.org",
+        )
+
+        response = client.post(
+            f"/drafts/{draft_id}/hints/edit",
+            data={
+                "conceptual_text": "Unsaved conceptual wording.",
+                "conceptual_citations": "47",
+                "strategic_text": "Unsaved strategic wording.",
+                "strategic_citations": "0",
+                "specific_text": "Unsaved specific wording.",
+                "specific_citations": "0",
+                "reviewer_notes": "Keep these edits visible.",
+            },
+            headers={
+                "X-Reviewer": "reviewer@example.org",
+                "Origin": "http://testserver",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 422
+        assert "Unsaved conceptual wording." in response.text
+        assert 'value="47"' in response.text
+        assert "Keep these edits visible." in response.text
+        assert "Allowed paragraphs: 0" in response.text
+        assert 'aria-invalid="true"' in response.text
+        current = app.state.repository.require_draft(draft_id).current_hint_ladder
+        assert current is not None
+        assert current.id == original.id
+        assert current.ladder.rungs[0].text == "Saved conceptual hint."
+
+
+def test_saved_hint_and_question_approvals_render_as_summaries(tmp_path: Path) -> None:
+    configured = settings(tmp_path).model_copy(
+        update={
+            "hint_generation_enabled": True,
+            "hint_publication_canary_enabled": True,
+        }
+    )
+    app = create_app(configured)
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.save_hint_ladder(
+            draft_id,
+            HintLadderDraft(
+                concept_label="Energy conservation",
+                rungs=[
+                    HintRungDraft(
+                        rung=rung,
+                        text=f"Review {rung.value} evidence.",
+                        citation_paragraphs=[0],
+                    )
+                    for rung in HintRungType
+                ],
+            ),
+            editor="reviewer@example.org",
+        )
+        hint_approval = client.post(
+            f"/drafts/{draft_id}/hints/review",
+            data={
+                "conceptual_confirmed": "true",
+                "strategic_confirmed": "true",
+                "specific_confirmed": "true",
+                "reviewer_notes": "All hint checks complete.",
+            },
+            headers={
+                "X-Reviewer": "reviewer@example.org",
+                "Origin": "http://testserver",
+            },
+            follow_redirects=False,
+        )
+        assert hint_approval.status_code == 303
+        question_approval = client.post(
+            f"/drafts/{draft_id}/review",
+            data={
+                "decision": "ready_to_publish",
+                "bloom_confirmed": "true",
+                "difficulty_confirmed": "true",
+            },
+            headers={
+                "X-Reviewer": "reviewer@example.org",
+                "Origin": "http://testserver",
+            },
+            follow_redirects=False,
+        )
+        assert question_approval.status_code == 303
+
+        detail = client.get(f"/drafts/{draft_id}")
+
+        assert "All three hints approved" in detail.text
+        assert "Question approved" in detail.text
+        assert "Approve saved hint version" not in detail.text
+        assert "Approve question revision" not in detail.text

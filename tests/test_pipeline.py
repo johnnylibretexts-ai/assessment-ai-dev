@@ -505,6 +505,46 @@ async def test_self_reported_hint_leak_is_rejected_before_persistence(store) -> 
 
 
 @pytest.mark.asyncio
+async def test_hint_citations_are_limited_to_the_exact_question_source(store) -> None:
+    database, repository = store
+    responses = generation_responses()
+    responses[0] = ConceptBatch(
+        concepts=[
+            Concept(
+                label="Conservation of energy",
+                description="Total energy and its transformations.",
+                source_paragraphs=[0, 1],
+            )
+        ]
+    )
+    ladder = hint_ladder()
+    ladder.rungs[0].citation_paragraphs = [1]
+    pipeline = AssessmentPipeline(
+        FakeContent(page()),
+        FakeLLM([*responses, ladder]),
+        repository,
+    )
+
+    with pytest.raises(
+        CitationValidationError,
+        match=r"conceptual hint.*outside the item source.*1.*Allowed paragraphs: 0",
+    ):
+        await pipeline.generate(
+            "Sandboxes/johnnyphung/Demo/Energy",
+            include_hint_ladder=True,
+        )
+
+    with database.session() as session:
+        assert session.scalar(select(func.count(Draft.id))) == 0
+        assert session.scalar(select(func.count(SourceSnapshot.id))) == 0
+    hint_prompt = pipeline.llm.calls[-1][0]
+    assert "<allowed_hint_citations>" in hint_prompt
+    assert "</allowed_hint_citations>" in hint_prompt
+    assert "[paragraph 0]" in hint_prompt
+    assert "[paragraph 1]" not in hint_prompt
+
+
+@pytest.mark.asyncio
 async def test_deterministically_detected_hint_leak_is_rejected_before_persistence(
     store,
 ) -> None:
