@@ -307,6 +307,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise ValueError("Dev sandbox sources are disabled for this service.")
             if not locator:
                 raise ValueError("Choose a public LibreTexts page to generate from.")
+            if generation_mode == "selected":
+                if not item_types:
+                    raise ValueError("Choose at least one item type.")
+                if len(item_types) > 8:
+                    raise ValueError("Choose no more than 8 item types.")
+                if item_count < len(item_types):
+                    raise ValueError(
+                        "Set Total number of items to at least the number of "
+                        "selected item types."
+                    )
             family = (computation_family or "").strip()
             delivery = (computation_delivery or "").strip()
             if bool(family) != bool(delivery):
@@ -366,6 +376,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     locator,
                     computation_profile=computation_profile,
                 )
+        except ValidationError:
+            return _redirect_with_message(
+                "/",
+                "error",
+                "Check the generation selections and try again.",
+            )
         except (
             ComputationClientError,
             ComputationWorkflowError,

@@ -249,6 +249,74 @@ def test_public_only_form_and_public_feature_disabled_behavior(tmp_path: Path) -
         assert "sandbox" not in form.text.casefold()
 
 
+def test_invalid_choose_types_requests_return_friendly_errors(
+    tmp_path: Path,
+) -> None:
+    configured = settings(tmp_path).model_copy(
+        update={
+            "advanced_items_enabled": True,
+            "public_sources_enabled": True,
+        }
+    )
+    with TestClient(create_app(configured)) as client:
+        too_many = client.post(
+            "/generate",
+            data={
+                "source_type": "public",
+                "source_locator": (
+                    "https://chem.libretexts.org/Bookshelves/Test/Page"
+                ),
+                "generation_mode": "selected",
+                "item_count": "8",
+                "item_types": [
+                    "multiple_choice",
+                    "true_false",
+                    "numerical",
+                    "multiple_response",
+                    "select_all",
+                    "select_n",
+                    "fill_in_blank",
+                    "matching",
+                    "ordering",
+                ],
+            },
+            headers={
+                "Origin": "http://testserver",
+                "X-Reviewer": "reviewer@example.org",
+            },
+            follow_redirects=False,
+        )
+        assert too_many.status_code == 303
+        assert "Choose+no+more+than+8+item+types" in too_many.headers["location"]
+        assert "pydantic" not in too_many.headers["location"]
+
+        total_too_small = client.post(
+            "/generate",
+            data={
+                "source_type": "public",
+                "source_locator": (
+                    "https://chem.libretexts.org/Bookshelves/Test/Page"
+                ),
+                "generation_mode": "selected",
+                "item_count": "1",
+                "item_types": [
+                    "multiple_choice",
+                    "true_false",
+                    "numerical",
+                    "ordering",
+                ],
+            },
+            headers={
+                "Origin": "http://testserver",
+                "X-Reviewer": "reviewer@example.org",
+            },
+            follow_redirects=False,
+        )
+        assert total_too_small.status_code == 303
+        assert "Set+Total+number+of+items" in total_too_small.headers["location"]
+        assert "pydantic" not in total_too_small.headers["location"]
+
+
 def test_sandbox_and_legacy_requests_are_blocked_before_adapter_creation(
     tmp_path: Path,
 ) -> None:
