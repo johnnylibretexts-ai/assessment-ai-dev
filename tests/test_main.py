@@ -241,10 +241,16 @@ def test_public_only_form_and_public_feature_disabled_behavior(tmp_path: Path) -
         assert "not+enabled" in response.headers["location"]
 
     enabled_settings = settings(tmp_path).model_copy(
-        update={"public_sources_enabled": True}
+        update={
+            "public_sources_enabled": True,
+            "advanced_items_enabled": True,
+        }
     )
     with TestClient(create_app(enabled_settings)) as client:
         form = client.get("/")
+        assert "Select All That Apply" in form.text
+        assert "not a control that checks every format" in form.text
+        assert "Select Exactly N" in form.text
         assert 'type="hidden" name="source_type" value="public"' in form.text
         assert "sandbox" not in form.text.casefold()
 

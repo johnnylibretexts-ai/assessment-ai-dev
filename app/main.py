@@ -280,6 +280,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "advanced_items_enabled": resolved_settings.advanced_items_enabled,
                 "hint_generation_enabled": resolved_settings.hint_generation_enabled,
                 "item_type_options": [item.value for item in AssessmentItemType],
+                "item_type_labels": {
+                    item.value: _item_type_label(item.value)
+                    for item in AssessmentItemType
+                },
                 "computation_mode": resolved_settings.computation_mode,
                 "computation_families": resolved_settings.computation_families,
             },
@@ -1087,7 +1091,7 @@ def _draft_detail(
         "concept_label": current.concept_label,
         "stem": current.stem,
         "item_type": current.item_type.value,
-        "item_type_label": current.item_type.value.replace("_", " "),
+        "item_type_label": _item_type_label(current.item_type.value),
         "context_type": current.context_type.value,
         "stimulus": current.stimulus,
         "set_key": current.set_key,
@@ -1163,6 +1167,14 @@ def _status_label(status_value: str) -> str:
     if status_value == ReviewStatus.READY_TO_PUBLISH.value:
         return "Approved — not yet published"
     return status_value.replace("_", " ")
+
+
+def _item_type_label(item_type: str) -> str:
+    labels = {
+        AssessmentItemType.SELECT_ALL.value: "Select All That Apply",
+        AssessmentItemType.SELECT_N.value: "Select Exactly N",
+    }
+    return labels.get(item_type, item_type.replace("_", " ").title())
 
 
 def _source_type(backend: str) -> str:
