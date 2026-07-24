@@ -8,16 +8,23 @@ Human hint approval and publication remain intentionally pending.
 
 ## Deployment closure — 2026-07-24
 
-- Assessment AI source: `d7bcce6`; live image:
-  `sha256:0c1ede5f83c71a7511a124249e7691a3c7b8c6d36a2d98d8a0ff329af8de4a1c`
+- Assessment AI source: `ecddda4`; live image:
+  `sha256:91fc9eb28e386a247cb30ec16a1c5e496326a77c57fe4a4739c10202a8ef01c1`
 - ADAPT source: `f38a93a6e`; live image:
   `sha256:d324f2bbe3b23f6e75ac182c8e2f3404ad7929ecde364ccfc322b0ab58e32532`
 - Pre-deploy Assessment AI SQLite and ADAPT MySQL backups are stored under
   `/opt/libretexts/backups/assessment-ai-review-workflow-20260724/`.
 - The live read-only hint audit reports zero findings after append-only repairs to drafts 10,
   13, and 16. Their replacement hint ladders remain unapproved.
-- Existing publication state was preserved: 3 publications and 8 publication attempts.
+- The initial workflow deployment preserved 3 publications and 8 publication attempts. The
+  publication-state follow-up preserved the subsequently recorded live totals of 4 publications
+  and 11 publication attempts.
 - The read-only 380-draft corpus demo was not changed.
+
+The publication-state follow-up derives status by saved draft revision. A successful publication
+for the current revision displays as published and suppresses the duplicate publish form. If a
+newer saved revision exists, the UI reports that the current revision is not yet published while
+identifying the earlier revision and ADAPT question that remain published.
 
 ## Goal
 
