@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
+from .schemas import SourceLicenseMetadata
+
 
 CATALOG_DIR = Path(__file__).resolve().parent / "catalogs"
 CHEMISTRY_SEED = CATALOG_DIR / "fundamentals-gob-chemistry-v1.json"
@@ -70,7 +72,18 @@ def suggested_topic(source_url: str) -> CuratedTopic | None:
     )
 
 
-def source_license(source_url: str) -> SourceLicense | None:
+def source_license(
+    source_url: str,
+    metadata: SourceLicenseMetadata | None = None,
+) -> SourceLicense | None:
+    if metadata is not None:
+        return SourceLicense(
+            code=metadata.code,
+            version=metadata.version,
+            label=metadata.label,
+            evidence_url=metadata.evidence_url,
+            mapping_prefix=source_url,
+        )
     normalized = normalize_source_url(source_url)
     mappings = (
         SourceLicense(

@@ -592,34 +592,36 @@
             {% if mapped_license %}
               <div class="license-evidence">
                 <strong>Source license: {{ mapped_license.label }}</strong>
-                <p>This verified book-level license is enforced and cannot be overridden.</p>
+                <p>This verified LibreTexts page metadata is filled automatically, enforced during publishing, and cannot be overridden.</p>
                 <a href="{{ mapped_license.evidence_url }}" target="_blank" rel="noopener noreferrer">Open license evidence</a>
               </div>
             {% else %}
               <fieldset>
                 <legend>Source license</legend>
-                <label>License
-                  <select name="license_code" required>
+                <p class="help">This page does not expose a supported license tag. Check the license shown on the source page before confirming this fallback.</p>
+                <label for="license-code">License</label>
+                  <select id="license-code" name="license_code" required>
                     <option value="">Choose a license</option>
-                    {% for code, label in manual_license_options %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+                    {% for code, label in manual_license_options %}<option value="{{ code }}" data-license-label="{{ label }}">{{ label }}</option>{% endfor %}
                   </select>
-                </label>
-                <label>License version
-                  <input name="license_version" placeholder="For example, 4.0">
-                </label>
-                <label>Display label
-                  <input name="license_label" placeholder="For example, CC BY 4.0" required>
-                </label>
-                <label>Evidence URL
-                  <input name="license_evidence_url" type="url" required>
-                </label>
+                <label for="license-version">License version</label>
+                  <input id="license-version" name="license_version" placeholder="For example, 4.0">
+                <label for="license-label">Display label</label>
+                  <input id="license-label" name="license_label" placeholder="For example, CC BY 4.0" required>
+                <label for="license-evidence-url">Evidence URL</label>
+                  <input id="license-evidence-url" name="license_evidence_url" type="url"
+                         value="{{ draft.source_url }}" required>
+                <p class="help">The source page URL is filled in because its license footer is the publication evidence.</p>
                 <label class="check">
                   <input type="checkbox" name="license_confirmed" value="true" required>
                   <span>I verified this license against the source.</span>
                 </label>
               </fieldset>
             {% endif %}
-            <label for="topic_stable_id">Curated Chemistry framework topic</label>
+            <label for="topic_stable_id">Curated Fundamentals of GOB Chemistry framework topic</label>
+            {% if not suggested_topic_id %}
+              <p class="notice error">This source is outside the currently curated framework. Do not choose a merely similar topic; publish only if one of the topics below genuinely matches the question.</p>
+            {% endif %}
             <select id="topic_stable_id" name="topic_stable_id" required>
               <option value="">Choose a topic</option>
               {% for group in topic_groups %}

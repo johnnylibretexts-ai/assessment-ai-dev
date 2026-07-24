@@ -16,11 +16,19 @@ class Paragraph(BaseModel):
     end: int = Field(gt=0)
 
 
+class SourceLicenseMetadata(BaseModel):
+    code: str = Field(min_length=1, max_length=40)
+    version: str | None = Field(default=None, max_length=20)
+    label: str = Field(min_length=1, max_length=120)
+    evidence_url: str = Field(min_length=1, max_length=4_096)
+
+
 class SourceInfo(BaseModel):
     backend: str = "cxone_sandbox"
     canonical_url: str
     path: str
     page_id: str | None = None
+    license: SourceLicenseMetadata | None = None
 
 
 class NormalizedPage(BaseModel):
@@ -629,6 +637,13 @@ class GenerateRequest(BaseModel):
             raise ValueError("choose at least one item type")
         if len(self.item_types) != len(set(self.item_types)):
             raise ValueError("item type selections must not contain duplicates")
+        if (
+            self.generation_mode == "selected"
+            and self.item_count < len(self.item_types)
+        ):
+            raise ValueError(
+                "total item count must be at least the number of selected item types"
+            )
         return self
 
 

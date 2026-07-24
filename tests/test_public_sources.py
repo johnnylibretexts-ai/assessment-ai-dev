@@ -139,15 +139,27 @@ async def test_public_adapter_uses_only_fixed_proxy_calls_and_headers(
                     "uri.ui": f"{CHEM_URL}?ignored=yes#ignored",
                 },
             )
+        if request.url.path.endswith("/tags"):
+            return httpx.Response(
+                200,
+                json={
+                    "@count": "2",
+                    "tag": [
+                        {"@value": "license:ccbyncsa"},
+                        {"@value": "licenseversion:40"},
+                    ],
+                },
+            )
         return httpx.Response(200, json={"body": body})
 
     async with adapter(tmp_path, handler) as content:
         page = await content.fetch_page(f"{CHEM_URL}?caller=yes#fragment")
 
-    assert [request.method for request in requests] == ["PUT", "PUT"]
+    assert [request.method for request in requests] == ["PUT", "PUT", "PUT"]
     assert [str(request.url) for request in requests] == [
         "https://api.libretexts.org/endpoint/info",
         "https://api.libretexts.org/endpoint/contents",
+        "https://api.libretexts.org/endpoint/tags",
     ]
     payloads = [json.loads(request.content) for request in requests]
     assert payloads[0] == {
@@ -160,6 +172,7 @@ async def test_public_adapter_uses_only_fixed_proxy_calls_and_headers(
         "dreamformat": "json",
     }
     assert payloads[1] == {**payloads[0], "mode": "view"}
+    assert payloads[2] == payloads[0]
     for request in requests:
         assert request.headers["origin"] == PUBLIC_API_ORIGIN
         assert request.headers["user-agent"] == PUBLIC_API_USER_AGENT
@@ -172,8 +185,39 @@ async def test_public_adapter_uses_only_fixed_proxy_calls_and_headers(
     assert page.source.page_id == "86187"
     assert page.source.path.startswith("chem.libretexts.org/Bookshelves/")
     assert page.source.canonical_url == CHEM_URL
+    assert page.source.license is not None
+    assert page.source.license.code == "ccbyncsa"
+    assert page.source.license.version == "4.0"
+    assert page.source.license.label == "CC BY-NC-SA 4.0"
+    assert page.source.license.evidence_url == CHEM_URL
     assert "Measurements compare" in page.plaintext
     assert page.plaintext[page.paragraphs[0].start : page.paragraphs[0].end]
+
+
+@pytest.mark.asyncio
+async def test_public_license_backfill_reads_only_tags_and_rejects_ambiguity(
+    tmp_path: Path,
+) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "tag": [
+                    {"title": "license:ccby"},
+                    {"title": "license:ccbync"},
+                    {"title": "licenseversion:40"},
+                ]
+            },
+        )
+
+    async with adapter(tmp_path, handler) as content:
+        metadata = await content.fetch_license(CHEM_URL)
+
+    assert metadata is None
+    assert [request.url.path for request in requests] == ["/endpoint/tags"]
 
 
 @pytest.mark.asyncio
