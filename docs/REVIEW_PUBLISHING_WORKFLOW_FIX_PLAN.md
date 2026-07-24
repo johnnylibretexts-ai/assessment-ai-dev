@@ -1,10 +1,23 @@
 # Assessment AI Review and Publishing Workflow Fix Plan
 
 **Date:** 2026-07-24
-**Status:** Implemented and locally qualified; live backup, deployment, and bounded
-repair remain in progress
+**Status:** Implemented, qualified, and deployed; bounded hint repairs are complete.
+Human hint approval and publication remain intentionally pending.
 **Assessment AI baseline:** `feat/math-rendering` at `6bc57fe`
 **Writable remotes:** `johnnylibretexts/assessment-ai-dev` and `johnnylibretexts/adapt-dev` only
+
+## Deployment closure — 2026-07-24
+
+- Assessment AI source: `d7bcce6`; live image:
+  `sha256:0c1ede5f83c71a7511a124249e7691a3c7b8c6d36a2d98d8a0ff329af8de4a1c`
+- ADAPT source: `f38a93a6e`; live image:
+  `sha256:d324f2bbe3b23f6e75ac182c8e2f3404ad7929ecde364ccfc322b0ab58e32532`
+- Pre-deploy Assessment AI SQLite and ADAPT MySQL backups are stored under
+  `/opt/libretexts/backups/assessment-ai-review-workflow-20260724/`.
+- The live read-only hint audit reports zero findings after append-only repairs to drafts 10,
+  13, and 16. Their replacement hint ladders remain unapproved.
+- Existing publication state was preserved: 3 publications and 8 publication attempts.
+- The read-only 380-draft corpus demo was not changed.
 
 ## Goal
 
