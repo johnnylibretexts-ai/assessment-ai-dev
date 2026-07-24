@@ -239,6 +239,8 @@ def test_corpus_renderer_is_display_only_and_excludes_machine_fields() -> None:
     assert "innerHTML" not in bootstrap
     assert "textContent" in bootstrap
     assert "SEGMENT_MARKER" in bootstrap
+    assert "canonicalizeServerPreview" in bootstrap
+    assert ".parameter-preview-table tbody td:not(:first-child)" in bootstrap
 
 
 def test_server_owned_engine_preview_gets_display_only_canonical_tex() -> None:
