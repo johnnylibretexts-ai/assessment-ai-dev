@@ -2,7 +2,8 @@
 
 **Date:** 2026-07-24
 **Status:** Implemented, qualified, and deployed; bounded hint repairs are complete.
-Human hint approval and publication remain intentionally pending.
+The repaired ladders remain subject to their own human review. Draft 14 was subsequently approved
+and published during live workflow verification; Draft 16 remains intentionally unpublished.
 **Assessment AI baseline:** `feat/math-rendering` at `6bc57fe`
 **Writable remotes:** `johnnylibretexts/assessment-ai-dev` and `johnnylibretexts/adapt-dev` only
 
