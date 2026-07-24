@@ -1,0 +1,15 @@
+{
+  "name": "libretexts-assessment-ai-static-assets",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pinned browser assets for the Assessment AI reviewer",
+  "license": "MIT",
+  "scripts": {
+    "vendor:mathjax": "node scripts/vendor-mathjax.mjs"
+  },
+  "dependencies": {
+    "@mathjax/mathjax-mhchem-font-extension": "4.1.0",
+    "@mathjax/mathjax-newcm-font": "4.1.0",
+    "mathjax": "4.1.0"
+  }
+}

@@ -20,7 +20,7 @@
       {% for paragraph in draft.cited_paragraphs %}
         <article class="source-paragraph">
           <span>Paragraph {{ paragraph.index }}</span>
-          <p>{{ paragraph.text }}</p>
+          <p class="math-content">{{ paragraph.display_text }}</p>
         </article>
       {% endfor %}
     </section>
@@ -31,13 +31,13 @@
         <span class="muted">{{ draft.model_id }} · {{ draft.prompt_version }}</span>
       </div>
       <p class="eyebrow">Revised AI draft</p>
-      {% if draft.stimulus %}<div class="stimulus"><strong>Stimulus</strong><p>{{ draft.stimulus }}</p></div>{% endif %}
-      <h2>{{ draft.stem }}</h2>
+      {% if draft.stimulus %}<div class="stimulus"><strong>Stimulus</strong><p class="math-content">{{ draft.display.stimulus }}</p></div>{% endif %}
+      <h2 class="math-content">{{ draft.display.stem }}</h2>
       {% if draft.choices %}
         <ol class="choices" type="A">
           {% for choice in draft.choices %}
             <li class="{% if choice.correct %}correct{% endif %}">
-              {{ choice.text }}
+              <span class="math-content">{{ draft.display.choices[loop.index0].text }}</span>
               {% if choice.correct %}<strong>Correct answer</strong>{% endif %}
             </li>
           {% endfor %}
@@ -47,24 +47,34 @@
         <div class="interaction-preview"><strong>Correct order:</strong> {{ draft.response.correct_order|join(' → ') }}</div>
       {% elif draft.item_type == 'matching' %}
         <table class="interaction-table"><thead><tr><th>Prompt</th><th>Match</th></tr></thead><tbody>
-          {% for pair in draft.response.matching_pairs %}<tr><td>{{ pair.prompt }}</td><td>{{ pair.target }}</td></tr>{% endfor %}
+          {% for pair in draft.display.response.matching_pairs %}<tr><td class="math-content">{{ pair.prompt }}</td><td class="math-content">{{ pair.target }}</td></tr>{% endfor %}
         </tbody></table>
       {% elif draft.item_type in ['fill_in_blank', 'drag_drop_cloze'] %}
         <ul>{% for blank in draft.response.blanks %}<li><strong>{{ blank.id }}:</strong> {{ blank.correct|join(' or ') }}</li>{% endfor %}</ul>
       {% elif draft.item_type == 'numerical' %}
         <div class="interaction-preview"><strong>Answer:</strong> {{ draft.response.numeric_answer }} ± {{ draft.response.numeric_tolerance }}</div>
       {% elif draft.item_type == 'image_hotspot' %}
-        <div class="interaction-preview"><strong>Image:</strong> {{ draft.response.image_alt }}<br><span class="muted">{{ draft.response.image_url }}</span>
-          <ul>{% for region in draft.response.hotspot_regions %}<li>{% if region.correct %}<strong>Correct: </strong>{% endif %}{{ region.label }} ({{ region.shape }})</li>{% endfor %}</ul>
+        <div class="interaction-preview"><strong>Image:</strong> <span class="math-content">{{ draft.display.response.image_alt }}</span><br><span class="muted">{{ draft.response.image_url }}</span>
+          <ul>{% for region in draft.display.response.hotspot_regions %}<li>{% if region.correct %}<strong>Correct: </strong>{% endif %}<span class="math-content">{{ region.label }}</span> ({{ region.shape }})</li>{% endfor %}</ul>
         </div>
       {% elif draft.item_type in ['highlight_text', 'highlight_table'] %}
-        <div class="interaction-preview">{% for segment in draft.response.highlight_segments %}<span class="highlight-segment {% if segment.correct %}correct{% endif %}">{{ segment.text }}</span>{% endfor %}</div>
+        <div class="interaction-preview math-content">{% for segment in draft.display.response.highlight_segments %}<span class="highlight-segment {% if segment.correct %}correct{% endif %}">{{ segment.text }}</span>{% endfor %}</div>
       {% elif draft.item_type == 'matrix' %}
+        <div class="interaction-preview">
+          <strong>Columns</strong>
+          <ul>{% for column in draft.display.response.matrix_columns %}<li><strong>{{ column.id }}:</strong> <span class="math-content">{{ column.text }}</span></li>{% endfor %}</ul>
+        </div>
         <table class="interaction-table"><thead><tr><th>Row</th><th>Correct column(s)</th></tr></thead><tbody>
-          {% for row in draft.response.matrix_rows %}<tr><td>{{ row.text }}</td><td>{{ row.correct_column_ids|join(', ') }}</td></tr>{% endfor %}
+          {% for row in draft.display.response.matrix_rows %}<tr><td class="math-content">{{ row.text }}</td><td>{{ row.correct_column_ids|join(', ') }}</td></tr>{% endfor %}
         </tbody></table>
       {% elif draft.item_type == 'bow_tie' %}
-        <div class="interaction-preview"><strong>Clinical bow-tie structure</strong><p>Actions, central condition, and monitored parameters require specialist review.</p></div>
+        <div class="interaction-preview math-content">
+          <strong>Bow-tie structure</strong>
+          {% for label, group in [('Actions', draft.display.response.bow_tie_actions), ('Condition', draft.display.response.bow_tie_condition), ('Parameters', draft.display.response.bow_tie_parameters)] %}
+            <h3>{{ label }}</h3>
+            <ul>{% for choice in group.choices %}<li class="{% if choice.correct %}correct{% endif %}">{{ choice.text }}</li>{% endfor %}</ul>
+          {% endfor %}
+        </div>
       {% elif draft.item_type in ['webwork', 'imathas'] %}
         <div class="interaction-preview"><strong>{{ draft.item_type_label }} parameter specification</strong><pre tabindex="0" aria-label="Scrollable {{ draft.item_type_label }} parameter specification">{{ draft.response.parameterized|tojson(indent=2) }}</pre></div>
         {% if draft.engine_validation %}
@@ -72,7 +82,7 @@
             <strong>Fixed-seed validation:</strong> {{ draft.engine_validation.seed_count }} seeds passed with {{ draft.engine_validation.compiler_version }}.
             <div class="table-scroll" tabindex="0" aria-label="Scrollable fixed-seed validation previews">
               <table class="interaction-table parameter-preview-table"><thead><tr><th>Seed</th><th>Generated prompt</th><th>Correct answer</th><th>Explanation</th></tr></thead><tbody>
-                {% for preview in draft.engine_validation.previews %}<tr><td>{{ preview.seed }}</td><td>{{ preview.prompt }}</td><td>{{ preview.answer }}</td><td>{{ preview.explanation }}</td></tr>{% endfor %}
+                {% for preview in draft.engine_validation.previews %}<tr><td>{{ preview.seed }}</td><td class="math-content">{{ preview.display_prompt }}</td><td class="math-content">{{ preview.display_answer }}</td><td class="math-content">{{ preview.display_explanation }}</td></tr>{% endfor %}
               </tbody></table>
             </div>
           </div>
@@ -80,12 +90,12 @@
       {% endif %}
       <div class="explanation">
         <h3>Explanation</h3>
-        <p>{{ draft.explanation }}</p>
+        <p class="math-content">{{ draft.display.explanation }}</p>
       </div>
       {% if draft.critique_issues %}
         <details>
           <summary>See critique used for revision</summary>
-          <ul>{% for issue in draft.critique_issues %}<li>{{ issue }}</li>{% endfor %}</ul>
+          <ul class="math-content">{% for issue in draft.critique_issues %}<li>{{ issue }}</li>{% endfor %}</ul>
         </details>
       {% endif %}
 
@@ -120,7 +130,7 @@
           {% endif %}
 
           {% if computation_report.legacy_reason|default('') == 'legacy_without_blueprint' %}
-            <p class="computation-evidence-state computation-evidence-warning">
+            <p class="computation-evidence-state computation-evidence-warning math-content">
               <strong>Unsupported legacy draft:</strong> this item predates the typed
               computation blueprint and must be explicitly revalidated.
             </p>
@@ -189,7 +199,7 @@
           {% if computation_report.domain|default(none) %}
             <div class="computation-section">
               <h4>Domain</h4>
-              <p>{% if computation_report.domain is string %}{{ computation_report.domain }}{% else %}<code>{{ computation_report.domain|tojson }}</code>{% endif %}</p>
+              <p class="{% if computation_report.domain is string %}math-content{% else %}math-raw{% endif %}">{% if computation_report.domain is string %}{{ computation_report.domain }}{% else %}<code>{{ computation_report.domain|tojson }}</code>{% endif %}</p>
             </div>
           {% endif %}
 
@@ -198,7 +208,7 @@
               <h4>Structured assumptions</h4>
               <ul>
                 {% for assumption in computation_report.assumptions %}
-                  <li>{% if assumption is string %}{{ assumption }}{% else %}<code>{{ assumption|tojson }}</code>{% endif %}</li>
+                  <li class="{% if assumption is string %}math-content{% else %}math-raw{% endif %}">{% if assumption is string %}{{ assumption }}{% else %}<code>{{ assumption|tojson }}</code>{% endif %}</li>
                 {% endfor %}
               </ul>
             </div>
@@ -218,7 +228,7 @@
                     <tr>
                       <th scope="row">{{ check.name|default('Unnamed check', true) }}</th>
                       <td><span class="check-status check-status-{{ check_status }}">{{ check_status.replace('_', ' ') }}</span></td>
-                      <td>
+                      <td class="math-content">
                         {{ check.detail|default('No detail recorded.', true) }}
                         {% if check.details|default({}, true) %}
                           <details>
@@ -243,7 +253,7 @@
               <h4>Limitations</h4>
               <ul>
                 {% for limitation in computation_report.limitations %}
-                  <li>{% if limitation is string %}{{ limitation }}{% else %}<code>{{ limitation|tojson }}</code>{% endif %}</li>
+                  <li class="{% if limitation is string %}math-content{% else %}math-raw{% endif %}">{% if limitation is string %}{{ limitation }}{% else %}<code>{{ limitation|tojson }}</code>{% endif %}</li>
                 {% endfor %}
               </ul>
             </div>
@@ -440,7 +450,7 @@
                       <strong>{{ attestation.specialist_identity|default(attestation.identity|default('Computation specialist', true), true) }}</strong>
                       {% if attestation.created_at|default(none) %}<span class="muted">{{ attestation.created_at }}</span>{% endif %}
                     </div>
-                    <p>{{ attestation.rationale|default('No rationale recorded.', true) }}</p>
+                    <p class="math-content">{{ attestation.rationale|default('No rationale recorded.', true) }}</p>
                   </li>
                 {% endfor %}
               </ul>
@@ -485,19 +495,22 @@
         <form method="post" action="/drafts/{{ draft.id }}/edit" class="review-form">
           {% if draft.item_type == 'multiple_choice' %}
           <label for="stem">Question</label>
-          <textarea id="stem" name="stem" rows="3" required>{{ draft.stem }}</textarea>
+          <textarea id="stem" class="math-raw" name="stem" rows="3" required>{{ draft.stem }}</textarea>
+          <div class="math-preview math-content" data-math-preview-for="stem" aria-label="Rendered question preview"></div>
           <fieldset>
             <legend>Choices and correct answer</legend>
             {% for choice in draft.choices %}
               <div class="choice-edit">
                 <input aria-label="Correct answer {{ choice.id }}" type="radio" name="correct_choice" value="{{ choice.id }}" {% if choice.correct %}checked{% endif %} required>
                 <label for="choice_{{ choice.id }}">{{ choice.id }}</label>
-                <input id="choice_{{ choice.id }}" name="choice_{{ choice.id|lower }}" value="{{ choice.text }}" required>
+                <input id="choice_{{ choice.id }}" class="math-raw" name="choice_{{ choice.id|lower }}" value="{{ choice.text }}" required>
               </div>
+              <div class="math-preview math-content" data-math-preview-for="choice_{{ choice.id }}" aria-label="Rendered choice {{ choice.id }} preview"></div>
             {% endfor %}
           </fieldset>
           <label for="explanation">Explanation</label>
-          <textarea id="explanation" name="explanation" rows="4" required>{{ draft.explanation }}</textarea>
+          <textarea id="explanation" class="math-raw" name="explanation" rows="4" required>{{ draft.explanation }}</textarea>
+          <div class="math-preview math-content" data-math-preview-for="explanation" aria-label="Rendered explanation preview"></div>
           <div class="two-column">
             <label>Bloom level
               <select name="bloom">
@@ -516,7 +529,7 @@
           <p class="help">Saving an edit resets both human confirmation checks.</p>
           {% else %}
             <label for="item_json">Typed assessment item JSON</label>
-            <textarea id="item_json" name="item_json" rows="24" required>{{ draft.item_json }}</textarea>
+            <textarea id="item_json" class="math-raw" name="item_json" rows="24" required>{{ draft.item_json }}</textarea>
             <label for="advanced_edit_notes">Edit note</label>
             <textarea id="advanced_edit_notes" name="reviewer_notes" rows="2"></textarea>
             <button type="submit">Validate and save item</button>
@@ -533,7 +546,9 @@
             {% for rung in draft.hint_ladder.rungs %}
               <fieldset class="hint-rung">
                 <legend>{{ rung.rung|capitalize }} hint</legend>
-                <label>Hint text<textarea name="{{ rung.rung }}_text" rows="3" required>{{ rung.text }}</textarea></label>
+                <label for="hint-{{ rung.rung }}-text">Hint text</label>
+                <textarea id="hint-{{ rung.rung }}-text" class="math-raw" name="{{ rung.rung }}_text" rows="3" required>{{ rung.text }}</textarea>
+                <div class="math-preview math-content" data-math-preview-for="hint-{{ rung.rung }}-text" aria-label="Rendered {{ rung.rung }} hint preview">{{ rung.display_text }}</div>
                 <label>Cited paragraphs<input name="{{ rung.rung }}_citations" value="{{ rung.citations_text }}" required></label>
                 {% if rung.answer_leak_detected %}<p class="error-text">The generator flagged possible answer leakage. Edit this rung before approval.</p>{% endif %}
               </fieldset>

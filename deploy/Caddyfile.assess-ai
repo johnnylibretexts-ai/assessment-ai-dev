@@ -2,10 +2,11 @@ assess-ai.libretexts.dev {
 	import secheaders
 	import gate
 	header {
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
 		Permissions-Policy "camera=(), geolocation=(), microphone=()"
 		X-Frame-Options "DENY"
 	}
+	encode zstd gzip
 
 	request_body {
 		max_size 256KB

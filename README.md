@@ -73,6 +73,19 @@ the same Pydantic models before it can enter the review queue. If a provider fai
 attempts, the next ready provider is tried. The successful provider and model are stored with each
 LLM call for audit provenance.
 
+## Mathematical notation
+
+Reviewer-facing math uses self-hosted MathJax 4.1.0 with the New Computer Modern font; the browser
+makes no CDN requests. Generated prose accepts only `\(...\)` for inline math and `\[...\]` for
+display math. Dollar delimiters, naked TeX commands, ASCII pseudo-math, segment markers, HTML, URL
+and image macros, dynamic package loading, and macro definitions are rejected by the provider
+schema and enter the normal structured-output correction path. Machine/scoring fields and
+WeBWorK/IMathAS templates remain unchanged.
+
+Question and hint editors show raw canonical TeX with a safe rendered preview. See
+[`docs/MATH_RENDERING_RUNBOOK.md`](docs/MATH_RENDERING_RUNBOOK.md) for qualification, deployment,
+bounded draft repair, and rollback procedures.
+
 `/healthz` is container liveness; `/readyz` returns HTTP 503 until at least one selected provider is
 ready. A direct cloud provider is ready only when its API key is non-empty. This lets the review
 shell stay observable without claiming generation is ready.

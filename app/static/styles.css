@@ -76,6 +76,31 @@ code { padding: 2px 5px; border-radius: 5px; background: #eef3f7; }
 .empty-state { padding: 46px; border: 1px dashed #aebbc8; border-radius: 12px; text-align: center; color: var(--muted); background: rgb(255 255 255 / 60%); }
 .notice { margin: 20px 0; padding: 12px 15px; border-radius: 8px; background: #e0f2fe; color: #075985; }
 .notice.error { background: var(--danger-bg); color: var(--danger); }
+.math-warning { margin-inline: auto; max-width: 1200px; }
+.math-content { min-width: 0; overflow-wrap: anywhere; }
+.math-content mjx-container[jax="CHTML"] {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: .08em;
+}
+.math-content mjx-container[display="true"] {
+  margin: .75rem 0;
+  text-align: left;
+}
+.math-preview {
+  min-height: 2.75rem;
+  margin: 7px 0 14px;
+  padding: 10px 12px;
+  border: 1px dashed #9db4c5;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.math-preview:empty::before {
+  color: var(--muted);
+  content: "Rendered preview";
+}
+.math-raw { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .back { margin: 24px 0 0; }
 .review-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 20px; align-items: start; }
 .review-layout > * { min-width: 0; }

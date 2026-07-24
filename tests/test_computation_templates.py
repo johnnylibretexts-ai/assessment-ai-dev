@@ -38,7 +38,7 @@ def _render_index(**overrides: Any) -> str:
 
 
 def _draft() -> dict[str, Any]:
-    return {
+    draft = {
         "id": 17,
         "status": "ready_for_review",
         "status_label": "ready for review",
@@ -71,6 +71,14 @@ def _draft() -> dict[str, Any]:
         "hint_ladder": None,
         "publications": [],
     }
+    draft["display"] = {
+        "stem": draft["stem"],
+        "stimulus": draft["stimulus"],
+        "explanation": draft["explanation"],
+        "choices": draft["choices"],
+        "response": draft["response"],
+    }
+    return draft
 
 
 def _render_draft(

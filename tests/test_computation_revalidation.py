@@ -276,8 +276,8 @@ def test_legacy_revalidation_rebinds_and_appends_evidence_atomically(
         assert rebound.current.response.numeric_answer == 5
         assert rebound.current.stem.startswith("What is the legacy numerical answer?")
         assert (
-            'For the source concept "Computed quantity": Evaluate (2 + 3).'
-            in rebound.current.stem
+            'For the source concept "Computed quantity": '
+            r"Evaluate \(\left(2 + 3\right)\)." in rebound.current.stem
         )
         assert current is not None
         assert current.status == "partially_validated"

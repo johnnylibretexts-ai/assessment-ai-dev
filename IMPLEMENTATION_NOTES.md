@@ -28,6 +28,11 @@ from the working P0 service described here.
   CC BY-NC-SA 3.0; unmapped sources require a reviewer-selected and confirmed license.
 - QTI export is a deterministic QTI 3.0.1 assessment-item ZIP, validated offline against pinned
   official 1EdTech schemas. It is separate from ADAPT's internal `qti_json` representation.
+- Reviewer-facing math is rendered only by the self-hosted, checksum-manifested MathJax 4.1.0
+  CommonHTML runtime. Generated human prose must use `\(...\)` and `\[...\]`; scoring strings,
+  typed computation identities, and external-engine templates are deliberately excluded. Human
+  OIDC identity and the dedicated role-5 ADAPT publishing credential remain separate and are not
+  exposed to the renderer.
 - Existing ADAPT hint UI and telemetry support one flat hint, not per-rung progressive reveal. P1
   graduated hinting therefore requires the additive private-fork contract: server-only rung storage
   (never `qti_json`), append-only attempt inputs, one-row-per-request lifecycle telemetry,

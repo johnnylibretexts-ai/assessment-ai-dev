@@ -34,7 +34,9 @@ from app.schemas import (
     ConceptBatch,
     Critique,
     Difficulty,
+    GeneratedCritique,
     GeneratedHintLadderDraft,
+    GeneratedQuestionDraft,
     HintRungDraft,
     HintRungType,
     NormalizedPage,
@@ -76,7 +78,8 @@ class FakeLLM:
         if not self.responses:
             raise AssertionError("fake LLM response queue exhausted")
         value = self.responses.pop(0)
-        assert isinstance(value, schema)
+        if not isinstance(value, schema):
+            value = schema.model_validate(value.model_dump(mode="json"))
         raw = json.dumps(value.model_dump(mode="json"), sort_keys=True)
         attempt = LLMAttemptMetadata(
             attempt=1,
@@ -222,9 +225,9 @@ async def test_pipeline_runs_separate_mandatory_revision_and_persists_provenance
     assert content.paths == ["Sandboxes/johnnyphung/Demo/Energy"]
     assert [schema for _, schema, _ in llm.calls] == [
         ConceptBatch,
-        QuestionDraft,
-        Critique,
-        QuestionDraft,
+        GeneratedQuestionDraft,
+        GeneratedCritique,
+        GeneratedQuestionDraft,
     ]
     assert "mandatory revised MCQ" in llm.calls[-1][0]
     draft = repository.require_draft(outcome.draft_id)
@@ -246,7 +249,12 @@ async def test_pipeline_runs_separate_mandatory_revision_and_persists_provenance
         "revision",
     ]
     assert all(call.model_id == "test-open-model" for call in source.llm_calls)
-    assert all(call.prompt_version.endswith("-v1") for call in source.llm_calls)
+    assert [call.prompt_version for call in source.llm_calls] == [
+        "concept-extraction-v1",
+        "assessment-item-initial-v2",
+        "assessment-item-critique-v2",
+        "assessment-item-revision-v2",
+    ]
     assert all(call.prompt_hash and call.raw_response for call in source.llm_calls)
 
 
