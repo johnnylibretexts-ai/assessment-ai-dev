@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import socket
 import threading
+import time
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -90,7 +91,18 @@ class FakeAdapt:
         self.hint_sync_calls += 1
 
 
+class PortUnavailable(RuntimeError):
+    """The chosen port was taken between selection and bind."""
+
+
 def free_port() -> int:
+    """Ask the kernel for a free port.
+
+    Inherently racy: the socket must close before uvicorn can bind the same
+    port, so anything else on the host may take it in between. Callers retry
+    with a fresh port rather than failing the run -- see disposable_instance.
+    """
+
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         return int(probe.getsockname()[1])
@@ -288,11 +300,18 @@ class LiveServer:
 
     def start(self, timeout: float = 30.0) -> None:
         self._thread.start()
-        deadline = datetime.now(UTC).timestamp() + timeout
-        while datetime.now(UTC).timestamp() < deadline:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
             if self._server.started:
                 return
-            threading.Event().wait(0.05)
+            if not self._thread.is_alive():
+                # uvicorn raises inside the thread when the port is taken. Say
+                # so immediately: waiting out the full timeout would report
+                # "did not start in time", which points at the wrong cause.
+                raise PortUnavailable(
+                    f"server thread exited before binding {self.base_url}"
+                )
+            time.sleep(0.05)
         raise RuntimeError("live server did not start in time")
 
     def stop(self) -> None:
@@ -304,13 +323,29 @@ class LiveServer:
 def disposable_instance(tmp_path: Path, port: int | None = None) -> Iterator[dict]:
     """Start a seeded, fake-publishing Assessment AI and yield its handles."""
 
-    chosen = port or free_port()
-    settings = build_settings(
-        tmp_path / "browser-regression.db", chosen, tmp_path / "qti"
-    )
-    app = create_app(settings)
-    server = LiveServer(app, chosen)
-    server.start()
+    # The port is baked into allowed_origin, so losing a port race means
+    # rebuilding Settings and the app, not merely re-binding. An explicit port
+    # is never retried -- the caller asked for that one specifically.
+    attempts = 1 if port else 3
+    settings = None
+    server = None
+    app = None
+    for attempt in range(1, attempts + 1):
+        chosen = port or free_port()
+        settings = build_settings(
+            tmp_path / "browser-regression.db", chosen, tmp_path / "qti"
+        )
+        app = create_app(settings)
+        server = LiveServer(app, chosen)
+        try:
+            server.start()
+            break
+        except PortUnavailable:
+            server.stop()
+            if attempt == attempts:
+                raise
+    if server is None or settings is None or app is None:  # pragma: no cover
+        raise RuntimeError("failed to start a disposable instance")
     try:
         fake = FakeAdapt()
         # Rebuild the publisher around the fake BEFORE anything can publish.
