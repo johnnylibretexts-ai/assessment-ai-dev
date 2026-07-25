@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -7,6 +8,10 @@ from urllib.parse import urlparse
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+COMPUTATION_PROXY_TOKEN_HEADER = "x-assessment-ai-proxy-token"
+DEFAULT_COMPUTATION_SPECIALIST_SUBJECT_HEADER = "x-assessment-ai-authenticated-subject"
 
 
 class Settings(BaseSettings):
@@ -31,6 +36,27 @@ class Settings(BaseSettings):
     hint_generation_enabled: bool = False
     webwork_enabled: bool = False
     imathas_enabled: bool = False
+
+    computation_mode: Literal["off", "assist", "enforce"] = "off"
+    computation_family_allowlist: str = ""
+    computation_socket_path: Path = Path("/run/assessment-computation/compute.sock")
+    # v0 qualification binds these exact wall clocks to the sidecar and client.
+    # They are exposed for health reporting, not configurable runtime knobs.
+    computation_numeric_timeout_seconds: Literal[2.0] = 2.0
+    computation_unit_timeout_seconds: Literal[2.0] = 2.0
+    computation_algebraic_timeout_seconds: Literal[5.0] = 5.0
+    computation_specialist_subject_allowlist: str = ""
+    computation_specialist_subject_header: str = (
+        DEFAULT_COMPUTATION_SPECIALIST_SUBJECT_HEADER
+    )
+    computation_trusted_proxy_token: SecretStr | None = None
+    computation_image_reference: str = Field(default="unavailable", max_length=512)
+    # Native grading is a distinct, optional local-only trust boundary.  Both
+    # values must be supplied together; the empty defaults make the runner
+    # unreachable unless an operator explicitly configures a Unix socket and
+    # a source-controlled qualified runner identity.
+    computation_native_runner_socket_path: Path | None = None
+    computation_native_runner_id: str = ""
 
     sandbox_root: str = "Sandboxes/johnnyphung"
     cxone_host: str = "dev.libretexts.org"
@@ -94,6 +120,149 @@ class Settings(BaseSettings):
     imathas_bridge_api_url: str | None = None
     imathas_bridge_token: SecretStr | None = None
     imathas_timeout_seconds: float = Field(default=30.0, ge=5, le=120)
+
+    @field_validator("computation_family_allowlist")
+    @classmethod
+    def validate_computation_family_allowlist(cls, value: str) -> str:
+        return _normalize_csv_allowlist(
+            value,
+            setting_name="computation_family_allowlist",
+            allowed={"numeric", "algebraic", "unit"},
+            casefold=True,
+        )
+
+    @field_validator("computation_specialist_subject_allowlist")
+    @classmethod
+    def validate_computation_specialist_subject_allowlist(cls, value: str) -> str:
+        normalized = _normalize_csv_allowlist(
+            value,
+            setting_name="computation_specialist_subject_allowlist",
+        )
+        for subject in normalized.split(",") if normalized else ():
+            if len(subject) > 255:
+                raise ValueError(
+                    "computation specialist subjects must be at most 255 characters"
+                )
+            if any(character.isspace() or ord(character) < 32 for character in subject):
+                raise ValueError(
+                    "computation specialist subjects must not contain whitespace "
+                    "or control characters"
+                )
+        return normalized
+
+    @field_validator("computation_specialist_subject_header")
+    @classmethod
+    def validate_computation_specialist_subject_header(cls, value: str) -> str:
+        normalized = value.strip().casefold()
+        if (
+            not re.fullmatch(
+                r"x-assessment-ai-[a-z0-9]+(?:-[a-z0-9]+)*",
+                normalized,
+            )
+            or normalized == COMPUTATION_PROXY_TOKEN_HEADER
+        ):
+            raise ValueError(
+                "computation_specialist_subject_header must be a dedicated "
+                "X-Assessment-AI-* header and must not be the proxy-token header"
+            )
+        return normalized
+
+    @field_validator("computation_trusted_proxy_token")
+    @classmethod
+    def validate_computation_trusted_proxy_token(
+        cls,
+        value: SecretStr | None,
+    ) -> SecretStr | None:
+        if value is None:
+            return None
+        token = value.get_secret_value()
+        if not token.strip():
+            return None
+        if not re.fullmatch(r"[A-Za-z0-9_-]{32,256}", token):
+            raise ValueError(
+                "computation_trusted_proxy_token must be a 32–256 character "
+                "base64url token"
+            )
+        return SecretStr(token)
+
+    @field_validator("computation_socket_path")
+    @classmethod
+    def validate_computation_socket_path(cls, value: Path) -> Path:
+        if not value.is_absolute() or value.suffix != ".sock" or ".." in value.parts:
+            raise ValueError(
+                "computation_socket_path must be an absolute .sock path "
+                "without parent traversal"
+            )
+        return value
+
+    @field_validator("computation_native_runner_socket_path", mode="before")
+    @classmethod
+    def normalize_computation_native_runner_socket_path(
+        cls,
+        value: object,
+    ) -> object:
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        return value
+
+    @field_validator("computation_native_runner_socket_path")
+    @classmethod
+    def validate_computation_native_runner_socket_path(
+        cls,
+        value: Path | None,
+    ) -> Path | None:
+        if value is None:
+            return None
+        if not value.is_absolute() or value.suffix != ".sock" or ".." in value.parts:
+            raise ValueError(
+                "computation_native_runner_socket_path must be an absolute "
+                ".sock path without parent traversal"
+            )
+        return value
+
+    @field_validator("computation_native_runner_id")
+    @classmethod
+    def validate_computation_native_runner_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            return ""
+        if re.fullmatch(r"[a-z][a-z0-9_.-]{2,63}", normalized) is None:
+            raise ValueError(
+                "computation_native_runner_id must be a safe source-controlled "
+                "runner identity"
+            )
+        return normalized
+
+    @field_validator("computation_image_reference")
+    @classmethod
+    def validate_computation_image_reference(cls, value: str) -> str:
+        normalized = value.strip()
+        if normalized == "unavailable":
+            return normalized
+        if (
+            "://" in normalized
+            or any(
+                character.isspace() or ord(character) < 32 for character in normalized
+            )
+            or not re.fullmatch(r"[a-z0-9][A-Za-z0-9._/:@-]{0,510}", normalized)
+        ):
+            raise ValueError(
+                "computation_image_reference must be unavailable or a safe OCI "
+                "image reference"
+            )
+        if "@" in normalized:
+            repository, separator, digest = normalized.rpartition("@")
+            if (
+                normalized.count("@") != 1
+                or not separator
+                or not re.fullmatch(r"[a-z0-9][a-z0-9._/:-]{0,400}", repository)
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
+            ):
+                raise ValueError(
+                    "immutable computation_image_reference must use "
+                    "lowercase-repository@sha256:<64 lowercase hex characters>"
+                )
+        return normalized
 
     @field_validator("sandbox_root")
     @classmethod
@@ -221,6 +390,15 @@ class Settings(BaseSettings):
             )
         if marker and marker != expected:
             raise ValueError("unknown qualification-canary marker")
+        native_socket_configured = (
+            self.computation_native_runner_socket_path is not None
+        )
+        native_id_configured = bool(self.computation_native_runner_id)
+        if native_socket_configured != native_id_configured:
+            raise ValueError(
+                "computation native runner socket path and runner id must be "
+                "configured together"
+            )
         return self
 
     @field_validator("hotspot_media_public_base")
@@ -249,6 +427,81 @@ class Settings(BaseSettings):
     @property
     def llm_providers(self) -> tuple[str, ...]:
         return tuple(self.llm_provider_order.split(","))
+
+    @property
+    def computation_families(self) -> tuple[str, ...]:
+        if not self.computation_family_allowlist:
+            return ()
+        return tuple(self.computation_family_allowlist.split(","))
+
+    @property
+    def computation_container_digest(self) -> str:
+        """Derive evidence digest from the single configured OCI reference."""
+
+        _repository, separator, digest = self.computation_image_reference.rpartition(
+            "@"
+        )
+        if separator and re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            return digest
+        return "unavailable"
+
+    @property
+    def computation_image_is_immutable(self) -> bool:
+        return self.computation_container_digest != "unavailable"
+
+    @property
+    def computation_native_runner_configured(self) -> bool:
+        return self.computation_native_runner_socket_path is not None and bool(
+            self.computation_native_runner_id
+        )
+
+    @property
+    def computation_specialist_subjects(self) -> tuple[str, ...]:
+        if not self.computation_specialist_subject_allowlist:
+            return ()
+        return tuple(self.computation_specialist_subject_allowlist.split(","))
+
+    @property
+    def computation_specialist_proxy_ready(self) -> bool:
+        """Whether authenticated specialist identity can be accepted fail-closed."""
+
+        token = (
+            self.computation_trusted_proxy_token.get_secret_value()
+            if self.computation_trusted_proxy_token is not None
+            else ""
+        )
+        return (
+            self.computation_mode != "off"
+            and bool(self.computation_specialist_subjects)
+            and bool(token)
+        )
+
+    @property
+    def computation_health_config(self) -> dict[str, object]:
+        """Return non-secret computation settings safe for status endpoints."""
+
+        status: dict[str, object] = {
+            "mode": self.computation_mode,
+            "enabled": self.computation_mode != "off",
+            "families": list(self.computation_families),
+            "transport": "unix",
+            "socket_path": str(self.computation_socket_path),
+            "image_reference": self.computation_image_reference,
+            "timeouts_seconds": {
+                "numeric": self.computation_numeric_timeout_seconds,
+                "unit": self.computation_unit_timeout_seconds,
+                "algebraic": self.computation_algebraic_timeout_seconds,
+            },
+            "specialist_subject_count": len(self.computation_specialist_subjects),
+        }
+        if self.computation_native_runner_configured:
+            status["native_runner"] = {
+                "configured": True,
+                "transport": "unix",
+                "runner_id": self.computation_native_runner_id,
+                "socket_path": str(self.computation_native_runner_socket_path),
+            }
+        return status
 
     @property
     def adapt_publishing_status(self) -> str:
@@ -331,6 +584,32 @@ def _pinned_dev_url(value: str, hostname: str) -> str:
     ):
         raise ValueError(f"URL is pinned to https://{hostname}")
     return f"https://{hostname}"
+
+
+def _normalize_csv_allowlist(
+    value: str,
+    *,
+    setting_name: str,
+    allowed: set[str] | None = None,
+    casefold: bool = False,
+) -> str:
+    if not value.strip():
+        return ""
+    entries = value.split(",")
+    if any(not entry.strip() for entry in entries):
+        raise ValueError(f"{setting_name} must not contain blank entries")
+    normalized = [
+        entry.strip().casefold() if casefold else entry.strip() for entry in entries
+    ]
+    if len(normalized) != len(set(normalized)):
+        raise ValueError(f"{setting_name} must not contain duplicates")
+    if allowed is not None:
+        unknown = sorted(set(normalized) - allowed)
+        if unknown:
+            raise ValueError(
+                f"unsupported computation family/families: {', '.join(unknown)}"
+            )
+    return ",".join(normalized)
 
 
 @lru_cache

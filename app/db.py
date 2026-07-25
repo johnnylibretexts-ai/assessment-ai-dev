@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
+import json
 import posixpath
 import re
 import time
@@ -13,7 +15,7 @@ from pathlib import PurePosixPath
 from typing import Any, Iterator
 from uuid import uuid4
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -46,7 +48,38 @@ from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.exc import IntegrityError, OperationalError
 
+from .computation import (
+    QUALIFIED_PINT_VERSION,
+    QUALIFIED_SYMPY_VERSION,
+    QUALIFIED_UCUMVERT_VERSION,
+    SCHEMA_VERSION as COMPUTATION_SCHEMA_VERSION,
+    UCUM_ESSENCE_SHA256,
+    UCUM_PROFILE,
+    VALIDATOR_VERSION,
+    AssessmentComputationBlueprint,
+    AssessmentValidationReport,
+    CheckStatus,
+    FormulaAdapterPromotionEvidence,
+    NativeEngineEvidence,
+    ValidationStatus,
+    canonical_blueprint_hash,
+)
+from .native_engine_runner import (
+    NativeEngineRunnerReceipt,
+    qualified_native_engine_runner,
+    seed_plan_sha256,
+)
+from .native_engine_evidence import (
+    NativeEvidenceVerificationError,
+    verify_native_engine_observations,
+)
+from .parameterized import (
+    formula_adapter_promotion_identity,
+    formula_adapter_promotion_sha256 as current_formula_adapter_promotion_sha256,
+    qualified_formula_adapter,
+)
 from .schemas import (
+    AssessmentItemType,
     Concept,
     Critique,
     HintLadderDraft,
@@ -54,6 +87,7 @@ from .schemas import (
     QuestionDraft,
     ReviewDecision,
     ReviewStatus,
+    SourceLicenseMetadata,
 )
 from .source_policy import PublicSourceValidationError, canonicalize_public_identity
 
@@ -210,6 +244,10 @@ class SourceSnapshot(Base):
     canonical_url: Mapped[str] = mapped_column(String(4_096), nullable=False)
     backend: Mapped[str] = mapped_column(String(100), nullable=False)
     page_id: Mapped[str | None] = mapped_column(String(255))
+    license_code: Mapped[str | None] = mapped_column(String(40))
+    license_version: Mapped[str | None] = mapped_column(String(20))
+    license_label: Mapped[str | None] = mapped_column(String(120))
+    license_evidence_url: Mapped[str | None] = mapped_column(String(4_096))
     title: Mapped[str] = mapped_column(String(1_000), nullable=False)
     plaintext: Mapped[str] = mapped_column(Text, nullable=False)
     html_body: Mapped[str] = mapped_column(Text, nullable=False)
@@ -237,6 +275,17 @@ class SourceSnapshot(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+    @property
+    def license_metadata(self) -> SourceLicenseMetadata | None:
+        if not (self.license_code and self.license_label and self.license_evidence_url):
+            return None
+        return SourceLicenseMetadata(
+            code=self.license_code,
+            version=self.license_version,
+            label=self.license_label,
+            evidence_url=self.license_evidence_url,
+        )
 
 
 class Draft(Base):
@@ -422,6 +471,110 @@ class EngineValidationRecord(Base):
     draft: Mapped[Draft] = relationship(back_populates="engine_validations")
 
 
+class ComputationValidationRecord(Base):
+    """Append-only computation evidence bound to one exact draft edit."""
+
+    __tablename__ = "computation_validation_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "draft_id",
+            "edit_count",
+            "evidence_sha256",
+            name="uq_computation_validation_draft_edit_evidence",
+        ),
+        CheckConstraint(
+            "duration_ms >= 0",
+            name="ck_computation_validation_duration_nonnegative",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    draft_id: Mapped[int] = mapped_column(
+        ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    edit_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    draft_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    blueprint_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    report_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    evidence_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    schema_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    validator_revision: Mapped[str] = mapped_column(String(100), nullable=False)
+    blueprint_json: Mapped[str] = mapped_column(Text, nullable=False)
+    report_json: Mapped[str] = mapped_column(Text, nullable=False)
+    dependency_versions_json: Mapped[str] = mapped_column(Text, nullable=False)
+    container_digest: Mapped[str] = mapped_column(String(255), nullable=False)
+    seed_plan_json: Mapped[str] = mapped_column(Text, nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    engine_evidence_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class ComputationAttestation(Base):
+    """Append-only specialist attestation for one validation report hash."""
+
+    __tablename__ = "computation_attestations"
+    __table_args__ = (
+        UniqueConstraint(
+            "attestation_sha256",
+            name="uq_computation_attestation_sha256",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    validation_record_id: Mapped[int] = mapped_column(
+        ForeignKey("computation_validation_records.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    draft_id: Mapped[int] = mapped_column(
+        ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    edit_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    report_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    specialist_identity: Mapped[str] = mapped_column(String(255), nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    qualification_json: Mapped[str] = mapped_column(Text, nullable=False)
+    attestation_sha256: Mapped[str] = mapped_column(
+        String(64), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class ComputationApprovalEvidence(Base):
+    """Append-only enforce-mode approval bound to one exact draft version."""
+
+    __tablename__ = "computation_approval_evidence"
+    __table_args__ = (
+        UniqueConstraint(
+            "approval_sha256",
+            name="uq_computation_approval_evidence_sha256",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    draft_id: Mapped[int] = mapped_column(
+        ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    edit_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    draft_version_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    binding_json: Mapped[str] = mapped_column(Text, nullable=False)
+    binding_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    reviewer_identity: Mapped[str] = mapped_column(String(255), nullable=False)
+    approved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    approval_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
 class LLMCall(Base):
     """Audit-safe structured generation provenance for one model call."""
 
@@ -531,6 +684,46 @@ class Publication(Base):
     )
 
 
+class PublicationComputationEvidence(Base):
+    """Immutable computation evidence captured for one publication snapshot."""
+
+    __tablename__ = "publication_computation_evidence"
+    __table_args__ = (
+        UniqueConstraint(
+            "publication_id",
+            name="uq_publication_computation_evidence_publication",
+        ),
+        UniqueConstraint(
+            "snapshot_sha256",
+            name="uq_publication_computation_evidence_snapshot",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    publication_id: Mapped[int] = mapped_column(
+        ForeignKey("publications.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    validation_record_id: Mapped[int] = mapped_column(
+        ForeignKey("computation_validation_records.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    draft_id: Mapped[int] = mapped_column(
+        ForeignKey("drafts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    edit_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    report_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    validation_status: Mapped[str] = mapped_column(String(40), nullable=False)
+    attestation_sha256s_json: Mapped[str] = mapped_column(Text, nullable=False)
+    snapshot_json: Mapped[str] = mapped_column(Text, nullable=False)
+    snapshot_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
 class PublicationAttempt(Base):
     __tablename__ = "publication_attempts"
     __table_args__ = (
@@ -558,6 +751,191 @@ class PublicationAttempt(Base):
 
 
 @dataclass(frozen=True)
+class ComputationValidationWrite:
+    """Opaque serialized computation output ready for append-only persistence."""
+
+    status: str
+    schema_version: str
+    validator_revision: str
+    blueprint_json: str
+    report_json: str
+    container_digest: str
+    dependency_versions_json: str = "{}"
+    seed_plan_json: str = "[]"
+    duration_ms: int = 0
+    engine_evidence_json: str = "{}"
+
+
+@dataclass(frozen=True)
+class ComputationValidationRead:
+    id: int
+    draft_id: int
+    edit_count: int
+    source_sha256: str
+    draft_sha256: str
+    blueprint_sha256: str
+    report_sha256: str
+    evidence_sha256: str
+    status: str
+    schema_version: str
+    validator_revision: str
+    blueprint_json: str
+    report_json: str
+    dependency_versions_json: str
+    container_digest: str
+    seed_plan_json: str
+    duration_ms: int
+    engine_evidence_json: str
+    created_at: datetime
+    is_current: bool
+
+
+@dataclass(frozen=True)
+class ComputationAttestationWrite:
+    specialist_identity: str
+    rationale: str
+    qualification_json: str = "{}"
+
+
+@dataclass(frozen=True)
+class ComputationAttestationRead:
+    id: int
+    validation_record_id: int
+    draft_id: int
+    edit_count: int
+    report_sha256: str
+    specialist_identity: str
+    rationale: str
+    qualification_json: str
+    attestation_sha256: str
+    created_at: datetime
+    is_current: bool
+
+
+@dataclass(frozen=True)
+class EngineValidationBinding:
+    """Exact external-engine artifact approved for one draft revision."""
+
+    validation_record_id: int
+    draft_id: int
+    expected_edit_count: int
+    expected_draft_sha256: str
+    engine: str
+    compiler_version: str
+    source_sha256: str
+    seed_count: int
+
+    @property
+    def artifact_identity(self) -> dict[str, str]:
+        return {
+            "engine": self.engine,
+            "compiler_version": self.compiler_version,
+            "source_sha256": self.source_sha256,
+        }
+
+    @property
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "validation_record_id": self.validation_record_id,
+            "draft_id": self.draft_id,
+            "edit_count": self.expected_edit_count,
+            "draft_sha256": self.expected_draft_sha256,
+            **self.artifact_identity,
+            "seed_count": self.seed_count,
+        }
+
+
+@dataclass(frozen=True)
+class HintLadderBinding:
+    """Exact approved hint artifact selected before publication lookup."""
+
+    record_id: int
+    draft_id: int
+    expected_edit_count: int
+    version: int
+    evidence_sha256: str
+
+
+def approved_hint_ladder_snapshot(record: HintLadderRecord) -> dict[str, Any]:
+    """Return the exact learner-facing hint snapshot bound at publication."""
+
+    return {
+        "version": record.version,
+        "rungs": record.ladder.model_dump(mode="json")["rungs"],
+        "reviewed_by": record.reviewed_by,
+        "reviewed_at": (
+            _as_utc(record.reviewed_at).isoformat()
+            if record.reviewed_at is not None
+            else None
+        ),
+    }
+
+
+def hint_ladder_evidence_sha256(record: HintLadderRecord) -> str:
+    """Hash every immutable/review field that makes a hint version publishable."""
+
+    material = {
+        "id": record.id,
+        "draft_id": record.draft_id,
+        "edit_count": record.edit_count,
+        "version": record.version,
+        "ladder_json": record.ladder_json,
+        "confirmations_json": record.confirmations_json,
+        "status": record.status,
+        "reviewer_notes": record.reviewer_notes,
+        "reviewed_by": record.reviewed_by,
+        "reviewed_at": (
+            _as_utc(record.reviewed_at).isoformat()
+            if record.reviewed_at is not None
+            else None
+        ),
+        "created_at": _as_utc(record.created_at).isoformat(),
+    }
+    return hashlib.sha256(_stable_json_bytes(material)).hexdigest()
+
+
+@dataclass(frozen=True)
+class PublicationComputationEvidenceWrite:
+    report_sha256: str
+    attestation_sha256s: tuple[str, ...] = ()
+    engine_validation: EngineValidationBinding | None = None
+
+
+@dataclass(frozen=True)
+class PublicationComputationEvidenceRead:
+    id: int
+    publication_id: int
+    validation_record_id: int
+    draft_id: int
+    edit_count: int
+    report_sha256: str
+    validation_status: str
+    attestation_sha256s: tuple[str, ...]
+    snapshot_json: str
+    snapshot_sha256: str
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class ComputationGateBinding:
+    """Expected enforce-mode evidence for one exact detached draft revision."""
+
+    expected_edit_count: int
+    expected_draft_sha256: str
+    scoped: bool
+    validation_record_id: int | None = None
+    evidence_sha256: str | None = None
+    validation_status: str | None = None
+    report_sha256: str | None = None
+    formula_adapter_promotion_sha256: str | None = None
+    runtime_image_reference: str | None = None
+    runtime_container_digest: str | None = None
+    runtime_promotion_sha256: str | None = None
+    attestation_sha256s: tuple[str, ...] = ()
+    trusted_specialist_subjects: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class DraftWrite:
     position: int
     concept: Concept | Mapping[str, Any]
@@ -566,6 +944,7 @@ class DraftWrite:
     revised: QuestionDraft | Mapping[str, Any]
     hint_ladder: HintLadderDraft | Mapping[str, Any] | None = None
     engine_validation: Mapping[str, Any] | None = None
+    computation_validation: ComputationValidationWrite | None = None
 
 
 @dataclass(frozen=True)
@@ -617,19 +996,36 @@ class Database:
             self._apply_sqlite_additive_migrations()
 
     def _apply_sqlite_additive_migrations(self) -> None:
-        existing = {
+        publication_columns = {
             column["name"]
             for column in inspect(self.engine).get_columns("publications")
         }
-        additions = {
+        publication_additions = {
             "hint_ladder_snapshot_json": "JSON",
             "hints_synced_at": "DATETIME",
         }
+        source_columns = {
+            column["name"]
+            for column in inspect(self.engine).get_columns("source_snapshots")
+        }
+        source_additions = {
+            "license_code": "VARCHAR(40)",
+            "license_version": "VARCHAR(20)",
+            "license_label": "VARCHAR(120)",
+            "license_evidence_url": "VARCHAR(4096)",
+        }
         with self.engine.begin() as connection:
-            for name, data_type in additions.items():
-                if name not in existing:
+            for name, data_type in publication_additions.items():
+                if name not in publication_columns:
                     connection.execute(
                         text(f"ALTER TABLE publications ADD COLUMN {name} {data_type}")
+                    )
+            for name, data_type in source_additions.items():
+                if name not in source_columns:
+                    connection.execute(
+                        text(
+                            f"ALTER TABLE source_snapshots ADD COLUMN {name} {data_type}"
+                        )
                     )
 
     def dispose(self) -> None:
@@ -673,6 +1069,25 @@ class DraftGroundingError(ReviewTransitionError):
     pass
 
 
+@dataclass(frozen=True)
+class HintGroundingIssue:
+    """One reviewer-actionable mismatch for the exact question revision."""
+
+    code: str
+    message: str
+    rung: str | None = None
+    invalid_paragraphs: tuple[int, ...] = ()
+    allowed_paragraphs: tuple[int, ...] = ()
+
+
+class ComputationEvidenceError(ValueError):
+    pass
+
+
+class ComputationEvidenceConflictError(ComputationEvidenceError):
+    pass
+
+
 def _completed_generation_for_source(
     session: Session,
     source: SourceSnapshot,
@@ -702,6 +1117,23 @@ class DraftRepository:
         self._sessions = (
             sessions.session_factory if isinstance(sessions, Database) else sessions
         )
+
+    def update_source_license(
+        self,
+        source_id: int,
+        metadata: SourceLicenseMetadata,
+    ) -> None:
+        """Persist verified public page metadata for an existing source snapshot."""
+
+        with self._sessions.begin() as session:
+            source = session.get(SourceSnapshot, source_id)
+            if source is None:
+                raise DraftNotFoundError("Source snapshot not found")
+            source.license_code = metadata.code
+            source.license_version = metadata.version
+            source.license_label = metadata.label
+            source.license_evidence_url = metadata.evidence_url
+            source.updated_at = utc_now()
 
     def create_generation_job(
         self,
@@ -904,6 +1336,18 @@ class DraftRepository:
                     canonical_url=page.source.canonical_url,
                     backend=page.source.backend,
                     page_id=page.source.page_id,
+                    license_code=page.source.license.code
+                    if page.source.license
+                    else None,
+                    license_version=page.source.license.version
+                    if page.source.license
+                    else None,
+                    license_label=page.source.license.label
+                    if page.source.license
+                    else None,
+                    license_evidence_url=page.source.license.evidence_url
+                    if page.source.license
+                    else None,
                     title=page.title,
                     plaintext=page.plaintext,
                     html_body=page.html_body,
@@ -933,6 +1377,11 @@ class DraftRepository:
                 source.canonical_url = page.source.canonical_url
                 source.backend = page.source.backend
                 source.page_id = page.source.page_id
+                if page.source.license is not None:
+                    source.license_code = page.source.license.code
+                    source.license_version = page.source.license.version
+                    source.license_label = page.source.license.label
+                    source.license_evidence_url = page.source.license.evidence_url
                 source.title = page.title
                 source.plaintext = page.plaintext
                 source.html_body = page.html_body
@@ -1003,6 +1452,9 @@ class DraftRepository:
                 session.add(stored)
                 stored_drafts.append(stored)
             session.flush()
+            stored_drafts_by_position = {
+                stored.position: stored for stored in stored_drafts
+            }
             for stored in stored_drafts:
                 draft_ids_by_position[stored.position] = stored.id
 
@@ -1013,6 +1465,7 @@ class DraftRepository:
                     _json_value(draft_write.hint_ladder)
                 )
                 ladder = analyze_hint_leaks(draft_write.revised, ladder)
+                _validate_hint_ladder(draft_write.revised, ladder)
                 session.add(
                     HintLadderRecord(
                         draft_id=draft_ids_by_position[draft_write.position],
@@ -1026,19 +1479,62 @@ class DraftRepository:
                 )
 
             for draft_write in drafts:
-                if draft_write.engine_validation is None:
+                if draft_write.computation_validation is None:
                     continue
-                validation = dict(draft_write.engine_validation)
+                stored = stored_drafts_by_position[draft_write.position]
+                session.add(
+                    _new_computation_validation_record(
+                        stored,
+                        edit_count=0,
+                        source_sha256=source.content_hash,
+                        value=draft_write.computation_validation,
+                    )
+                )
+
+            for draft_write in drafts:
+                stored = stored_drafts_by_position[draft_write.position]
+                parameterized = stored.current.response.parameterized
+                computation_owned_external = (
+                    stored.current.item_type
+                    in {
+                        AssessmentItemType.WEBWORK,
+                        AssessmentItemType.IMATHAS,
+                    }
+                    and parameterized is not None
+                    and parameterized.compiler_profile == "assessment_computation_v0"
+                )
+                if computation_owned_external:
+                    # Computation-owned external drafts have one authoritative
+                    # compiler receipt.  Derive the compatibility row from the
+                    # already validated computation envelope instead of trusting
+                    # the parallel DraftWrite field.
+                    validation = (
+                        _engine_validation_from_computation_evidence(
+                            stored.current,
+                            draft_write.computation_validation,
+                        )
+                        if draft_write.computation_validation is not None
+                        else None
+                    )
+                elif draft_write.engine_validation is not None:
+                    legacy_validation = dict(draft_write.engine_validation)
+                    validation = {
+                        "engine": str(legacy_validation["engine"]),
+                        "compiler_version": str(legacy_validation["compiler_version"]),
+                        "source_sha256": str(legacy_validation["source_sha256"]),
+                        "seed_count": int(legacy_validation["seed_count"]),
+                        "previews_json": list(legacy_validation["previews"]),
+                        "status": "passed",
+                    }
+                else:
+                    validation = None
+                if validation is None:
+                    continue
                 session.add(
                     EngineValidationRecord(
                         draft_id=draft_ids_by_position[draft_write.position],
                         edit_count=0,
-                        engine=str(validation["engine"]),
-                        compiler_version=str(validation["compiler_version"]),
-                        source_sha256=str(validation["source_sha256"]),
-                        seed_count=int(validation["seed_count"]),
-                        previews_json=list(validation["previews"]),
-                        status="passed",
+                        **validation,
                     )
                 )
 
@@ -1131,6 +1627,7 @@ class DraftRepository:
             .options(
                 selectinload(Draft.source),
                 selectinload(Draft.llm_calls),
+                selectinload(Draft.publications),
                 selectinload(Draft.hint_ladders),
                 selectinload(Draft.engine_validations),
             )
@@ -1150,15 +1647,41 @@ class DraftRepository:
         *,
         editor: str,
         notes: str = "",
+        computation_validation: ComputationValidationWrite | None = None,
+        expected_edit_count: int | None = None,
+        expected_draft_sha256: str | None = None,
     ) -> Draft:
         actor = _actor(editor)
         validated = QuestionDraft.model_validate(_json_value(updated_draft))
+        if (expected_edit_count is None) != (expected_draft_sha256 is None):
+            raise ValueError(
+                "expected_edit_count and expected_draft_sha256 must be supplied together"
+            )
+        expected_hash = (
+            _sha256_digest(expected_draft_sha256, "expected_draft_sha256")
+            if expected_draft_sha256 is not None
+            else None
+        )
         now = utc_now()
         try:
             with self._sessions.begin() as session:
-                draft = session.get(Draft, draft_id)
+                draft = (
+                    session.scalar(
+                        select(Draft).where(Draft.id == draft_id).with_for_update()
+                    )
+                    if expected_edit_count is not None
+                    else session.get(Draft, draft_id)
+                )
                 if draft is None:
                     raise DraftNotFoundError(f"draft {draft_id} was not found")
+                if expected_edit_count is not None and (
+                    draft.edit_count != expected_edit_count
+                    or _draft_sha256(draft.current_json) != expected_hash
+                ):
+                    raise ConcurrentDraftUpdateError(
+                        "the draft changed during computation revalidation; reload it "
+                        "before retrying"
+                    )
                 previous_hint_ladder = session.scalar(
                     select(HintLadderRecord)
                     .where(
@@ -1180,6 +1703,15 @@ class DraftRepository:
                     ladder = HintLadderDraft.model_validate(
                         previous_hint_ladder.ladder_json
                     )
+                    grounding_issues = inspect_hint_grounding(validated, ladder)
+                    hint_status = (
+                        "needs_repair" if grounding_issues else "ready_for_review"
+                    )
+                    hint_note = "Question edited; hint approval reset."
+                    if grounding_issues:
+                        hint_note += " " + " ".join(
+                            issue.message for issue in grounding_issues
+                        )
                     session.add(
                         HintLadderRecord(
                             draft_id=draft.id,
@@ -1189,17 +1721,33 @@ class DraftRepository:
                             confirmations_json={
                                 rung.rung.value: False for rung in ladder.rungs
                             },
-                            status="ready_for_review",
-                            reviewer_notes="Question edited; hint approval reset.",
+                            status=hint_status,
+                            reviewer_notes=hint_note,
                         )
                     )
-                validation = _engine_validation_for(validated)
+                validation = (
+                    _engine_validation_from_computation_evidence(
+                        validated,
+                        computation_validation,
+                    )
+                    if computation_validation is not None
+                    else _engine_validation_for(validated)
+                )
                 if validation is not None:
                     session.add(
                         EngineValidationRecord(
                             draft_id=draft.id,
                             edit_count=draft.edit_count,
                             **validation,
+                        )
+                    )
+                if computation_validation is not None:
+                    session.add(
+                        _new_computation_validation_record(
+                            draft,
+                            edit_count=draft.edit_count,
+                            source_sha256=draft.source.content_hash,
+                            value=computation_validation,
                         )
                     )
                 draft.review_history_json = [
@@ -1218,6 +1766,488 @@ class DraftRepository:
                 "the draft changed during editing; reload it before saving"
             ) from None
         return self.require_draft(draft_id)
+
+    def append_computation_validation(
+        self,
+        draft_id: int,
+        *,
+        edit_count: int,
+        record: ComputationValidationWrite,
+    ) -> ComputationValidationRead:
+        """Append evidence only when it matches the draft's current edit."""
+
+        try:
+            with self._sessions.begin() as session:
+                draft = session.scalar(
+                    select(Draft)
+                    .options(selectinload(Draft.source))
+                    .where(Draft.id == draft_id)
+                    .with_for_update()
+                )
+                if draft is None:
+                    raise DraftNotFoundError(f"draft {draft_id} was not found")
+                if draft.edit_count != edit_count:
+                    raise ComputationEvidenceError(
+                        "computation evidence edit_count does not match the current draft"
+                    )
+                candidate = _new_computation_validation_record(
+                    draft,
+                    edit_count=edit_count,
+                    source_sha256=draft.source.content_hash,
+                    value=record,
+                )
+                parameterized = draft.current.response.parameterized
+                engine_validation = (
+                    _engine_validation_from_computation_evidence(
+                        draft.current,
+                        record,
+                    )
+                    if draft.current.item_type
+                    in {
+                        AssessmentItemType.WEBWORK,
+                        AssessmentItemType.IMATHAS,
+                    }
+                    and parameterized is not None
+                    and parameterized.compiler_profile == "assessment_computation_v0"
+                    else None
+                )
+                existing = session.scalar(
+                    select(ComputationValidationRecord).where(
+                        ComputationValidationRecord.draft_id == draft.id,
+                        ComputationValidationRecord.edit_count == edit_count,
+                        ComputationValidationRecord.evidence_sha256
+                        == candidate.evidence_sha256,
+                    )
+                )
+                if existing is not None:
+                    if not _same_computation_validation(existing, candidate):
+                        raise ComputationEvidenceConflictError(
+                            "the evidence hash is already bound to different evidence"
+                        )
+                    current = _current_computation_validation_record(session, draft)
+                    return _computation_validation_read(
+                        existing,
+                        is_current=current is not None and current.id == existing.id,
+                    )
+                now = utc_now()
+                draft.updated_at = now
+                if draft.status == ReviewStatus.READY_TO_PUBLISH:
+                    _transition_draft(
+                        draft,
+                        ReviewStatus.READY_FOR_REVIEW,
+                        actor="assessment-computation-validator",
+                        notes=(
+                            "New computation evidence was appended; the prior human "
+                            "approval is stale and must be renewed."
+                        ),
+                        now=now,
+                    )
+                session.add(candidate)
+                if engine_validation is not None:
+                    session.add(
+                        EngineValidationRecord(
+                            draft_id=draft.id,
+                            edit_count=draft.edit_count,
+                            **engine_validation,
+                        )
+                    )
+                session.flush()
+                result = _computation_validation_read(candidate, is_current=True)
+        except (IntegrityError, StaleDataError) as exc:
+            recovered = self._recover_computation_validation_race(
+                draft_id,
+                edit_count=edit_count,
+                record=record,
+            )
+            if recovered is not None:
+                return recovered
+            if isinstance(exc, StaleDataError):
+                raise ConcurrentDraftUpdateError(
+                    "the draft changed while computation evidence was appended; "
+                    "reload and retry"
+                ) from None
+            raise
+        return result
+
+    def _recover_computation_validation_race(
+        self,
+        draft_id: int,
+        *,
+        edit_count: int,
+        record: ComputationValidationWrite,
+    ) -> ComputationValidationRead | None:
+        """Return only an exact concurrent duplicate that is still current."""
+
+        with self._sessions() as session:
+            draft = session.scalar(
+                select(Draft)
+                .options(selectinload(Draft.source))
+                .where(Draft.id == draft_id)
+            )
+            if draft is None or draft.edit_count != edit_count:
+                return None
+            candidate = _new_computation_validation_record(
+                draft,
+                edit_count=edit_count,
+                source_sha256=draft.source.content_hash,
+                value=record,
+            )
+            existing = session.scalar(
+                select(ComputationValidationRecord).where(
+                    ComputationValidationRecord.draft_id == draft.id,
+                    ComputationValidationRecord.edit_count == edit_count,
+                    ComputationValidationRecord.evidence_sha256
+                    == candidate.evidence_sha256,
+                )
+            )
+            if existing is None:
+                return None
+            if not _same_computation_validation(existing, candidate):
+                raise ComputationEvidenceConflictError(
+                    "the evidence hash is already bound to different evidence"
+                )
+            current = _current_computation_validation_record(session, draft)
+            if current is None or current.id != existing.id:
+                return None
+            return _computation_validation_read(existing, is_current=True)
+
+    def get_computation_validation(
+        self,
+        draft_id: int,
+        *,
+        edit_count: int,
+        report_sha256: str,
+    ) -> ComputationValidationRead | None:
+        """Read one exact historical record without making it current again."""
+
+        report_hash = _sha256_digest(report_sha256, "report_sha256")
+        with self._sessions() as session:
+            draft = session.get(Draft, draft_id)
+            if draft is None:
+                return None
+            record = session.scalar(
+                select(ComputationValidationRecord)
+                .where(
+                    ComputationValidationRecord.draft_id == draft_id,
+                    ComputationValidationRecord.edit_count == edit_count,
+                    ComputationValidationRecord.report_sha256 == report_hash,
+                )
+                .order_by(ComputationValidationRecord.id.desc())
+            )
+            if record is None:
+                return None
+            current = _current_computation_validation_record(session, draft)
+            return _computation_validation_read(
+                record,
+                is_current=current is not None and current.id == record.id,
+            )
+
+    def get_current_computation_validation(
+        self,
+        draft_id: int,
+        *,
+        expected_edit_count: int | None = None,
+        draft_sha256: str | None = None,
+        report_sha256: str | None = None,
+    ) -> ComputationValidationRead | None:
+        """Return only the latest report for the exact current draft content."""
+
+        expected_draft_hash = (
+            _sha256_digest(draft_sha256, "draft_sha256")
+            if draft_sha256 is not None
+            else None
+        )
+        expected_report_hash = (
+            _sha256_digest(report_sha256, "report_sha256")
+            if report_sha256 is not None
+            else None
+        )
+        with self._sessions() as session:
+            draft = session.get(Draft, draft_id)
+            if draft is None:
+                return None
+            if (
+                expected_edit_count is not None
+                and draft.edit_count != expected_edit_count
+            ):
+                return None
+            current_draft_hash = _draft_sha256(draft.current_json)
+            if (
+                expected_draft_hash is not None
+                and expected_draft_hash != current_draft_hash
+            ):
+                return None
+            record = _current_computation_validation_record(session, draft)
+            if record is None:
+                return None
+            if (
+                expected_report_hash is not None
+                and expected_report_hash != record.report_sha256
+            ):
+                return None
+            return _computation_validation_read(record, is_current=True)
+
+    def draft_revision_matches(
+        self,
+        draft_id: int,
+        *,
+        edit_count: int,
+        draft_sha256: str,
+        status: ReviewStatus | None = None,
+    ) -> bool:
+        """Check a detached draft binding without accepting a newer revision."""
+
+        expected_hash = _sha256_digest(draft_sha256, "draft_sha256")
+        with self._sessions() as session:
+            draft = session.get(Draft, draft_id)
+            return bool(
+                draft is not None
+                and draft.edit_count == edit_count
+                and _draft_sha256(draft.current_json) == expected_hash
+                and (status is None or draft.status == status)
+            )
+
+    def list_computation_validations(
+        self,
+        draft_id: int,
+    ) -> tuple[ComputationValidationRead, ...]:
+        with self._sessions() as session:
+            draft = session.get(Draft, draft_id)
+            if draft is None:
+                raise DraftNotFoundError(f"draft {draft_id} was not found")
+            records = tuple(
+                session.scalars(
+                    select(ComputationValidationRecord)
+                    .where(ComputationValidationRecord.draft_id == draft_id)
+                    .order_by(
+                        ComputationValidationRecord.edit_count,
+                        ComputationValidationRecord.id,
+                    )
+                )
+            )
+            current = _current_computation_validation_record(session, draft)
+            current_id = current.id if current is not None else None
+            return tuple(
+                _computation_validation_read(
+                    record,
+                    is_current=record.id == current_id,
+                )
+                for record in records
+            )
+
+    def append_computation_attestation(
+        self,
+        draft_id: int,
+        *,
+        edit_count: int,
+        report_sha256: str,
+        attestation: ComputationAttestationWrite,
+    ) -> ComputationAttestationRead:
+        """Bind one specialist attestation to the exact current report."""
+
+        report_hash = _sha256_digest(report_sha256, "report_sha256")
+        specialist = _actor(attestation.specialist_identity)
+        rationale = attestation.rationale.strip()
+        if not rationale:
+            raise ComputationEvidenceError(
+                "computation attestation rationale must not be blank"
+            )
+        qualification_json = _opaque_json_string(
+            attestation.qualification_json,
+            "qualification_json",
+        )
+        try:
+            with self._sessions.begin() as session:
+                draft = session.scalar(
+                    select(Draft).where(Draft.id == draft_id).with_for_update()
+                )
+                if draft is None:
+                    raise DraftNotFoundError(f"draft {draft_id} was not found")
+                if draft.edit_count != edit_count:
+                    raise ComputationEvidenceError(
+                        "computation attestation edit_count does not match the "
+                        "current draft"
+                    )
+                validation = _current_computation_validation_record(session, draft)
+                if validation is None or validation.report_sha256 != report_hash:
+                    raise ComputationEvidenceError(
+                        "computation attestation must reference the current report hash"
+                    )
+                attestation_hash = _computation_attestation_sha256(
+                    validation_record_id=validation.id,
+                    draft_id=draft.id,
+                    edit_count=edit_count,
+                    report_sha256=report_hash,
+                    specialist_identity=specialist,
+                    rationale=rationale,
+                    qualification_json=qualification_json,
+                )
+                existing = session.scalar(
+                    select(ComputationAttestation).where(
+                        ComputationAttestation.attestation_sha256 == attestation_hash
+                    )
+                )
+                if existing is not None:
+                    return _computation_attestation_read(existing, is_current=True)
+                stored = ComputationAttestation(
+                    validation_record_id=validation.id,
+                    draft_id=draft.id,
+                    edit_count=edit_count,
+                    report_sha256=report_hash,
+                    specialist_identity=specialist,
+                    rationale=rationale,
+                    qualification_json=qualification_json,
+                    attestation_sha256=attestation_hash,
+                )
+                now = utc_now()
+                draft.updated_at = now
+                if draft.status == ReviewStatus.READY_TO_PUBLISH:
+                    _transition_draft(
+                        draft,
+                        ReviewStatus.READY_FOR_REVIEW,
+                        actor="assessment-computation-attestor",
+                        notes=(
+                            "New computation attestation evidence was appended; the "
+                            "prior human approval is stale and must be renewed."
+                        ),
+                        now=now,
+                    )
+                session.add(stored)
+                session.flush()
+                result = _computation_attestation_read(stored, is_current=True)
+        except (IntegrityError, StaleDataError) as exc:
+            recovered = self._recover_computation_attestation_race(
+                draft_id,
+                edit_count=edit_count,
+                report_sha256=report_hash,
+                specialist_identity=specialist,
+                rationale=rationale,
+                qualification_json=qualification_json,
+            )
+            if recovered is not None:
+                return recovered
+            if isinstance(exc, StaleDataError):
+                raise ConcurrentDraftUpdateError(
+                    "the draft changed while computation attestation evidence was "
+                    "appended; reload and retry"
+                ) from None
+            raise
+        return result
+
+    def _recover_computation_attestation_race(
+        self,
+        draft_id: int,
+        *,
+        edit_count: int,
+        report_sha256: str,
+        specialist_identity: str,
+        rationale: str,
+        qualification_json: str,
+    ) -> ComputationAttestationRead | None:
+        """Return only an exact concurrent attestation duplicate."""
+
+        with self._sessions() as session:
+            draft = session.get(Draft, draft_id)
+            if draft is None or draft.edit_count != edit_count:
+                return None
+            validation = _current_computation_validation_record(session, draft)
+            if validation is None or validation.report_sha256 != report_sha256:
+                return None
+            attestation_hash = _computation_attestation_sha256(
+                validation_record_id=validation.id,
+                draft_id=draft.id,
+                edit_count=edit_count,
+                report_sha256=report_sha256,
+                specialist_identity=specialist_identity,
+                rationale=rationale,
+                qualification_json=qualification_json,
+            )
+            existing = session.scalar(
+                select(ComputationAttestation).where(
+                    ComputationAttestation.attestation_sha256 == attestation_hash
+                )
+            )
+            if (
+                existing is None
+                or existing.validation_record_id != validation.id
+                or existing.draft_id != draft.id
+                or existing.edit_count != edit_count
+                or existing.report_sha256 != report_sha256
+                or existing.specialist_identity != specialist_identity
+                or existing.rationale != rationale
+                or existing.qualification_json != qualification_json
+            ):
+                return None
+            return _computation_attestation_read(existing, is_current=True)
+
+    def get_computation_attestation(
+        self,
+        attestation_sha256: str,
+    ) -> ComputationAttestationRead | None:
+        attestation_hash = _sha256_digest(
+            attestation_sha256,
+            "attestation_sha256",
+        )
+        with self._sessions() as session:
+            stored = session.scalar(
+                select(ComputationAttestation).where(
+                    ComputationAttestation.attestation_sha256 == attestation_hash
+                )
+            )
+            if stored is None:
+                return None
+            draft = session.get(Draft, stored.draft_id)
+            current = (
+                _current_computation_validation_record(session, draft)
+                if draft is not None
+                else None
+            )
+            return _computation_attestation_read(
+                stored,
+                is_current=(
+                    current is not None
+                    and current.id == stored.validation_record_id
+                    and current.report_sha256 == stored.report_sha256
+                ),
+            )
+
+    def list_current_computation_attestations(
+        self,
+        draft_id: int,
+        *,
+        report_sha256: str | None = None,
+    ) -> tuple[ComputationAttestationRead, ...]:
+        expected_report_hash = (
+            _sha256_digest(report_sha256, "report_sha256")
+            if report_sha256 is not None
+            else None
+        )
+        with self._sessions() as session:
+            draft = session.get(Draft, draft_id)
+            if draft is None:
+                raise DraftNotFoundError(f"draft {draft_id} was not found")
+            validation = _current_computation_validation_record(session, draft)
+            if validation is None:
+                return ()
+            if (
+                expected_report_hash is not None
+                and validation.report_sha256 != expected_report_hash
+            ):
+                return ()
+            records = session.scalars(
+                select(ComputationAttestation)
+                .where(
+                    ComputationAttestation.validation_record_id == validation.id,
+                    ComputationAttestation.draft_id == draft.id,
+                    ComputationAttestation.edit_count == draft.edit_count,
+                    ComputationAttestation.report_sha256 == validation.report_sha256,
+                )
+                .order_by(ComputationAttestation.id)
+            )
+            return tuple(
+                _computation_attestation_read(record, is_current=True)
+                for record in records
+            )
 
     def save_hint_ladder(
         self,
@@ -1342,6 +2372,178 @@ class DraftRepository:
                 return existing, False
         return self.require_publication(publication_id), True
 
+    def create_or_get_publication_guarded(
+        self,
+        values: Mapping[str, Any],
+        *,
+        computation_binding: ComputationGateBinding | None,
+        computation_evidence: PublicationComputationEvidenceWrite | None,
+        engine_binding: EngineValidationBinding | None = None,
+        hint_binding: HintLadderBinding | None = None,
+    ) -> tuple[Publication, bool]:
+        """Atomically reserve publication and freeze exact validated evidence."""
+
+        publication_key = str(values["publication_key"])
+        if computation_binding is None:
+            if computation_evidence is not None:
+                raise ComputationEvidenceError(
+                    "computation evidence requires an enforce-mode binding"
+                )
+        else:
+            _validate_publication_evidence_binding(
+                computation_binding,
+                computation_evidence,
+                engine_binding=engine_binding,
+            )
+        hint_snapshot = values.get("hint_ladder_snapshot_json")
+        if (hint_snapshot is None) != (hint_binding is None):
+            raise ComputationEvidenceError(
+                "hint snapshot and exact hint binding must be supplied together"
+            )
+        if (
+            computation_binding is None
+            and engine_binding is None
+            and hint_binding is None
+        ):
+            raise ComputationEvidenceError(
+                "guarded publication requires computation, engine, or hint evidence"
+            )
+        try:
+            with self._sessions.begin() as session:
+                draft = session.scalar(
+                    select(Draft)
+                    .where(Draft.id == int(values["draft_id"]))
+                    .with_for_update()
+                )
+                if draft is None:
+                    raise DraftNotFoundError(
+                        f"draft {values['draft_id']} was not found"
+                    )
+                if draft.status != ReviewStatus.READY_TO_PUBLISH:
+                    raise ReviewGateError(
+                        "the exact draft revision is no longer approved"
+                    )
+                validation = (
+                    _verify_computation_gate_binding(
+                        session,
+                        draft,
+                        computation_binding,
+                    )
+                    if computation_binding is not None
+                    else None
+                )
+                if computation_binding is not None:
+                    _verify_computation_approval_evidence(
+                        session,
+                        draft,
+                        computation_binding,
+                    )
+                _verify_engine_validation_binding(
+                    session,
+                    draft,
+                    engine_binding,
+                    computation_validation=validation,
+                )
+                _verify_hint_ladder_binding(
+                    session,
+                    draft,
+                    hint_binding,
+                    snapshot=hint_snapshot,
+                )
+                existing = session.scalar(
+                    select(Publication)
+                    .where(Publication.publication_key == publication_key)
+                    .with_for_update()
+                )
+                reserved = existing is None
+                publication = existing or Publication(**dict(values))
+                if existing is None:
+                    session.add(publication)
+                    session.flush()
+                _verify_publication_revision(publication, draft)
+                if computation_binding is not None and computation_binding.scoped:
+                    if computation_evidence is None or validation is None:
+                        raise ComputationEvidenceError(
+                            "scoped publication requires computation evidence"
+                        )
+                    _store_publication_computation_evidence(
+                        session,
+                        publication,
+                        validation,
+                        computation_evidence,
+                    )
+                elif computation_evidence is not None:
+                    raise ComputationEvidenceError(
+                        "unscoped publication cannot freeze computation evidence"
+                    )
+                publication_id = publication.id
+        except IntegrityError:
+            # A concurrent reservation may win the unique publication key. Recheck
+            # the complete guard in a new transaction before returning its row.
+            with self._sessions.begin() as session:
+                draft = session.scalar(
+                    select(Draft)
+                    .where(Draft.id == int(values["draft_id"]))
+                    .with_for_update()
+                )
+                existing = session.scalar(
+                    select(Publication)
+                    .where(Publication.publication_key == publication_key)
+                    .with_for_update()
+                )
+                if draft is None or existing is None:
+                    raise
+                if draft.status != ReviewStatus.READY_TO_PUBLISH:
+                    raise ReviewGateError(
+                        "the exact draft revision is no longer approved"
+                    )
+                validation = (
+                    _verify_computation_gate_binding(
+                        session,
+                        draft,
+                        computation_binding,
+                    )
+                    if computation_binding is not None
+                    else None
+                )
+                if computation_binding is not None:
+                    _verify_computation_approval_evidence(
+                        session,
+                        draft,
+                        computation_binding,
+                    )
+                _verify_engine_validation_binding(
+                    session,
+                    draft,
+                    engine_binding,
+                    computation_validation=validation,
+                )
+                _verify_hint_ladder_binding(
+                    session,
+                    draft,
+                    hint_binding,
+                    snapshot=hint_snapshot,
+                )
+                _verify_publication_revision(existing, draft)
+                if computation_binding is not None and computation_binding.scoped:
+                    if computation_evidence is None or validation is None:
+                        raise ComputationEvidenceError(
+                            "scoped publication requires computation evidence"
+                        )
+                    _store_publication_computation_evidence(
+                        session,
+                        existing,
+                        validation,
+                        computation_evidence,
+                    )
+                elif computation_evidence is not None:
+                    raise ComputationEvidenceError(
+                        "unscoped publication cannot freeze computation evidence"
+                    )
+                publication_id = existing.id
+                reserved = False
+        return self.require_publication(publication_id), reserved
+
     def get_publication(self, publication_id: int) -> Publication | None:
         with self._sessions() as session:
             return session.scalar(
@@ -1355,6 +2557,176 @@ class DraftRepository:
         if publication is None:
             raise DraftNotFoundError(f"publication {publication_id} was not found")
         return publication
+
+    def snapshot_publication_computation_evidence(
+        self,
+        publication_id: int,
+        evidence: PublicationComputationEvidenceWrite,
+    ) -> PublicationComputationEvidenceRead:
+        """Freeze exact validation and attestation evidence for a publication."""
+
+        report_hash = _sha256_digest(evidence.report_sha256, "report_sha256")
+        attestation_hashes = tuple(
+            _sha256_digest(value, "attestation_sha256")
+            for value in evidence.attestation_sha256s
+        )
+        if len(attestation_hashes) != len(set(attestation_hashes)):
+            raise ComputationEvidenceError(
+                "publication evidence contains duplicate attestation hashes"
+            )
+        ordered_hashes = tuple(sorted(attestation_hashes))
+
+        with self._sessions.begin() as session:
+            publication = session.scalar(
+                select(Publication)
+                .where(Publication.id == publication_id)
+                .with_for_update()
+            )
+            if publication is None:
+                raise DraftNotFoundError(f"publication {publication_id} was not found")
+            existing = session.scalar(
+                select(PublicationComputationEvidence).where(
+                    PublicationComputationEvidence.publication_id == publication.id
+                )
+            )
+            if existing is not None:
+                existing_hashes = tuple(
+                    str(value)
+                    for value in json.loads(existing.attestation_sha256s_json)
+                )
+                try:
+                    existing_snapshot = json.loads(existing.snapshot_json)
+                    existing_engine = existing_snapshot.get("engine_validation")
+                except (AttributeError, TypeError, ValueError):
+                    existing_engine = object()
+                expected_engine = (
+                    evidence.engine_validation.snapshot
+                    if evidence.engine_validation is not None
+                    else None
+                )
+                if (
+                    existing.report_sha256 != report_hash
+                    or existing_hashes != ordered_hashes
+                    or existing_engine != expected_engine
+                ):
+                    raise ComputationEvidenceConflictError(
+                        "publication computation evidence is already frozen"
+                    )
+                return _publication_computation_evidence_read(existing)
+
+            publication_draft_hash = _draft_sha256(publication.question_snapshot_json)
+            validation = session.scalar(
+                select(ComputationValidationRecord)
+                .where(
+                    ComputationValidationRecord.draft_id == publication.draft_id,
+                    ComputationValidationRecord.edit_count == publication.edit_count,
+                    ComputationValidationRecord.draft_sha256 == publication_draft_hash,
+                    ComputationValidationRecord.report_sha256 == report_hash,
+                )
+                .order_by(ComputationValidationRecord.id.desc())
+            )
+            if validation is None:
+                raise ComputationEvidenceError(
+                    "publication evidence must reference a report for the "
+                    "publication's exact draft edit"
+                )
+            latest_validation = _latest_computation_validation_record(
+                session,
+                draft_id=publication.draft_id,
+                edit_count=publication.edit_count,
+                draft_sha256=publication_draft_hash,
+            )
+            if latest_validation is None or latest_validation.id != validation.id:
+                raise ComputationEvidenceError(
+                    "publication evidence must reference the latest report for "
+                    "the publication's exact draft edit"
+                )
+            validate_computation_evidence(
+                _computation_validation_read(validation, is_current=True),
+                require_authorizable=True,
+            )
+            draft = session.scalar(
+                select(Draft).where(Draft.id == publication.draft_id).with_for_update()
+            )
+            if draft is None:
+                raise DraftNotFoundError(f"draft {publication.draft_id} was not found")
+            _verify_engine_validation_binding(
+                session,
+                draft,
+                evidence.engine_validation,
+                computation_validation=validation,
+            )
+            attestations: tuple[ComputationAttestation, ...]
+            if ordered_hashes:
+                attestations = tuple(
+                    session.scalars(
+                        select(ComputationAttestation)
+                        .where(
+                            ComputationAttestation.attestation_sha256.in_(
+                                ordered_hashes
+                            )
+                        )
+                        .order_by(ComputationAttestation.attestation_sha256)
+                    )
+                )
+                if len(attestations) != len(ordered_hashes):
+                    raise ComputationEvidenceError(
+                        "publication evidence references an unknown attestation"
+                    )
+                if any(
+                    item.validation_record_id != validation.id
+                    or item.draft_id != publication.draft_id
+                    or item.edit_count != publication.edit_count
+                    or item.report_sha256 != report_hash
+                    for item in attestations
+                ):
+                    raise ComputationEvidenceError(
+                        "publication attestations must bind to the exact report"
+                    )
+            else:
+                attestations = ()
+
+            snapshot_json = _publication_computation_snapshot_json(
+                publication,
+                validation,
+                attestations,
+                engine_binding=evidence.engine_validation,
+            )
+            snapshot_hash = hashlib.sha256(snapshot_json.encode("utf-8")).hexdigest()
+            stored = PublicationComputationEvidence(
+                publication_id=publication.id,
+                validation_record_id=validation.id,
+                draft_id=publication.draft_id,
+                edit_count=publication.edit_count,
+                report_sha256=report_hash,
+                validation_status=validation.status,
+                attestation_sha256s_json=json.dumps(
+                    ordered_hashes,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+                snapshot_json=snapshot_json,
+                snapshot_sha256=snapshot_hash,
+            )
+            session.add(stored)
+            session.flush()
+            return _publication_computation_evidence_read(stored)
+
+    def get_publication_computation_evidence(
+        self,
+        publication_id: int,
+    ) -> PublicationComputationEvidenceRead | None:
+        with self._sessions() as session:
+            stored = session.scalar(
+                select(PublicationComputationEvidence).where(
+                    PublicationComputationEvidence.publication_id == publication_id
+                )
+            )
+            return (
+                _publication_computation_evidence_read(stored)
+                if stored is not None
+                else None
+            )
 
     def update_publication(
         self,
@@ -1510,6 +2882,7 @@ class DraftRepository:
         decision: ReviewDecision,
         *,
         reviewer: str,
+        computation_binding: ComputationGateBinding | None = None,
     ) -> Draft:
         """Atomically apply API input while retaining independent gate audit events."""
 
@@ -1517,9 +2890,21 @@ class DraftRepository:
         now = utc_now()
         try:
             with self._sessions.begin() as session:
-                draft = session.get(Draft, draft_id)
+                draft = (
+                    session.scalar(
+                        select(Draft).where(Draft.id == draft_id).with_for_update()
+                    )
+                    if computation_binding is not None
+                    else session.get(Draft, draft_id)
+                )
                 if draft is None:
                     raise DraftNotFoundError(f"draft {draft_id} was not found")
+                if computation_binding is not None:
+                    _verify_computation_gate_binding(
+                        session,
+                        draft,
+                        computation_binding,
+                    )
                 if decision.status != ReviewStatus.REJECTED:
                     _record_confirmation(
                         draft,
@@ -1542,11 +2927,1711 @@ class DraftRepository:
                     notes=decision.reviewer_notes,
                     now=now,
                 )
+                if (
+                    computation_binding is not None
+                    and decision.status == ReviewStatus.READY_TO_PUBLISH
+                ):
+                    session.flush()
+                    _store_computation_approval_evidence(
+                        session,
+                        draft,
+                        computation_binding,
+                        reviewer=actor,
+                        approved_at=now,
+                    )
         except StaleDataError:
             raise ConcurrentDraftUpdateError(
                 "the draft changed during review; reload it before submitting a decision"
             ) from None
         return self.require_draft(draft_id)
+
+
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _sha256_digest(value: str, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise ComputationEvidenceError(
+            f"{field_name} must be a lowercase SHA-256 hex digest"
+        )
+    normalized = value.strip().lower()
+    if not _SHA256_PATTERN.fullmatch(normalized):
+        raise ComputationEvidenceError(
+            f"{field_name} must be a lowercase SHA-256 hex digest"
+        )
+    return normalized
+
+
+def _opaque_json_string(value: str, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ComputationEvidenceError(f"{field_name} must be a JSON string")
+    try:
+        json.loads(value)
+    except (TypeError, ValueError):
+        raise ComputationEvidenceError(
+            f"{field_name} must contain valid JSON"
+        ) from None
+    return value
+
+
+def _bounded_computation_text(value: str, field_name: str, limit: int) -> str:
+    if not isinstance(value, str):
+        raise ComputationEvidenceError(f"{field_name} must be text")
+    normalized = value.strip()
+    if not normalized:
+        raise ComputationEvidenceError(f"{field_name} must not be blank")
+    if len(normalized) > limit:
+        raise ComputationEvidenceError(
+            f"{field_name} exceeds the {limit}-character persistence limit"
+        )
+    return normalized
+
+
+def draft_content_sha256(current_json: Mapping[str, Any]) -> str:
+    """Return the canonical hash used to bind evidence to draft content."""
+
+    return hashlib.sha256(_stable_json_bytes(current_json)).hexdigest()
+
+
+def _draft_sha256(current_json: Mapping[str, Any]) -> str:
+    return draft_content_sha256(current_json)
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+@dataclass(frozen=True)
+class _TypedComputationEvidence:
+    blueprint: AssessmentComputationBlueprint | None
+    report: AssessmentValidationReport
+    blueprint_sha256: str
+    report_sha256: str
+
+
+_QUALIFIED_COMPUTATION_DEPENDENCIES = {
+    "sympy": QUALIFIED_SYMPY_VERSION,
+    "pint": QUALIFIED_PINT_VERSION,
+    "ucumvert": QUALIFIED_UCUMVERT_VERSION,
+    "ucum_profile": UCUM_PROFILE,
+    "ucum_essence_sha256": UCUM_ESSENCE_SHA256,
+}
+_NOT_APPLICABLE_BLUEPRINT = {
+    "schema_version": COMPUTATION_SCHEMA_VERSION,
+    "profile": None,
+}
+_LEGACY_UNSUPPORTED_BLUEPRINT = {
+    "schema_version": COMPUTATION_SCHEMA_VERSION,
+    "reason": "legacy_without_blueprint",
+}
+
+
+def validate_computation_evidence(
+    record: ComputationValidationRead,
+    *,
+    require_authorizable: bool = False,
+) -> AssessmentValidationReport:
+    """Revalidate stored typed evidence before an enforce-mode decision."""
+
+    expected_evidence_hash = _computation_validation_evidence_sha256(record)
+    stored_evidence_hash = _sha256_digest(
+        record.evidence_sha256,
+        "evidence_sha256",
+    )
+    if not hmac.compare_digest(expected_evidence_hash, stored_evidence_hash):
+        raise ComputationEvidenceError(
+            "stored evidence hash does not match the immutable validation envelope"
+        )
+    typed = _validate_typed_computation_evidence(
+        status=record.status,
+        schema_version=record.schema_version,
+        validator_revision=record.validator_revision,
+        blueprint_json=record.blueprint_json,
+        report_json=record.report_json,
+        dependency_versions_json=record.dependency_versions_json,
+        seed_plan_json=record.seed_plan_json,
+        engine_evidence_json=record.engine_evidence_json,
+        container_digest=record.container_digest,
+        require_authorizable=require_authorizable,
+        expected_draft_sha256=record.draft_sha256,
+    )
+    if typed.blueprint_sha256 != record.blueprint_sha256:
+        raise ComputationEvidenceError(
+            "stored blueprint hash does not match the typed blueprint"
+        )
+    if typed.report_sha256 != record.report_sha256:
+        raise ComputationEvidenceError(
+            "stored report hash does not match the typed validation report"
+        )
+    return typed.report
+
+
+def computation_formula_adapter_promotion_sha256(
+    record: ComputationValidationRead,
+) -> str | None:
+    """Return the persisted formula-promotion binding for an atomic gate."""
+
+    try:
+        payload = json.loads(
+            _opaque_json_string(
+                record.engine_evidence_json,
+                "engine_evidence_json",
+            )
+        )
+        if not isinstance(payload, dict):
+            raise ValueError
+        top_level = payload.get("formula_adapter_promotion")
+        nested_receipt = payload.get("native_receipt")
+        if top_level is None:
+            if nested_receipt is not None:
+                receipt = NativeEngineRunnerReceipt.model_validate(nested_receipt)
+                if receipt.formula_adapter_promotion is not None:
+                    raise ValueError
+            return None
+        promotion = FormulaAdapterPromotionEvidence.model_validate(top_level)
+        if nested_receipt is not None:
+            receipt = NativeEngineRunnerReceipt.model_validate(nested_receipt)
+            if receipt.formula_adapter_promotion != promotion:
+                raise ValueError
+    except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
+        raise ComputationEvidenceError(
+            "formula promotion binding requires one consistent typed identity"
+        ) from None
+    return promotion.identity_sha256
+
+
+def _validate_typed_computation_evidence(
+    *,
+    status: str,
+    schema_version: str,
+    validator_revision: str,
+    blueprint_json: str,
+    report_json: str,
+    dependency_versions_json: str,
+    seed_plan_json: str,
+    engine_evidence_json: str,
+    container_digest: str,
+    require_authorizable: bool,
+    expected_draft_sha256: str | None = None,
+) -> _TypedComputationEvidence:
+    raw_status = _bounded_computation_text(status, "status", 40)
+    raw_schema = _bounded_computation_text(schema_version, "schema_version", 100)
+    raw_validator = _bounded_computation_text(
+        validator_revision, "validator_revision", 100
+    )
+    blueprint_text = _opaque_json_string(blueprint_json, "blueprint_json")
+    report_text = _opaque_json_string(report_json, "report_json")
+    dependencies_text = _opaque_json_string(
+        dependency_versions_json,
+        "dependency_versions_json",
+    )
+    seed_plan_text = _opaque_json_string(seed_plan_json, "seed_plan_json")
+    engine_evidence_text = _opaque_json_string(
+        engine_evidence_json,
+        "engine_evidence_json",
+    )
+    try:
+        report_payload = json.loads(report_text)
+        report = AssessmentValidationReport.model_validate(report_payload)
+    except (TypeError, ValueError, ValidationError):
+        raise ComputationEvidenceError(
+            "report_json must be a typed AssessmentValidationReport"
+        ) from None
+    if raw_status != report.status.value:
+        raise ComputationEvidenceError(
+            "computation status column does not match report status"
+        )
+    if raw_schema != report.schema_version or raw_schema != COMPUTATION_SCHEMA_VERSION:
+        raise ComputationEvidenceError(
+            "computation schema version does not match the typed report"
+        )
+    if raw_validator != report.validator_version or raw_validator != VALIDATOR_VERSION:
+        raise ComputationEvidenceError(
+            "validator revision does not match the typed report"
+        )
+
+    blueprint_payload = json.loads(blueprint_text)
+    blueprint: AssessmentComputationBlueprint | None
+    try:
+        blueprint = AssessmentComputationBlueprint.model_validate(blueprint_payload)
+    except (TypeError, ValueError, ValidationError):
+        blueprint = None
+    if blueprint is not None:
+        blueprint_hash = canonical_blueprint_hash(blueprint)
+        if blueprint.schema_version != raw_schema:
+            raise ComputationEvidenceError(
+                "blueprint schema version does not match the report"
+            )
+        if report.reason is not None:
+            raise ComputationEvidenceError(
+                "typed blueprint reports cannot carry a legacy reason"
+            )
+    elif (
+        report.status == ValidationStatus.NOT_APPLICABLE
+        and blueprint_payload == _NOT_APPLICABLE_BLUEPRINT
+    ) or (
+        report.status == ValidationStatus.UNSUPPORTED
+        and blueprint_payload == _LEGACY_UNSUPPORTED_BLUEPRINT
+        and report.reason == "legacy_without_blueprint"
+        and any(check.code == "legacy_without_blueprint" for check in report.checks)
+    ):
+        blueprint_hash = hashlib.sha256(
+            _stable_json_bytes(blueprint_payload)
+        ).hexdigest()
+    else:
+        raise ComputationEvidenceError(
+            "blueprint_json must be a typed AssessmentComputationBlueprint"
+        )
+    if report.blueprint_hash != blueprint_hash:
+        raise ComputationEvidenceError(
+            "validation report blueprint hash does not match blueprint_json"
+        )
+    if report.result is not None:
+        if (
+            report.result.schema_version != raw_schema
+            or report.result.blueprint_hash != blueprint_hash
+        ):
+            raise ComputationEvidenceError(
+                "computation result is not bound to the typed blueprint"
+            )
+
+    dependencies = json.loads(dependencies_text)
+    seed_plan = json.loads(seed_plan_text)
+    engine_evidence = json.loads(engine_evidence_text)
+    if not isinstance(dependencies, dict) or any(
+        not isinstance(key, str) or not isinstance(value, str)
+        for key, value in dependencies.items()
+    ):
+        raise ComputationEvidenceError(
+            "dependency_versions_json must be a string-to-string object"
+        )
+    if dependencies != report.dependencies:
+        raise ComputationEvidenceError(
+            "dependency versions do not match the typed report"
+        )
+    if seed_plan != report.seed_plan:
+        raise ComputationEvidenceError("seed plan does not match the typed report")
+    if not isinstance(engine_evidence, dict):
+        raise ComputationEvidenceError("engine_evidence_json must be an object")
+    _validate_report_semantics(
+        report,
+        blueprint=blueprint,
+        require_authorizable=require_authorizable,
+    )
+    _validate_native_engine_evidence(
+        report,
+        blueprint=blueprint,
+        engine_evidence=engine_evidence,
+        expected_draft_sha256=expected_draft_sha256,
+        require_authorizable=require_authorizable,
+    )
+
+    if require_authorizable:
+        if blueprint is None:
+            raise ComputationEvidenceError(
+                "legacy or not-applicable evidence cannot authorize enforce mode"
+            )
+        if report.status not in {
+            ValidationStatus.VALIDATED,
+            ValidationStatus.PARTIALLY_VALIDATED,
+            ValidationStatus.UNSUPPORTED,
+        }:
+            raise ComputationEvidenceError(
+                "validation status cannot authorize enforce mode"
+            )
+        if dependencies != _QUALIFIED_COMPUTATION_DEPENDENCIES:
+            raise ComputationEvidenceError(
+                "dependency evidence does not match the qualified runtime"
+            )
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", container_digest):
+            raise ComputationEvidenceError(
+                "a qualified container digest is required in enforce mode"
+            )
+
+    return _TypedComputationEvidence(
+        blueprint=blueprint,
+        report=report,
+        blueprint_sha256=blueprint_hash,
+        report_sha256=hashlib.sha256(report_text.encode("utf-8")).hexdigest(),
+    )
+
+
+def _validate_report_semantics(
+    report: AssessmentValidationReport,
+    *,
+    blueprint: AssessmentComputationBlueprint | None,
+    require_authorizable: bool,
+) -> None:
+    has_blueprint = blueprint is not None
+    check_codes = [check.code for check in report.checks]
+    if len(check_codes) != len(set(check_codes)):
+        raise ComputationEvidenceError(
+            "typed computation reports cannot contain duplicate check codes"
+        )
+    check_statuses = [check.status for check in report.checks]
+    if report.status == ValidationStatus.VALIDATED:
+        if (
+            report.result is None
+            or not report.checks
+            or any(status != CheckStatus.PASSED for status in check_statuses)
+        ):
+            raise ComputationEvidenceError(
+                "validated reports require a result and only passed checks"
+            )
+    elif report.status == ValidationStatus.PARTIALLY_VALIDATED:
+        if (
+            report.result is None
+            or CheckStatus.FAILED in check_statuses
+            or CheckStatus.INCONCLUSIVE not in check_statuses
+        ):
+            raise ComputationEvidenceError(
+                "partially_validated reports require a result, no failed check, "
+                "and at least one inconclusive check"
+            )
+    elif report.status == ValidationStatus.UNSUPPORTED:
+        if (
+            report.result is not None
+            or CheckStatus.INCONCLUSIVE not in check_statuses
+            or CheckStatus.FAILED in check_statuses
+        ):
+            raise ComputationEvidenceError(
+                "unsupported reports require no result, at least one inconclusive "
+                "check, and no failed checks"
+            )
+    elif report.status == ValidationStatus.VALIDATION_FAILED:
+        if report.result is not None or CheckStatus.FAILED not in check_statuses:
+            raise ComputationEvidenceError(
+                "validation_failed reports require no result and a failed check"
+            )
+    elif report.status == ValidationStatus.NOT_APPLICABLE:
+        if report.result is not None or report.seed_plan or has_blueprint:
+            raise ComputationEvidenceError(
+                "not_applicable reports cannot contain a result, seeds, or blueprint"
+            )
+    if has_blueprint and len(report.seed_plan) != 25:
+        raise ComputationEvidenceError(
+            "typed computation reports require exactly 25 deterministic seeds"
+        )
+    if blueprint is not None:
+        checks_by_code = {check.code: check.status for check in report.checks}
+        external = blueprint.profile.delivery.value in {"webwork", "imathas"}
+        native_status = checks_by_code.get("native_engine")
+        if external and report.status == ValidationStatus.VALIDATED:
+            if native_status != CheckStatus.PASSED:
+                raise ComputationEvidenceError(
+                    "validated external-engine reports require a passed "
+                    "server-trusted native-engine receipt"
+                )
+        elif external and report.status == ValidationStatus.PARTIALLY_VALIDATED:
+            if native_status not in {
+                CheckStatus.PASSED,
+                CheckStatus.INCONCLUSIVE,
+            }:
+                raise ComputationEvidenceError(
+                    "partially validated external-engine reports require passed "
+                    "or inconclusive native-engine evidence"
+                )
+        elif not external and native_status is not None:
+            raise ComputationEvidenceError(
+                "native-engine checks are invalid for nonexternal delivery"
+            )
+    if (
+        require_authorizable
+        and blueprint is not None
+        and report.status
+        in {
+            ValidationStatus.VALIDATED,
+            ValidationStatus.PARTIALLY_VALIDATED,
+        }
+    ):
+        checks_by_code = {check.code: check.status for check in report.checks}
+        required_passes = {"computation", "presentation_binding"}
+        if blueprint.profile.delivery.value == "multiple_choice":
+            required_passes.add("choices")
+        else:
+            required_passes.add("candidate")
+        if blueprint.operation.value == "equivalent":
+            required_passes.add("equivalence")
+            required_passes.discard("candidate")
+        elif blueprint.operation.value == "solve":
+            required_passes.add("candidate_solutions")
+            required_passes.discard("candidate")
+        if blueprint.profile.family.value == "unit":
+            required_passes.update({"unit_dimensions", "unit_round_trip"})
+        if any(variable.minimum is not None for variable in blueprint.variables):
+            required_passes.add("deterministic_samples")
+        missing = sorted(
+            code
+            for code in required_passes
+            if checks_by_code.get(code) != CheckStatus.PASSED
+        )
+        if missing:
+            raise ComputationEvidenceError(
+                "computation report is missing required passed checks: "
+                + ", ".join(missing)
+            )
+
+
+def _validate_native_engine_evidence(
+    report: AssessmentValidationReport,
+    *,
+    blueprint: AssessmentComputationBlueprint | None,
+    engine_evidence: Mapping[str, Any],
+    expected_draft_sha256: str | None,
+    require_authorizable: bool,
+) -> None:
+    """Bind a passed native check to the exact persisted qualified receipt.
+
+    The receipt is trusted only because the application acquired it from the
+    configured local Unix socket and verified it against the source-controlled
+    promotion registry.  Persistence independently rechecks every immutable
+    identity so caller-supplied report JSON cannot promote itself.
+    """
+
+    native_checks = [check for check in report.checks if check.code == "native_engine"]
+    nested_receipt = engine_evidence.get("native_receipt")
+    formula_evidence = _validate_formula_adapter_evidence(
+        report,
+        blueprint=blueprint,
+        engine_evidence=engine_evidence,
+        require_authorizable=require_authorizable,
+    )
+    if blueprint is None or blueprint.profile.delivery.value not in {
+        "webwork",
+        "imathas",
+    }:
+        if native_checks or nested_receipt is not None:
+            raise ComputationEvidenceError(
+                "native-engine evidence is invalid without an external typed blueprint"
+            )
+        return
+
+    if len(native_checks) > 1:
+        raise ComputationEvidenceError(
+            "typed computation reports cannot contain duplicate native checks"
+        )
+    native_check = native_checks[0] if native_checks else None
+    if native_check is None or native_check.status != CheckStatus.PASSED:
+        if nested_receipt is not None:
+            raise ComputationEvidenceError(
+                "persisted native receipt requires a passed native-engine check"
+            )
+        return
+    if nested_receipt is None:
+        raise ComputationEvidenceError(
+            "passed native-engine check requires its exact persisted receipt"
+        )
+
+    try:
+        receipt = NativeEngineRunnerReceipt.model_validate(nested_receipt)
+        observed_evidence = NativeEngineEvidence.model_validate(native_check.details)
+    except (TypeError, ValueError, ValidationError):
+        raise ComputationEvidenceError(
+            "native-engine evidence must contain a complete typed receipt"
+        ) from None
+    expected_evidence = _native_evidence_for_receipt(receipt)
+    if observed_evidence != expected_evidence:
+        raise ComputationEvidenceError(
+            "native-engine report details do not match the persisted receipt"
+        )
+
+    expected_draft_hash = (
+        _sha256_digest(expected_draft_sha256, "expected_draft_sha256")
+        if expected_draft_sha256 is not None
+        else None
+    )
+    if (
+        receipt.engine != blueprint.profile.delivery.value
+        or receipt.blueprint_sha256 != canonical_blueprint_hash(blueprint)
+        or (
+            expected_draft_hash is not None
+            and receipt.draft_sha256 != expected_draft_hash
+        )
+        or receipt.seeds != report.seed_plan
+        or receipt.seed_plan_sha256 != seed_plan_sha256(report.seed_plan)
+    ):
+        raise ComputationEvidenceError(
+            "native-engine receipt does not match the exact draft, blueprint, "
+            "or deterministic seed plan"
+        )
+
+    previews = engine_evidence.get("previews")
+    preview_seeds = (
+        [preview.get("seed") for preview in previews]
+        if isinstance(previews, list)
+        and all(isinstance(preview, dict) for preview in previews)
+        else None
+    )
+    if (
+        engine_evidence.get("engine") != receipt.engine
+        or engine_evidence.get("compiler_version") != receipt.compiler_version
+        or engine_evidence.get("source_sha256") != receipt.source_sha256
+        or engine_evidence.get("seed_count") != 25
+        or len(receipt.seeds) != 25
+        or len(set(receipt.seeds)) != 25
+        or preview_seeds != report.seed_plan
+    ):
+        raise ComputationEvidenceError(
+            "native-engine receipt does not match the persisted compiler artifact"
+        )
+    if report.result is None:
+        raise ComputationEvidenceError(
+            "passed native-engine receipt requires typed computation ground truth"
+        )
+    try:
+        verify_native_engine_observations(
+            blueprint=blueprint,
+            result=report.result,
+            receipt=receipt,
+        )
+    except NativeEvidenceVerificationError:
+        raise ComputationEvidenceError(
+            "native-engine observations do not match typed ground truth"
+        ) from None
+
+    if receipt.answer_kind == "formula":
+        if (
+            formula_evidence is None
+            or receipt.formula_adapter_promotion != formula_evidence
+            or formula_evidence.family != blueprint.profile.family.value
+            or formula_evidence.operation != blueprint.operation.value
+        ):
+            raise ComputationEvidenceError(
+                "formula receipt does not match the independently persisted "
+                "promotion identity"
+            )
+    elif formula_evidence is not None:
+        raise ComputationEvidenceError(
+            "numeric native receipt cannot carry formula promotion evidence"
+        )
+
+    promotion = qualified_native_engine_runner(
+        runner_id=receipt.runner_id,
+        engine=receipt.engine,
+        compiler_version=receipt.compiler_version,
+        answer_kind=receipt.answer_kind,
+    )
+    if promotion is None:
+        raise ComputationEvidenceError(
+            "native-engine receipt is not bound to a source-controlled qualification"
+        )
+    promoted_identity = {
+        "runner_id": promotion.runner_id,
+        "runner_version": promotion.runner_version,
+        "runner_manifest_sha256": promotion.runner_manifest_sha256,
+        "runner_image_digest": promotion.runner_image_digest,
+        "qualification_report_sha256": promotion.qualification_report_sha256,
+        "promotion_approval_sha256": promotion.promotion_approval_sha256,
+        "engine": promotion.engine,
+        "compiler_version": promotion.compiler_version,
+        "answer_kind": promotion.answer_kind,
+        "native_grader": promotion.native_grader,
+        "engine_image_digest": promotion.engine_image_digest,
+        "adapter_image_digest": promotion.adapter_image_digest,
+        "network_attestation_sha256": promotion.network_attestation_sha256,
+    }
+    observed_identity = {field: getattr(receipt, field) for field in promoted_identity}
+    if observed_identity != promoted_identity:
+        raise ComputationEvidenceError(
+            "native-engine receipt identity does not match its reviewed promotion"
+        )
+
+
+def _validate_formula_adapter_evidence(
+    report: AssessmentValidationReport,
+    *,
+    blueprint: AssessmentComputationBlueprint | None,
+    engine_evidence: Mapping[str, Any],
+    require_authorizable: bool,
+) -> FormulaAdapterPromotionEvidence | None:
+    """Validate formula promotion independently of native-runner availability."""
+
+    raw_promotion = engine_evidence.get("formula_adapter_promotion")
+    artifact_fields = {
+        "engine",
+        "compiler_version",
+        "source_sha256",
+        "seed_count",
+        "previews",
+        "answer_kind",
+    }
+    artifact_present = any(field in engine_evidence for field in artifact_fields)
+    external = blueprint is not None and blueprint.profile.delivery.value in {
+        "webwork",
+        "imathas",
+    }
+    if not artifact_present:
+        if raw_promotion is not None:
+            raise ComputationEvidenceError(
+                "formula promotion evidence requires a compiled engine artifact"
+            )
+        return None
+    if not external or blueprint is None or report.result is None:
+        if raw_promotion is not None:
+            raise ComputationEvidenceError(
+                "formula promotion evidence requires a computed external item"
+            )
+        return None
+
+    referenced = _expression_symbol_names(
+        report.result.answer_expression or blueprint.expression
+    )
+    response_symbols = {
+        variable.name
+        for variable in blueprint.variables
+        if (
+            variable.minimum is None
+            and variable.name in referenced
+            and variable.name not in blueprint.substitutions
+        )
+    }
+    expected_answer_kind = "formula" if response_symbols else "numeric"
+    if engine_evidence.get("answer_kind") != expected_answer_kind:
+        raise ComputationEvidenceError(
+            "compiled answer kind does not match the typed computation blueprint"
+        )
+    if expected_answer_kind == "numeric":
+        if raw_promotion is not None:
+            raise ComputationEvidenceError(
+                "numeric compiler artifact cannot carry formula promotion evidence"
+            )
+        return None
+    if raw_promotion is None:
+        raise ComputationEvidenceError(
+            "formula compiler artifact requires its exact persisted promotion identity"
+        )
+    try:
+        promotion = FormulaAdapterPromotionEvidence.model_validate(raw_promotion)
+    except (TypeError, ValueError, ValidationError):
+        raise ComputationEvidenceError(
+            "formula compiler artifact has malformed promotion evidence"
+        ) from None
+    if (
+        promotion.engine != engine_evidence.get("engine")
+        or promotion.compiler_version != engine_evidence.get("compiler_version")
+        or promotion.engine != blueprint.profile.delivery.value
+        or promotion.family != blueprint.profile.family.value
+        or promotion.operation != blueprint.operation.value
+    ):
+        raise ComputationEvidenceError(
+            "formula promotion identity does not match its typed compiler artifact"
+        )
+    if require_authorizable:
+        current = qualified_formula_adapter(
+            promotion.engine,
+            promotion.compiler_version,
+            family=blueprint.profile.family.value,
+            operation=blueprint.operation.value,
+        )
+        if current is None:
+            raise ComputationEvidenceError(
+                "formula adapter promotion is unavailable or revoked"
+            )
+        expected = formula_adapter_promotion_identity(
+            current,
+            compiler_version=promotion.compiler_version,
+            family=blueprint.profile.family.value,
+            operation=blueprint.operation.value,
+        )
+        expected["identity_sha256"] = current_formula_adapter_promotion_sha256(
+            current,
+            compiler_version=promotion.compiler_version,
+            family=blueprint.profile.family.value,
+            operation=blueprint.operation.value,
+        )
+        if promotion.model_dump(mode="json", exclude_none=False) != expected:
+            raise ComputationEvidenceError(
+                "formula promotion identity does not match its current promotion"
+            )
+    return promotion
+
+
+def _expression_symbol_names(node: Any) -> set[str]:
+    """Return symbol names from a previously validated typed expression node."""
+
+    names: set[str] = set()
+    symbol = getattr(node, "symbol", None)
+    if isinstance(symbol, str):
+        names.add(symbol)
+    for child in getattr(node, "args", ()):
+        names.update(_expression_symbol_names(child))
+    return names
+
+
+def _native_evidence_for_receipt(
+    receipt: NativeEngineRunnerReceipt,
+) -> NativeEngineEvidence:
+    return NativeEngineEvidence(
+        engine=receipt.engine,
+        compiler_version=receipt.compiler_version,
+        source_sha256=receipt.source_sha256,
+        receipt_sha256=receipt.receipt_sha256,
+        seeds_validated=receipt.seeds_validated,
+        passed=receipt.passed,
+        server_verified=True,
+        answer_kind=receipt.answer_kind,
+        native_grader=receipt.native_grader,
+        blueprint_sha256=receipt.blueprint_sha256,
+        draft_sha256=receipt.draft_sha256,
+        request_sha256=receipt.request_sha256,
+        seed_plan_sha256=receipt.seed_plan_sha256,
+        seed_receipts_sha256=receipt.seed_receipts_sha256,
+        runner_id=receipt.runner_id,
+        runner_version=receipt.runner_version,
+        runner_manifest_sha256=receipt.runner_manifest_sha256,
+        runner_image_digest=receipt.runner_image_digest,
+        qualification_report_sha256=receipt.qualification_report_sha256,
+        promotion_approval_sha256=receipt.promotion_approval_sha256,
+        engine_image_digest=receipt.engine_image_digest,
+        adapter_image_digest=receipt.adapter_image_digest,
+        formula_adapter_promotion=receipt.formula_adapter_promotion,
+        network_attestation_sha256=receipt.network_attestation_sha256,
+        correct_answer_accepted=receipt.correct_answer_accepted,
+        wrong_answer_rejected=receipt.wrong_answer_rejected,
+        rendered=receipt.rendered,
+        render_sha256=receipt.render_sha256,
+        repeat_render_sha256=receipt.repeat_render_sha256,
+        warnings_count=receipt.warnings_count,
+        errors_count=receipt.errors_count,
+        outbound_request_count=receipt.outbound_request_count,
+    )
+
+
+def _new_computation_validation_record(
+    draft: Draft,
+    *,
+    edit_count: int,
+    source_sha256: str,
+    value: ComputationValidationWrite,
+) -> ComputationValidationRecord:
+    if edit_count < 0:
+        raise ComputationEvidenceError("edit_count must not be negative")
+    if (
+        isinstance(value.duration_ms, bool)
+        or not isinstance(value.duration_ms, int)
+        or value.duration_ms < 0
+    ):
+        raise ComputationEvidenceError("duration_ms must be a non-negative integer")
+    typed = _validate_typed_computation_evidence(
+        status=value.status,
+        schema_version=value.schema_version,
+        validator_revision=value.validator_revision,
+        blueprint_json=value.blueprint_json,
+        report_json=value.report_json,
+        dependency_versions_json=value.dependency_versions_json,
+        seed_plan_json=value.seed_plan_json,
+        engine_evidence_json=value.engine_evidence_json,
+        container_digest=value.container_digest,
+        require_authorizable=False,
+        expected_draft_sha256=_draft_sha256(draft.current_json),
+    )
+    record = ComputationValidationRecord(
+        draft_id=draft.id,
+        edit_count=edit_count,
+        source_sha256=_sha256_digest(source_sha256, "source_sha256"),
+        draft_sha256=_draft_sha256(draft.current_json),
+        blueprint_sha256=typed.blueprint_sha256,
+        report_sha256=typed.report_sha256,
+        evidence_sha256="0" * 64,
+        status=typed.report.status.value,
+        schema_version=typed.report.schema_version,
+        validator_revision=typed.report.validator_version,
+        blueprint_json=value.blueprint_json,
+        report_json=value.report_json,
+        dependency_versions_json=value.dependency_versions_json,
+        container_digest=_bounded_computation_text(
+            value.container_digest,
+            "container_digest",
+            255,
+        ),
+        seed_plan_json=value.seed_plan_json,
+        duration_ms=int(value.duration_ms),
+        engine_evidence_json=value.engine_evidence_json,
+    )
+    record.evidence_sha256 = _computation_validation_evidence_sha256(record)
+    return record
+
+
+def _computation_validation_evidence_sha256(
+    record: ComputationValidationRecord | ComputationValidationRead,
+) -> str:
+    """Hash the complete immutable validator envelope, excluding DB metadata."""
+
+    material = {
+        "draft_id": record.draft_id,
+        "edit_count": record.edit_count,
+        "source_sha256": record.source_sha256,
+        "draft_sha256": record.draft_sha256,
+        "blueprint_sha256": record.blueprint_sha256,
+        "report_sha256": record.report_sha256,
+        "status": record.status,
+        "schema_version": record.schema_version,
+        "validator_revision": record.validator_revision,
+        "blueprint_json": record.blueprint_json,
+        "report_json": record.report_json,
+        "dependency_versions_json": record.dependency_versions_json,
+        "container_digest": record.container_digest,
+        "seed_plan_json": record.seed_plan_json,
+        "duration_ms": record.duration_ms,
+        "engine_evidence_json": record.engine_evidence_json,
+    }
+    return hashlib.sha256(_stable_json_bytes(material)).hexdigest()
+
+
+def _computation_attestation_sha256(
+    *,
+    validation_record_id: int,
+    draft_id: int,
+    edit_count: int,
+    report_sha256: str,
+    specialist_identity: str,
+    rationale: str,
+    qualification_json: str,
+) -> str:
+    return hashlib.sha256(
+        _stable_json_bytes(
+            {
+                "validation_record_id": validation_record_id,
+                "draft_id": draft_id,
+                "edit_count": edit_count,
+                "report_sha256": report_sha256,
+                "specialist_identity": specialist_identity,
+                "rationale": rationale,
+                "qualification_json": qualification_json,
+            }
+        )
+    ).hexdigest()
+
+
+def _same_computation_validation(
+    left: ComputationValidationRecord,
+    right: ComputationValidationRecord,
+) -> bool:
+    fields = (
+        "draft_id",
+        "edit_count",
+        "source_sha256",
+        "draft_sha256",
+        "blueprint_sha256",
+        "report_sha256",
+        "evidence_sha256",
+        "status",
+        "schema_version",
+        "validator_revision",
+        "blueprint_json",
+        "report_json",
+        "dependency_versions_json",
+        "container_digest",
+        "seed_plan_json",
+        "duration_ms",
+        "engine_evidence_json",
+    )
+    return all(getattr(left, field) == getattr(right, field) for field in fields)
+
+
+def _current_computation_validation_record(
+    session: Session,
+    draft: Draft,
+) -> ComputationValidationRecord | None:
+    return _latest_computation_validation_record(
+        session,
+        draft_id=draft.id,
+        edit_count=draft.edit_count,
+        draft_sha256=_draft_sha256(draft.current_json),
+    )
+
+
+def _latest_computation_validation_record(
+    session: Session,
+    *,
+    draft_id: int,
+    edit_count: int,
+    draft_sha256: str,
+) -> ComputationValidationRecord | None:
+    return session.scalar(
+        select(ComputationValidationRecord)
+        .where(
+            ComputationValidationRecord.draft_id == draft_id,
+            ComputationValidationRecord.edit_count == edit_count,
+            ComputationValidationRecord.draft_sha256 == draft_sha256,
+        )
+        .order_by(ComputationValidationRecord.id.desc())
+    )
+
+
+def validate_computation_engine_binding(
+    record: ComputationValidationRead,
+    binding: EngineValidationBinding,
+) -> None:
+    """Verify report engine evidence against one freshly compiled artifact."""
+
+    if (
+        record.draft_id != binding.draft_id
+        or record.edit_count != binding.expected_edit_count
+        or record.draft_sha256
+        != _sha256_digest(binding.expected_draft_sha256, "expected_draft_sha256")
+    ):
+        raise ComputationEvidenceError(
+            "computation engine evidence does not match the exact draft revision"
+        )
+    validate_computation_evidence(record, require_authorizable=True)
+    _validate_engine_evidence_json(record.engine_evidence_json, binding)
+
+
+def _verify_engine_validation_binding(
+    session: Session,
+    draft: Draft,
+    binding: EngineValidationBinding | None,
+    *,
+    computation_validation: ComputationValidationRecord | None,
+) -> EngineValidationRecord | None:
+    """Recheck the exact compiled artifact while the draft row is locked."""
+
+    question = QuestionDraft.model_validate(draft.current_json)
+    external = question.item_type in {
+        AssessmentItemType.WEBWORK,
+        AssessmentItemType.IMATHAS,
+    }
+    if not external:
+        if binding is not None:
+            raise ComputationEvidenceError(
+                "nonexternal publication cannot include engine evidence"
+            )
+        return None
+    if binding is None:
+        raise ReviewGateError(
+            "external-engine publication requires exact compiled-source evidence"
+        )
+    expected_draft_hash = _sha256_digest(
+        binding.expected_draft_sha256,
+        "expected_draft_sha256",
+    )
+    if (
+        binding.draft_id != draft.id
+        or binding.expected_edit_count != draft.edit_count
+        or expected_draft_hash != _draft_sha256(draft.current_json)
+    ):
+        raise ConcurrentDraftUpdateError(
+            "the draft changed after engine validation; reload and retry"
+        )
+    current = session.scalar(
+        select(EngineValidationRecord)
+        .where(
+            EngineValidationRecord.draft_id == draft.id,
+            EngineValidationRecord.edit_count == draft.edit_count,
+        )
+        .order_by(EngineValidationRecord.id.desc())
+        .limit(1)
+        .with_for_update()
+    )
+    if current is None:
+        raise ReviewGateError(
+            "external-engine publication requires current engine validation"
+        )
+    if (
+        isinstance(binding.validation_record_id, bool)
+        or binding.validation_record_id < 1
+        or current.id != binding.validation_record_id
+        or current.status != "passed"
+        or current.seed_count < 25
+        or current.seed_count != binding.seed_count
+        or current.engine != binding.engine
+        or current.compiler_version != binding.compiler_version
+        or current.source_sha256
+        != _sha256_digest(binding.source_sha256, "source_sha256")
+        or binding.engine != question.item_type.value
+    ):
+        raise ConcurrentDraftUpdateError(
+            "engine validation or compiled source changed; reload and revalidate"
+        )
+    if computation_validation is not None:
+        _validate_engine_evidence_json(
+            computation_validation.engine_evidence_json,
+            binding,
+        )
+    return current
+
+
+def _verify_hint_ladder_binding(
+    session: Session,
+    draft: Draft,
+    binding: HintLadderBinding | None,
+    *,
+    snapshot: Any,
+) -> HintLadderRecord | None:
+    """Recheck the newest approved hint version while the draft row is locked."""
+
+    if binding is None:
+        if snapshot is not None:
+            raise ComputationEvidenceError(
+                "hint snapshot requires an exact hint-ladder binding"
+            )
+        return None
+    expected_evidence_hash = _sha256_digest(
+        binding.evidence_sha256,
+        "hint_evidence_sha256",
+    )
+    current = session.scalar(
+        select(HintLadderRecord)
+        .where(
+            HintLadderRecord.draft_id == draft.id,
+            HintLadderRecord.edit_count == draft.edit_count,
+        )
+        .order_by(HintLadderRecord.version.desc(), HintLadderRecord.id.desc())
+        .limit(1)
+        .with_for_update()
+    )
+    if (
+        current is None
+        or binding.record_id != current.id
+        or binding.draft_id != draft.id
+        or binding.expected_edit_count != draft.edit_count
+        or binding.version != current.version
+        or hint_ladder_evidence_sha256(current) != expected_evidence_hash
+    ):
+        raise ConcurrentDraftUpdateError(
+            "hint approval changed; reload and review the current ladder"
+        )
+    confirmations = current.confirmations_json
+    required = {"conceptual", "strategic", "specific"}
+    if (
+        current.status != "approved"
+        or not isinstance(confirmations, dict)
+        or set(confirmations) != required
+        or any(confirmations.get(rung) is not True for rung in required)
+    ):
+        raise ReviewGateError(
+            "the current three-rung hint ladder is not fully approved"
+        )
+    try:
+        ladder = HintLadderDraft.model_validate(current.ladder_json)
+        _validate_hint_ladder(
+            QuestionDraft.model_validate(draft.current_json),
+            ladder,
+        )
+    except (DraftGroundingError, ValidationError) as exc:
+        raise ReviewGateError(
+            "the current hint ladder failed typed grounding validation"
+        ) from exc
+    if any(rung.answer_leak_detected for rung in ladder.rungs):
+        raise ReviewGateError(
+            "the current hint ladder contains an unresolved answer-leak flag"
+        )
+    if snapshot != approved_hint_ladder_snapshot(current):
+        raise ConcurrentDraftUpdateError(
+            "hint publication snapshot changed; reload and retry"
+        )
+    return current
+
+
+def _validate_engine_evidence_json(
+    engine_evidence_json: str,
+    binding: EngineValidationBinding,
+) -> None:
+    try:
+        payload = json.loads(
+            _opaque_json_string(engine_evidence_json, "engine_evidence_json")
+        )
+    except (TypeError, ValueError, json.JSONDecodeError):
+        raise ComputationEvidenceError(
+            "computation engine evidence must be a JSON object"
+        ) from None
+    if not isinstance(payload, dict):
+        raise ComputationEvidenceError(
+            "computation engine evidence must be a JSON object"
+        )
+    observed = {
+        "engine": payload.get("engine"),
+        "compiler_version": payload.get("compiler_version"),
+        "source_sha256": payload.get("source_sha256"),
+    }
+    if observed != binding.artifact_identity:
+        raise ComputationEvidenceError(
+            "computation engine evidence does not match the compiled artifact"
+        )
+
+
+def _verify_computation_gate_binding(
+    session: Session,
+    draft: Draft,
+    binding: ComputationGateBinding,
+) -> ComputationValidationRecord | None:
+    """Fail closed unless an enforce decision still matches inside the write txn."""
+
+    expected_hash = _sha256_digest(
+        binding.expected_draft_sha256,
+        "expected_draft_sha256",
+    )
+    if (
+        draft.edit_count != binding.expected_edit_count
+        or _draft_sha256(draft.current_json) != expected_hash
+    ):
+        raise ConcurrentDraftUpdateError(
+            "the draft changed after computation validation; reload and retry"
+        )
+    question = QuestionDraft.model_validate(draft.current_json)
+    current = _current_computation_validation_record(session, draft)
+    computational_type = question.item_type in {
+        AssessmentItemType.NUMERICAL,
+        AssessmentItemType.WEBWORK,
+        AssessmentItemType.IMATHAS,
+    }
+
+    if not binding.scoped:
+        if (
+            binding.formula_adapter_promotion_sha256 is not None
+            or binding.runtime_image_reference is not None
+            or binding.runtime_container_digest is not None
+            or binding.runtime_promotion_sha256 is not None
+        ):
+            raise ComputationEvidenceError(
+                "unscoped computation binding cannot claim promotion identities"
+            )
+        if computational_type:
+            raise ReviewGateError(
+                "a computational item requires current enforce-mode evidence"
+            )
+        if binding.report_sha256 is None:
+            if (
+                binding.validation_record_id is not None
+                or binding.evidence_sha256 is not None
+            ):
+                raise ComputationEvidenceError(
+                    "unscoped no-report binding cannot include evidence identity"
+                )
+            any_evidence = session.scalar(
+                select(ComputationValidationRecord.id)
+                .where(ComputationValidationRecord.draft_id == draft.id)
+                .limit(1)
+            )
+            if any_evidence is not None:
+                raise ConcurrentDraftUpdateError(
+                    "computation evidence changed; reload and retry"
+                )
+            return None
+        expected_report_hash = _sha256_digest(
+            binding.report_sha256,
+            "report_sha256",
+        )
+        expected_evidence_hash = (
+            _sha256_digest(binding.evidence_sha256, "evidence_sha256")
+            if binding.evidence_sha256 is not None
+            else None
+        )
+        if (
+            current is None
+            or binding.validation_record_id is None
+            or expected_evidence_hash is None
+            or current.id != binding.validation_record_id
+            or current.report_sha256 != expected_report_hash
+            or current.evidence_sha256 != expected_evidence_hash
+        ):
+            raise ConcurrentDraftUpdateError(
+                "computation evidence changed; reload and retry"
+            )
+        report = validate_computation_evidence(
+            _computation_validation_read(current, is_current=True)
+        )
+        if report.status != ValidationStatus.NOT_APPLICABLE:
+            raise ReviewGateError("unscoped enforce evidence must be not_applicable")
+        return current
+
+    if (
+        current is None
+        or binding.report_sha256 is None
+        or binding.validation_record_id is None
+        or binding.evidence_sha256 is None
+    ):
+        raise ReviewGateError(
+            "current computation evidence is required in enforce mode"
+        )
+    expected_report_hash = _sha256_digest(
+        binding.report_sha256,
+        "report_sha256",
+    )
+    expected_evidence_hash = _sha256_digest(
+        binding.evidence_sha256,
+        "evidence_sha256",
+    )
+    if (
+        current.id != binding.validation_record_id
+        or current.report_sha256 != expected_report_hash
+        or current.evidence_sha256 != expected_evidence_hash
+    ):
+        raise ConcurrentDraftUpdateError(
+            "computation evidence changed; reload and retry"
+        )
+    report = validate_computation_evidence(
+        _computation_validation_read(current, is_current=True),
+        require_authorizable=True,
+    )
+    current_formula_promotion_sha256 = computation_formula_adapter_promotion_sha256(
+        _computation_validation_read(current, is_current=True)
+    )
+    expected_formula_promotion_sha256 = (
+        _sha256_digest(
+            binding.formula_adapter_promotion_sha256,
+            "formula_adapter_promotion_sha256",
+        )
+        if binding.formula_adapter_promotion_sha256 is not None
+        else None
+    )
+    if current_formula_promotion_sha256 != expected_formula_promotion_sha256:
+        raise ConcurrentDraftUpdateError(
+            "formula adapter promotion changed; reload and retry"
+        )
+    if (
+        binding.runtime_image_reference is None
+        or binding.runtime_container_digest is None
+        or binding.runtime_promotion_sha256 is None
+    ):
+        raise ComputationEvidenceError(
+            "scoped computation binding requires an exact runtime promotion"
+        )
+    runtime_image_reference = _bounded_computation_text(
+        binding.runtime_image_reference,
+        "runtime_image_reference",
+        255,
+    )
+    runtime_container_digest = _bounded_computation_text(
+        binding.runtime_container_digest,
+        "runtime_container_digest",
+        255,
+    )
+    expected_runtime_promotion_sha256 = _sha256_digest(
+        binding.runtime_promotion_sha256,
+        "runtime_promotion_sha256",
+    )
+    # Local import avoids a module cycle: policy depends on the persistence
+    # contracts above, while the transaction must re-resolve current promotion
+    # state after the draft row is locked.
+    from .computation_policy import computation_runtime_promotion_sha256
+
+    current_runtime_promotion_sha256 = computation_runtime_promotion_sha256(
+        image_reference=runtime_image_reference,
+        container_digest=runtime_container_digest,
+    )
+    if current_runtime_promotion_sha256 != expected_runtime_promotion_sha256:
+        raise ConcurrentDraftUpdateError(
+            "computation runtime promotion changed; reload and retry"
+        )
+    if (
+        binding.validation_status is None
+        or report.status.value != binding.validation_status
+    ):
+        raise ConcurrentDraftUpdateError(
+            "computation validation status changed; reload and retry"
+        )
+
+    expected_attestations = tuple(
+        sorted(
+            _sha256_digest(value, "attestation_sha256")
+            for value in binding.attestation_sha256s
+        )
+    )
+    if len(expected_attestations) != len(set(expected_attestations)):
+        raise ComputationEvidenceError(
+            "computation gate contains duplicate attestation hashes"
+        )
+    if report.status in {
+        ValidationStatus.PARTIALLY_VALIDATED,
+        ValidationStatus.UNSUPPORTED,
+    }:
+        if not expected_attestations:
+            raise ReviewGateError(
+                "a trusted computation-specialist attestation is required"
+            )
+    elif expected_attestations:
+        raise ComputationEvidenceError(
+            "attestations may bind only partially_validated or unsupported reports"
+        )
+    if expected_attestations:
+        attestations = tuple(
+            session.scalars(
+                select(ComputationAttestation)
+                .where(
+                    ComputationAttestation.attestation_sha256.in_(expected_attestations)
+                )
+                .order_by(ComputationAttestation.attestation_sha256)
+            )
+        )
+        trusted = frozenset(binding.trusted_specialist_subjects)
+        if len(attestations) != len(expected_attestations) or any(
+            item.validation_record_id != current.id
+            or item.draft_id != draft.id
+            or item.edit_count != draft.edit_count
+            or item.report_sha256 != current.report_sha256
+            or item.specialist_identity not in trusted
+            for item in attestations
+        ):
+            raise ReviewGateError(
+                "computation attestation is stale or no longer trusted"
+            )
+    return current
+
+
+def _computation_gate_binding_payload(
+    binding: ComputationGateBinding,
+) -> dict[str, Any]:
+    return {
+        "expected_edit_count": binding.expected_edit_count,
+        "expected_draft_sha256": binding.expected_draft_sha256,
+        "scoped": binding.scoped,
+        "validation_record_id": binding.validation_record_id,
+        "evidence_sha256": binding.evidence_sha256,
+        "validation_status": binding.validation_status,
+        "report_sha256": binding.report_sha256,
+        "formula_adapter_promotion_sha256": (binding.formula_adapter_promotion_sha256),
+        "runtime_image_reference": binding.runtime_image_reference,
+        "runtime_container_digest": binding.runtime_container_digest,
+        "runtime_promotion_sha256": binding.runtime_promotion_sha256,
+        "attestation_sha256s": list(binding.attestation_sha256s),
+        "trusted_specialist_subjects": list(binding.trusted_specialist_subjects),
+    }
+
+
+def _computation_gate_binding_json(
+    binding: ComputationGateBinding,
+) -> tuple[str, str]:
+    payload = _computation_gate_binding_payload(binding)
+    encoded = _stable_json_bytes(payload)
+    return encoded.decode("utf-8"), hashlib.sha256(encoded).hexdigest()
+
+
+def _store_computation_approval_evidence(
+    session: Session,
+    draft: Draft,
+    binding: ComputationGateBinding,
+    *,
+    reviewer: str,
+    approved_at: datetime,
+) -> None:
+    binding_json, binding_sha256 = _computation_gate_binding_json(binding)
+    material = {
+        "draft_id": draft.id,
+        "edit_count": draft.edit_count,
+        "draft_version_id": draft.version_id,
+        "binding_sha256": binding_sha256,
+        "reviewer_identity": reviewer,
+        "approved_at": _as_utc(approved_at).isoformat(),
+    }
+    session.add(
+        ComputationApprovalEvidence(
+            draft_id=draft.id,
+            edit_count=draft.edit_count,
+            draft_version_id=draft.version_id,
+            binding_json=binding_json,
+            binding_sha256=binding_sha256,
+            reviewer_identity=reviewer,
+            approved_at=approved_at,
+            approval_sha256=hashlib.sha256(_stable_json_bytes(material)).hexdigest(),
+        )
+    )
+
+
+def _verify_computation_approval_evidence(
+    session: Session,
+    draft: Draft,
+    binding: ComputationGateBinding,
+) -> None:
+    binding_json, binding_sha256 = _computation_gate_binding_json(binding)
+    approval = session.scalar(
+        select(ComputationApprovalEvidence)
+        .where(
+            ComputationApprovalEvidence.draft_id == draft.id,
+            ComputationApprovalEvidence.edit_count == draft.edit_count,
+            ComputationApprovalEvidence.draft_version_id == draft.version_id,
+            ComputationApprovalEvidence.binding_sha256 == binding_sha256,
+        )
+        .order_by(ComputationApprovalEvidence.id.desc())
+    )
+    if (
+        approval is None
+        or approval.binding_json != binding_json
+        or approval.reviewer_identity != draft.last_reviewed_by
+        or draft.last_reviewed_at is None
+        or _as_utc(approval.approved_at) != _as_utc(draft.last_reviewed_at)
+    ):
+        raise ReviewGateError(
+            "the draft must be approved under the current enforce-mode "
+            "computation evidence"
+        )
+
+
+def _computation_validation_read(
+    record: ComputationValidationRecord,
+    *,
+    is_current: bool,
+) -> ComputationValidationRead:
+    return ComputationValidationRead(
+        id=record.id,
+        draft_id=record.draft_id,
+        edit_count=record.edit_count,
+        source_sha256=record.source_sha256,
+        draft_sha256=record.draft_sha256,
+        blueprint_sha256=record.blueprint_sha256,
+        report_sha256=record.report_sha256,
+        evidence_sha256=record.evidence_sha256,
+        status=record.status,
+        schema_version=record.schema_version,
+        validator_revision=record.validator_revision,
+        blueprint_json=record.blueprint_json,
+        report_json=record.report_json,
+        dependency_versions_json=record.dependency_versions_json,
+        container_digest=record.container_digest,
+        seed_plan_json=record.seed_plan_json,
+        duration_ms=record.duration_ms,
+        engine_evidence_json=record.engine_evidence_json,
+        created_at=_as_utc(record.created_at),
+        is_current=is_current,
+    )
+
+
+def _computation_attestation_read(
+    record: ComputationAttestation,
+    *,
+    is_current: bool,
+) -> ComputationAttestationRead:
+    return ComputationAttestationRead(
+        id=record.id,
+        validation_record_id=record.validation_record_id,
+        draft_id=record.draft_id,
+        edit_count=record.edit_count,
+        report_sha256=record.report_sha256,
+        specialist_identity=record.specialist_identity,
+        rationale=record.rationale,
+        qualification_json=record.qualification_json,
+        attestation_sha256=record.attestation_sha256,
+        created_at=_as_utc(record.created_at),
+        is_current=is_current,
+    )
+
+
+def _validate_publication_evidence_binding(
+    binding: ComputationGateBinding,
+    evidence: PublicationComputationEvidenceWrite | None,
+    *,
+    engine_binding: EngineValidationBinding | None,
+) -> None:
+    if not binding.scoped:
+        if evidence is not None:
+            raise ComputationEvidenceError(
+                "unscoped publication cannot include computation evidence"
+            )
+        return
+    if (
+        evidence is None
+        or binding.report_sha256 is None
+        or _sha256_digest(evidence.report_sha256, "report_sha256")
+        != _sha256_digest(binding.report_sha256, "report_sha256")
+    ):
+        raise ComputationEvidenceError(
+            "publication evidence does not match the enforce decision report"
+        )
+    evidence_attestations = tuple(
+        sorted(
+            _sha256_digest(value, "attestation_sha256")
+            for value in evidence.attestation_sha256s
+        )
+    )
+    binding_attestations = tuple(
+        sorted(
+            _sha256_digest(value, "attestation_sha256")
+            for value in binding.attestation_sha256s
+        )
+    )
+    if evidence_attestations != binding_attestations:
+        raise ComputationEvidenceError(
+            "publication attestations do not match the enforce decision"
+        )
+    if evidence is not None and evidence.engine_validation != engine_binding:
+        raise ComputationEvidenceError(
+            "publication engine evidence does not match the compiled artifact"
+        )
+
+
+def _verify_publication_revision(publication: Publication, draft: Draft) -> None:
+    if (
+        publication.draft_id != draft.id
+        or publication.edit_count != draft.edit_count
+        or _draft_sha256(publication.question_snapshot_json)
+        != _draft_sha256(draft.current_json)
+    ):
+        raise ConcurrentDraftUpdateError(
+            "publication reservation does not match the current approved draft"
+        )
+
+
+def _store_publication_computation_evidence(
+    session: Session,
+    publication: Publication,
+    validation: ComputationValidationRecord,
+    evidence: PublicationComputationEvidenceWrite,
+) -> PublicationComputationEvidence:
+    report_hash = _sha256_digest(evidence.report_sha256, "report_sha256")
+    ordered_hashes = tuple(
+        sorted(
+            _sha256_digest(value, "attestation_sha256")
+            for value in evidence.attestation_sha256s
+        )
+    )
+    if len(ordered_hashes) != len(set(ordered_hashes)):
+        raise ComputationEvidenceError(
+            "publication evidence contains duplicate attestation hashes"
+        )
+    if (
+        validation.draft_id != publication.draft_id
+        or validation.edit_count != publication.edit_count
+        or validation.draft_sha256 != _draft_sha256(publication.question_snapshot_json)
+        or validation.report_sha256 != report_hash
+    ):
+        raise ComputationEvidenceError(
+            "publication evidence does not match the exact draft revision"
+        )
+    validate_computation_evidence(
+        _computation_validation_read(validation, is_current=True),
+        require_authorizable=True,
+    )
+    draft = session.scalar(
+        select(Draft).where(Draft.id == publication.draft_id).with_for_update()
+    )
+    if draft is None:
+        raise DraftNotFoundError(f"draft {publication.draft_id} was not found")
+    _verify_engine_validation_binding(
+        session,
+        draft,
+        evidence.engine_validation,
+        computation_validation=validation,
+    )
+    attestations: tuple[ComputationAttestation, ...] = ()
+    if ordered_hashes:
+        attestations = tuple(
+            session.scalars(
+                select(ComputationAttestation)
+                .where(ComputationAttestation.attestation_sha256.in_(ordered_hashes))
+                .order_by(ComputationAttestation.attestation_sha256)
+            )
+        )
+        if len(attestations) != len(ordered_hashes) or any(
+            item.validation_record_id != validation.id
+            or item.draft_id != publication.draft_id
+            or item.edit_count != publication.edit_count
+            or item.report_sha256 != report_hash
+            for item in attestations
+        ):
+            raise ComputationEvidenceError(
+                "publication attestations must bind to the exact report"
+            )
+
+    snapshot_json = _publication_computation_snapshot_json(
+        publication,
+        validation,
+        attestations,
+        engine_binding=evidence.engine_validation,
+    )
+    snapshot_hash = hashlib.sha256(snapshot_json.encode("utf-8")).hexdigest()
+    existing = session.scalar(
+        select(PublicationComputationEvidence).where(
+            PublicationComputationEvidence.publication_id == publication.id
+        )
+    )
+    if existing is not None:
+        if existing.snapshot_sha256 != snapshot_hash:
+            raise ComputationEvidenceConflictError(
+                "publication computation evidence is already frozen"
+            )
+        return existing
+    stored = PublicationComputationEvidence(
+        publication_id=publication.id,
+        validation_record_id=validation.id,
+        draft_id=publication.draft_id,
+        edit_count=publication.edit_count,
+        report_sha256=report_hash,
+        validation_status=validation.status,
+        attestation_sha256s_json=json.dumps(
+            ordered_hashes,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+        snapshot_json=snapshot_json,
+        snapshot_sha256=snapshot_hash,
+    )
+    session.add(stored)
+    session.flush()
+    return stored
+
+
+def _publication_computation_snapshot_json(
+    publication: Publication,
+    validation: ComputationValidationRecord,
+    attestations: Sequence[ComputationAttestation],
+    *,
+    engine_binding: EngineValidationBinding | None = None,
+) -> str:
+    snapshot = {
+        "publication": {
+            "id": publication.id,
+            "publication_key": publication.publication_key,
+            "payload_hash": publication.payload_hash,
+            "draft_id": publication.draft_id,
+            "edit_count": publication.edit_count,
+        },
+        "validation": {
+            "id": validation.id,
+            "source_sha256": validation.source_sha256,
+            "draft_sha256": validation.draft_sha256,
+            "blueprint_sha256": validation.blueprint_sha256,
+            "report_sha256": validation.report_sha256,
+            "evidence_sha256": validation.evidence_sha256,
+            "status": validation.status,
+            "schema_version": validation.schema_version,
+            "validator_revision": validation.validator_revision,
+            "blueprint_json": validation.blueprint_json,
+            "report_json": validation.report_json,
+            "dependency_versions_json": validation.dependency_versions_json,
+            "container_digest": validation.container_digest,
+            "seed_plan_json": validation.seed_plan_json,
+            "duration_ms": validation.duration_ms,
+            "engine_evidence_json": validation.engine_evidence_json,
+            "created_at": _as_utc(validation.created_at),
+        },
+        "attestations": [
+            {
+                "id": item.id,
+                "attestation_sha256": item.attestation_sha256,
+                "specialist_identity": item.specialist_identity,
+                "rationale": item.rationale,
+                "qualification_json": item.qualification_json,
+                "created_at": _as_utc(item.created_at),
+            }
+            for item in attestations
+        ],
+        "engine_validation": (
+            engine_binding.snapshot if engine_binding is not None else None
+        ),
+    }
+    return _stable_json_bytes(snapshot).decode("utf-8")
+
+
+def _publication_computation_evidence_read(
+    record: PublicationComputationEvidence,
+) -> PublicationComputationEvidenceRead:
+    parsed_hashes = json.loads(record.attestation_sha256s_json)
+    return PublicationComputationEvidenceRead(
+        id=record.id,
+        publication_id=record.publication_id,
+        validation_record_id=record.validation_record_id,
+        draft_id=record.draft_id,
+        edit_count=record.edit_count,
+        report_sha256=record.report_sha256,
+        validation_status=record.validation_status,
+        attestation_sha256s=tuple(str(value) for value in parsed_hashes),
+        snapshot_json=record.snapshot_json,
+        snapshot_sha256=record.snapshot_sha256,
+        created_at=_as_utc(record.created_at),
+    )
 
 
 _ALLOWED_TRANSITIONS: dict[ReviewStatus, set[ReviewStatus]] = {
@@ -1663,20 +4748,51 @@ def _validate_persisted_question(draft: Draft, question: QuestionDraft) -> None:
         )
 
 
-def _validate_hint_ladder(question: QuestionDraft, ladder: HintLadderDraft) -> None:
+def inspect_hint_grounding(
+    question: QuestionDraft,
+    ladder: HintLadderDraft,
+) -> tuple[HintGroundingIssue, ...]:
+    """Return every grounding problem without mutating review evidence."""
+
+    allowed = tuple(sorted(set(question.citation_paragraphs)))
+    issues: list[HintGroundingIssue] = []
     if (
         ladder.concept_label.strip().casefold()
         != question.concept_label.strip().casefold()
     ):
-        raise DraftGroundingError("a hint ladder cannot change the selected concept")
-    allowed = set(question.citation_paragraphs)
-    for rung in ladder.rungs:
-        unavailable = set(rung.citation_paragraphs) - allowed
-        if unavailable:
-            raise DraftGroundingError(
-                f"{rung.rung.value} hint cites paragraph(s) outside the item source: "
-                + ", ".join(str(index) for index in sorted(unavailable))
+        issues.append(
+            HintGroundingIssue(
+                code="concept_mismatch",
+                message="A hint ladder cannot change the selected concept.",
+                allowed_paragraphs=allowed,
             )
+        )
+    allowed_set = set(allowed)
+    for rung in ladder.rungs:
+        unavailable = tuple(sorted(set(rung.citation_paragraphs) - allowed_set))
+        if unavailable:
+            invalid_text = ", ".join(str(index) for index in unavailable)
+            allowed_text = ", ".join(str(index) for index in allowed)
+            issues.append(
+                HintGroundingIssue(
+                    code="citation_outside_item_source",
+                    rung=rung.rung.value,
+                    invalid_paragraphs=unavailable,
+                    allowed_paragraphs=allowed,
+                    message=(
+                        f"{rung.rung.value} hint cites paragraph(s) outside the "
+                        f"item source: {invalid_text}. Allowed paragraphs: "
+                        f"{allowed_text}."
+                    ),
+                )
+            )
+    return tuple(issues)
+
+
+def _validate_hint_ladder(question: QuestionDraft, ladder: HintLadderDraft) -> None:
+    issues = inspect_hint_grounding(question, ladder)
+    if issues:
+        raise DraftGroundingError(issues[0].message)
 
 
 def analyze_hint_leaks(
@@ -1717,6 +4833,72 @@ def _engine_validation_for(question: QuestionDraft) -> dict[str, Any] | None:
             }
             for preview in compiled.previews
         ],
+        "status": "passed",
+    }
+
+
+def _engine_validation_from_computation_evidence(
+    question: QuestionDraft,
+    evidence: ComputationValidationWrite,
+) -> dict[str, Any] | None:
+    """Persist the exact typed compiler artifact carried by computation evidence.
+
+    Recompiling a computation-owned external item through the legacy string DSL
+    would create a different compiler version and source hash. The computation
+    workflow already produced immutable typed-AST source and previews; validate
+    that bounded server-generated payload here and use it for the matching
+    engine-validation row.
+    """
+
+    if question.item_type not in {
+        AssessmentItemType.WEBWORK,
+        AssessmentItemType.IMATHAS,
+    }:
+        return None
+    try:
+        payload = json.loads(
+            _opaque_json_string(
+                evidence.engine_evidence_json,
+                "engine_evidence_json",
+            )
+        )
+    except (TypeError, ValueError, json.JSONDecodeError):
+        raise ComputationEvidenceError(
+            "computation engine evidence must be a JSON object"
+        ) from None
+    if payload == {}:
+        return None
+    if not isinstance(payload, dict):
+        raise ComputationEvidenceError(
+            "computation engine evidence must be a JSON object"
+        )
+    engine = payload.get("engine")
+    compiler_version = payload.get("compiler_version")
+    source_sha256 = payload.get("source_sha256")
+    seed_count = payload.get("seed_count")
+    previews = payload.get("previews")
+    if (
+        engine != question.item_type.value
+        or not isinstance(compiler_version, str)
+        or not 1 <= len(compiler_version) <= 100
+        or not isinstance(source_sha256, str)
+        or not _SHA256_PATTERN.fullmatch(source_sha256)
+        or isinstance(seed_count, bool)
+        or not isinstance(seed_count, int)
+        or seed_count < 25
+        or not isinstance(previews, list)
+        or len(previews) != seed_count
+        or any(not isinstance(preview, dict) for preview in previews)
+    ):
+        raise ComputationEvidenceError(
+            "computation engine evidence is not a complete typed compiler receipt"
+        )
+    return {
+        "engine": engine,
+        "compiler_version": compiler_version,
+        "source_sha256": source_sha256,
+        "seed_count": seed_count,
+        "previews_json": previews,
         "status": "passed",
     }
 

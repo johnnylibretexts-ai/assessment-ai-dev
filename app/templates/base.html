@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Assessment AI{% endblock %} · LibreTexts</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/mathjax-config.js"></script>
+    <script src="/static/vendor/mathjax/runtime/tex-chtml.js" defer></script>
+    <script src="/static/math-preview.js" defer></script>
     <script src="/static/generation.js" defer></script>
+    <script src="/static/publishing.js" defer></script>
+    <script src="/static/review-workflow.js" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -15,6 +20,9 @@
       </div>
       <span class="badge">Human review required</span>
     </header>
+    <div id="math-rendering-warning" class="notice math-warning" role="status" hidden>
+      Math preview unavailable. The original TeX remains visible and editable.
+    </div>
     <main>{% block content %}{% endblock %}</main>
   </body>
 </html>

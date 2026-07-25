@@ -34,7 +34,9 @@ from app.schemas import (
     ConceptBatch,
     Critique,
     Difficulty,
+    GeneratedCritique,
     GeneratedHintLadderDraft,
+    GeneratedQuestionDraft,
     HintRungDraft,
     HintRungType,
     NormalizedPage,
@@ -76,7 +78,8 @@ class FakeLLM:
         if not self.responses:
             raise AssertionError("fake LLM response queue exhausted")
         value = self.responses.pop(0)
-        assert isinstance(value, schema)
+        if not isinstance(value, schema):
+            value = schema.model_validate(value.model_dump(mode="json"))
         raw = json.dumps(value.model_dump(mode="json"), sort_keys=True)
         attempt = LLMAttemptMetadata(
             attempt=1,
@@ -177,7 +180,9 @@ def generation_responses(
     ]
 
 
-def hint_ladder(*, leaking_rung: HintRungType | None = None) -> GeneratedHintLadderDraft:
+def hint_ladder(
+    *, leaking_rung: HintRungType | None = None
+) -> GeneratedHintLadderDraft:
     values = {
         "concept_label": "Conservation of energy",
         "rungs": [
@@ -220,9 +225,9 @@ async def test_pipeline_runs_separate_mandatory_revision_and_persists_provenance
     assert content.paths == ["Sandboxes/johnnyphung/Demo/Energy"]
     assert [schema for _, schema, _ in llm.calls] == [
         ConceptBatch,
-        QuestionDraft,
-        Critique,
-        QuestionDraft,
+        GeneratedQuestionDraft,
+        GeneratedCritique,
+        GeneratedQuestionDraft,
     ]
     assert "mandatory revised MCQ" in llm.calls[-1][0]
     draft = repository.require_draft(outcome.draft_id)
@@ -244,7 +249,12 @@ async def test_pipeline_runs_separate_mandatory_revision_and_persists_provenance
         "revision",
     ]
     assert all(call.model_id == "test-open-model" for call in source.llm_calls)
-    assert all(call.prompt_version.endswith("-v1") for call in source.llm_calls)
+    assert [call.prompt_version for call in source.llm_calls] == [
+        "concept-extraction-v1",
+        "assessment-item-initial-v2",
+        "assessment-item-critique-v2",
+        "assessment-item-revision-v2",
+    ]
     assert all(call.prompt_hash and call.raw_response for call in source.llm_calls)
 
 
@@ -273,9 +283,7 @@ async def test_pipeline_pins_model_edited_concept_labels_but_audits_raw_output(
     assert stored.raw_json["concept_label"] == "Conservation of energy"
     assert stored.current.concept_label == "Conservation of energy"
     assert stored.current_hint_ladder is not None
-    assert (
-        stored.current_hint_ladder.ladder.concept_label == "Conservation of energy"
-    )
+    assert stored.current_hint_ladder.ladder.concept_label == "Conservation of energy"
     source = repository.get_source(outcome.source_id)
     assert source is not None
     calls = sorted(source.llm_calls, key=lambda call: call.id)
@@ -494,6 +502,46 @@ async def test_self_reported_hint_leak_is_rejected_before_persistence(store) -> 
     with database.session() as session:
         assert session.scalar(select(func.count(Draft.id))) == 0
         assert session.scalar(select(func.count(SourceSnapshot.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_hint_citations_are_limited_to_the_exact_question_source(store) -> None:
+    database, repository = store
+    responses = generation_responses()
+    responses[0] = ConceptBatch(
+        concepts=[
+            Concept(
+                label="Conservation of energy",
+                description="Total energy and its transformations.",
+                source_paragraphs=[0, 1],
+            )
+        ]
+    )
+    ladder = hint_ladder()
+    ladder.rungs[0].citation_paragraphs = [1]
+    pipeline = AssessmentPipeline(
+        FakeContent(page()),
+        FakeLLM([*responses, ladder]),
+        repository,
+    )
+
+    with pytest.raises(
+        CitationValidationError,
+        match=r"conceptual hint.*outside the item source.*1.*Allowed paragraphs: 0",
+    ):
+        await pipeline.generate(
+            "Sandboxes/johnnyphung/Demo/Energy",
+            include_hint_ladder=True,
+        )
+
+    with database.session() as session:
+        assert session.scalar(select(func.count(Draft.id))) == 0
+        assert session.scalar(select(func.count(SourceSnapshot.id))) == 0
+    hint_prompt = pipeline.llm.calls[-1][0]
+    assert "<allowed_hint_citations>" in hint_prompt
+    assert "</allowed_hint_citations>" in hint_prompt
+    assert "[paragraph 0]" in hint_prompt
+    assert "[paragraph 1]" not in hint_prompt
 
 
 @pytest.mark.asyncio

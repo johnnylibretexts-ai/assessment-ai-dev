@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
-from app.catalog import chemistry_seed, curated_topics
+from app.catalog import alignment_by_topic_id
 from app.config import Settings
 from app.schemas import AssessmentItemType, BowTieGroup, Choice, QuestionDraft
 
@@ -681,32 +681,42 @@ class AdaptClient:
                 code="adapt_license_mismatch",
             )
 
-        local_topic = next(
-            (item for item in curated_topics() if item.stable_id == topic_stable_id),
-            None,
-        )
-        if local_topic is None:
+        local_alignment = alignment_by_topic_id(topic_stable_id)
+        if local_alignment is None:
             raise AdaptPublishingError(
                 "The selected framework topic is not in the curated catalog.",
                 code="adapt_topic_unknown",
             )
-        framework_properties = chemistry_seed()["framework"]
+        local_topic = local_alignment.topic
+        local_framework = local_alignment.framework
         frameworks = await self._request("GET", "frameworks")
         framework = next(
             (
                 item
                 for item in frameworks.get("frameworks", [])
-                if item.get("title") == framework_properties["title"]
-                and item.get("source_url") == framework_properties["source_url"]
+                # A non-dict entry would raise AttributeError here and escape
+                # the AdaptPublishingError contract that app/publishing.py
+                # handles, so guard the same way the owned-folder check does.
+                if isinstance(item, dict)
+                and item.get("title") == local_framework.title
+                and item.get("source_url") == local_framework.source_url
             ),
             None,
         )
         if framework is None:
             raise AdaptPublishingError(
-                "The curated Chemistry framework has not been provisioned in ADAPT.",
+                f"The curated {local_framework.title} framework has not been "
+                "provisioned in ADAPT.",
                 code="adapt_framework_missing",
             )
-        framework_id = int(framework["id"])
+        try:
+            framework_id = int(framework["id"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise AdaptPublishingError(
+                f"ADAPT returned an unusable id for the curated "
+                f"{local_framework.title} framework.",
+                code="adapt_framework_missing",
+            ) from exc
         tree = await self._request("GET", f"frameworks/{framework_id}")
         levels = tree.get("framework_levels", [])
         chapter = next(
@@ -737,7 +747,7 @@ class AdaptClient:
             )
         return ResolvedAlignment(
             framework_id=framework_id,
-            framework_title=framework_properties["title"],
+            framework_title=local_framework.title,
             chapter=FrameworkItem(id=int(chapter["id"]), text=chapter["title"]),
             topic=FrameworkItem(id=int(topic["id"]), text=topic["title"]),
             chapter_stable_id=local_topic.chapter_stable_id,

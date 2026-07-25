@@ -124,7 +124,9 @@ def test_plan_repair_changes_only_unaccepted_unsupported_hotspots(
     ]
 
     assert changed
-    assert all(before.item_type == AssessmentItemType.IMAGE_HOTSPOT for before, _ in changed)
+    assert all(
+        before.item_type == AssessmentItemType.IMAGE_HOTSPOT for before, _ in changed
+    )
     assert all(before.page_key == "humanities_social-0" for before, _ in changed)
     assert all(after.page_key == "humanities_social-1" for _, after in changed)
     assert all(before.stratum == after.stratum for before, after in changed)
@@ -150,7 +152,9 @@ def test_plan_repair_changes_only_unaccepted_unsupported_hotspots(
         )
 
 
-async def test_budgeted_client_writes_usage_without_model_output(tmp_path: Path) -> None:
+async def test_budgeted_client_writes_usage_without_model_output(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "provider-calls.jsonl"
     ledger = ProviderCallLedger(path, "test-run")
     client = BudgetedGeminiClient(FakeGemini(), ledger)
