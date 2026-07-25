@@ -599,6 +599,13 @@
           {% endif %}
           <form method="post" action="/drafts/{{ draft.id }}/hints/edit"
                 data-hint-edit-form>
+            {# Ladder-wide problems (a concept mismatch) belong to no single
+               rung, so without this block they would block publication with
+               nothing on the page naming the cause. #}
+            {% set hint_general_error = form_errors.get('general') if active_form == 'hint_edit' else draft.hint_ladder.grounding_error %}
+            {% if hint_general_error %}
+              <p class="error-text" role="alert">{{ hint_general_error }}</p>
+            {% endif %}
             {% for rung in draft.hint_ladder.rungs %}
               <fieldset class="hint-rung">
                 <legend>{{ rung.rung|capitalize }} hint</legend>
