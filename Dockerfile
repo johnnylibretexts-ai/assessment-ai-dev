@@ -33,13 +33,30 @@ FROM base AS test
 COPY tests ./tests
 COPY Dockerfile Dockerfile.corpus Dockerfile.compute docker-compose.computation.yml uv.lock package.json package-lock.json ./
 COPY deploy ./deploy
+# test_computation_service.py runs in its own pytest session on purpose: it
+# spawns real child interpreters and binds the computation runtime, which must
+# not leak into the rest of the suite. Keep the two invocations, but do NOT
+# chain them with `&&` -- that made a failure in the first one skip the other
+# ~818 tests entirely, so a red computation test hid the whole suite.
 RUN pip install '.[dev]' \
     && ruff check app tests \
     && ruff format --check app tests \
-    && pytest -q tests/test_computation_service.py \
-    && pytest -q tests --ignore=tests/test_computation_service.py
+    && set +e; \
+       pytest -q tests/test_computation_service.py; sidecar=$?; \
+       pytest -q tests --ignore=tests/test_computation_service.py; rest=$?; \
+       echo "test exit codes: sidecar=$sidecar rest=$rest"; \
+       [ "$sidecar" -eq 0 ] && [ "$rest" -eq 0 ] \
+    && touch /app/.tests-passed
 
 FROM base AS runtime
+
+# BuildKit only builds stages the target depends on, and `runtime` derives from
+# `base` -- so a plain `docker build` skipped the `test` stage and shipped
+# without ever running ruff or pytest. Copying this marker makes `test` a real
+# build dependency of `runtime` while keeping dev dependencies out of the
+# runtime image (the alternative, `FROM test AS runtime`, would ship pytest and
+# ruff to production).
+COPY --from=test /app/.tests-passed /app/.tests-passed
 
 USER assessment-ai
 

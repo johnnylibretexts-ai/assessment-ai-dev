@@ -476,6 +476,32 @@ def test_real_spawned_child_converts_a_qualified_ucum_unit_within_limits() -> No
     assert result["target_unit"] == "m"
 
 
+def test_compute_budget_excludes_child_startup() -> None:
+    _require_pinned_runtime()
+    # Children are spawned, so each pays for a fresh interpreter plus the
+    # SymPy/Pint/ucumvert imports -- seconds of work before any computation.
+    # This budget is far smaller than that startup but ample for the conversion
+    # itself, so it passes only while the startup allowance is accounted for
+    # separately. When the deadline still started before process.start(), this
+    # returned 504, which is exactly how every request failed on a modest host.
+    body = json.dumps(
+        {
+            "schema_version": "assessment-computation-v0",
+            "profile": {"family": "unit", "delivery": "numerical"},
+            "operation": "convert_unit",
+            "expression": {"kind": "integer", "integer": 100},
+            "source_unit": "cm",
+            "target_unit": "m",
+        }
+    ).encode("utf-8")
+
+    payload = computation_service._execute_isolated("compute", body, 0.5)
+
+    result = json.loads(payload)
+    assert result["numeric_value"] == "1"
+    assert result["target_unit"] == "m"
+
+
 def test_real_spawned_child_rejects_unknown_fields_without_echoing_input() -> None:
     blueprint = {**_numeric_blueprint(), "external_url": "https://evil.example"}
     with TestClient(_service_app()) as client:
@@ -515,7 +541,9 @@ def test_child_refuses_to_send_an_oversized_model(
         b"{}",
         computation_service.NUMERIC_TIMEOUT_SECONDS,
     )
-    assert sender.messages == [b"S"]
+    # The child now announces readiness once its pinned runtime is imported,
+    # before doing any work, so the caller's compute budget excludes startup.
+    assert sender.messages == [computation_service._CHILD_READY, b"S"]
     assert sender.closed is True
 
 
