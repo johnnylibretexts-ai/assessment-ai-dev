@@ -19,7 +19,13 @@ and published during live workflow verification; Draft 16 remains intentionally 
 - Pre-deploy Assessment AI SQLite and ADAPT MySQL backups are stored under
   `/opt/libretexts/backups/assessment-ai-review-workflow-20260724/`.
 - The live read-only hint audit reports zero findings after append-only repairs to drafts 10,
-  13, and 16. Their replacement hint ladders remain unapproved.
+  13, and 16. Approval state of the replacement ladders differs per draft, verified read-only
+  against the live database on 2026-07-25:
+  - Draft 10 (current revision, edit count 0): ladder v2 `approved`; draft `ready_to_publish`.
+  - Draft 13 (current revision, edit count 0): ladders v1 and v2 both `ready_for_review`;
+    draft `ready_for_review`.
+  - Draft 16 (current revision, edit count 1): ladders v1 and v2 both `ready_for_review`;
+    draft `ready_to_publish`, so its question is approved but its hints are not.
 - The initial workflow deployment preserved 3 publications and 8 publication attempts. The
   publication-state follow-up preserved the subsequently recorded live totals of 4 publications
   and 11 publication attempts.

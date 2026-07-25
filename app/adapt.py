@@ -694,7 +694,11 @@ class AdaptClient:
             (
                 item
                 for item in frameworks.get("frameworks", [])
-                if item.get("title") == local_framework.title
+                # A non-dict entry would raise AttributeError here and escape
+                # the AdaptPublishingError contract that app/publishing.py
+                # handles, so guard the same way the owned-folder check does.
+                if isinstance(item, dict)
+                and item.get("title") == local_framework.title
                 and item.get("source_url") == local_framework.source_url
             ),
             None,
@@ -705,7 +709,14 @@ class AdaptClient:
                 "provisioned in ADAPT.",
                 code="adapt_framework_missing",
             )
-        framework_id = int(framework["id"])
+        try:
+            framework_id = int(framework["id"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise AdaptPublishingError(
+                f"ADAPT returned an unusable id for the curated "
+                f"{local_framework.title} framework.",
+                code="adapt_framework_missing",
+            ) from exc
         tree = await self._request("GET", f"frameworks/{framework_id}")
         levels = tree.get("framework_levels", [])
         chapter = next(

@@ -535,7 +535,8 @@ Draft 16 current state:
 
 ```text
 current revision: 1
-question/hints: approved
+question: approved (draft status ready_to_publish)
+hints: NOT approved (edit count 1, ladders v1 and v2 both ready_for_review)
 framework: exact Mathematical Methods topic mapped
 publication: not yet published
 ```
@@ -984,7 +985,9 @@ This work is ready to integrate only when all of the following are true:
 - The ADAPT focused PHPUnit suite passes against a disposable database.
 - Framework catalog hashes match across repositories.
 - The read-only hint audit reports zero findings on a copied current database.
-- Manual tests A through H above pass.
+- Manual tests A through I above pass. Test I is the QTI/ADAPT evidence and publication retry
+  idempotency check; excluding it would let integration pass without validating the
+  cross-service publication artifact or duplicate prevention.
 - Draft 14 still shows current revision published with no duplicate publish button.
 - Draft 16 remains not published unless the user explicitly authorizes publication.
 - The authenticated assignment 44 question API returns HTTP 200 and includes question 125.
