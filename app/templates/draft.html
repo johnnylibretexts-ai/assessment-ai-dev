@@ -66,7 +66,7 @@
             <strong>Publication</strong>
             <span>
               {% if current_publication %}Published
-              {% elif latest_publication %}Current revision not published; revision {{ latest_publication.edit_count }} published
+              {% elif latest_publication %}Current revision not published; revision {{ revision_label(latest_publication.edit_count) }} published
               {% elif publication_readiness.ready %}Ready
               {% else %}Blocked ({{ publication_readiness.blockers|length }}){% endif %}
             </span>
@@ -675,7 +675,7 @@
           {% if draft.last_reviewed_by %}
             <p>Approved by {{ draft.last_reviewed_by }}{% if draft.last_reviewed_at %} on {{ draft.last_reviewed_at }}{% endif %}.</p>
           {% endif %}
-          <p class="help">This approval applies to revision {{ draft.edit_count }}. Editing the question resets it.</p>
+          <p class="help">This approval applies to revision {{ revision_label(draft.edit_count) }}. Editing the question resets it.</p>
         </section>
       {% else %}
         <form method="post" action="/drafts/{{ draft.id }}/review" class="review-form" data-question-review-form>
@@ -722,9 +722,9 @@
           </div>
         {% elif latest_publication %}
           <div class="notice publication-previous" role="status">
-            <strong>Current revision {{ draft.edit_count }} is not yet published.</strong>
+            <strong>Current revision {{ revision_label(draft.edit_count) }} is not yet published.</strong>
             <p>
-              Revision {{ latest_publication.edit_count }} remains published to ADAPT{% if latest_publication.adapt_question_id %} as question {{ latest_publication.adapt_question_id }}{% endif %}.
+              Revision {{ revision_label(latest_publication.edit_count) }} remains published to ADAPT{% if latest_publication.adapt_question_id %} as question {{ latest_publication.adapt_question_id }}{% endif %}.
               Publishing the current approved revision creates or updates only its own immutable publication record.
             </p>
           </div>
@@ -818,7 +818,7 @@
                   {% else %}Publication pending{% endif %}
                 </strong>
                 <span class="muted">
-                  Revision {{ publication.edit_count }}
+                  Revision {{ revision_label(publication.edit_count) }}
                   · {% if publication.is_current_edit %}Current revision{% else %}Earlier revision{% endif %}
                 </span>
               </div>

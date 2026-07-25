@@ -8,6 +8,33 @@
 
 **Scope:** Assessment AI review/publishing workflow and ADAPT framework provisioning
 
+## Status update — 2026-07-25
+
+The body of this document records the state on 2026-07-24 and is left unedited so the original
+reasoning stays legible. Where the two disagree, this section wins.
+
+- **Merged.** `fix/review-publishing-workflow` (`c18fadc`) was retargeted from `feat/math-rendering`
+  to `main` and merged as PR #1 (`424580e`). The "do not review this branch blindly against `main`"
+  rule below governs *review scoping*, and it had already been satisfied: both AI reviews ran
+  against the `6bc57fe` base before the retarget, and the branch was verified a strict superset of
+  `main` (nothing on `main` was missing from it). **P1 "Decide the integration strategy" is closed** —
+  steps 1 to 3 were executed and step 4 never triggered, as there was no rebase.
+- **Greptile is disabled; CodeRabbit is the sole reviewer of record.** Every "CodeRabbit and
+  Greptile" requirement below should be read as CodeRabbit-only, including the acceptance
+  expectations in "Read this first" and the review-base guidance. Two independent AI reviewers are
+  no longer available, so that redundancy is not part of the current bar.
+- **Still open and unchanged:** P0 manual browser QA, the durable browser regression, and the
+  accessibility review. Being listed here does not close them.
+- **New since this document was written.** The Dockerfile `test` stage is now a real build gate
+  (PR #3, `f50c414`); previously `runtime` did not depend on `test`, so a default `docker build`
+  skipped ruff and pytest entirely, and a `&&` chain let one computation failure hide ~818 other
+  tests. Making the gate real exposed a sandbox bug in which spawned-child startup consumed the
+  whole compute budget; the compute bounds themselves are unchanged. Deploys must build from the
+  release tree, never from `/opt/libretexts/assessment-ai` — see `DEPLOY.md` beside that compose
+  file.
+- **User-facing revision numbers are now v1/v2/v3 everywhere**, decided 2026-07-25, which resolves
+  the first P2 polish item below.
+
 ## Read this first
 
 This handoff covers the work prompted by these live reviewer failures:

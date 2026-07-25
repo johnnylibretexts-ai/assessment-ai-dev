@@ -90,6 +90,27 @@ from .schemas import (
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
+
+
+def revision_label(edit_count: Any) -> str:
+    """Render an internal ``edit_count`` as the user-facing revision number.
+
+    ``edit_count`` is 0-based and is the number of times a draft has been
+    edited, but reviewers were shown it raw, so a brand new draft read as
+    "revision 0". Every user-facing revision number goes through here so the
+    presentation stays v1/v2/v3 while the stored value keeps its own meaning.
+    Never used for optimistic-concurrency values such as ``expected_edit_count``,
+    which must stay the raw integer.
+    """
+
+    try:
+        count = int(edit_count)
+    except (TypeError, ValueError):
+        return "v1"
+    return f"v{max(count, 0) + 1}"
+
+
+templates.env.globals["revision_label"] = revision_label
 REVIEW_CONFIRMATION_ERROR = (
     "Confirm both the Bloom level and difficulty before approving this draft."
 )
