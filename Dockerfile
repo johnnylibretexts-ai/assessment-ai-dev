@@ -49,14 +49,25 @@ COPY deploy ./deploy
 # The two pytest invocations stay separate on purpose -- test_computation_service.py
 # spawns real child interpreters and binds the computation runtime, which must
 # not leak into the rest of the suite.
-RUN pip install '.[dev]' || exit 1; \
-    ruff check app tests; lint=$?; \
+RUN pip install '.[dev]' || exit 1
+
+# Chromium for the browser regressions, as its own layer so it caches across
+# source changes. This lands in the `test` stage only -- `runtime` derives from
+# `base`, so none of it reaches the production image.
+RUN playwright install --with-deps chromium || exit 1
+
+# The browser run uses `python -m pytest`, not bare `pytest`: only the module
+# form puts the working directory on sys.path, and tests/browser imports its
+# harness as `tests.browser.harness`. Bare pytest fails collection with
+# ModuleNotFoundError and exits 2 before running anything.
+RUN ruff check app tests; lint=$?; \
     ruff format --check app tests; fmt=$?; \
     pytest -q tests/test_computation_service.py; sidecar=$?; \
-    pytest -q tests --ignore=tests/test_computation_service.py; rest=$?; \
-    echo "gate exit codes: lint=$lint fmt=$fmt sidecar=$sidecar rest=$rest"; \
+    pytest -q tests --ignore=tests/test_computation_service.py --ignore=tests/browser; rest=$?; \
+    python -m pytest -q tests/browser; browser=$?; \
+    echo "gate exit codes: lint=$lint fmt=$fmt sidecar=$sidecar rest=$rest browser=$browser"; \
     [ "$lint" -eq 0 ] && [ "$fmt" -eq 0 ] \
-      && [ "$sidecar" -eq 0 ] && [ "$rest" -eq 0 ] \
+      && [ "$sidecar" -eq 0 ] && [ "$rest" -eq 0 ] && [ "$browser" -eq 0 ] \
       && touch /app/.tests-passed
 
 FROM base AS runtime
