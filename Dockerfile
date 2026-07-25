@@ -33,20 +33,31 @@ FROM base AS test
 COPY tests ./tests
 COPY Dockerfile Dockerfile.corpus Dockerfile.compute docker-compose.computation.yml uv.lock package.json package-lock.json ./
 COPY deploy ./deploy
-# test_computation_service.py runs in its own pytest session on purpose: it
+# Every check runs, then every exit code is asserted at the end.
+#
+# Two traps this shape exists to avoid, both of which shipped a passing build
+# from a failing gate:
+#   * `&&`-chaining the two pytest runs let a failure in the first skip the
+#     other ~818 tests entirely, so one red computation test hid the suite.
+#   * `RUN` uses `/bin/sh -c`, which does NOT set -e, so mixing `&&` with `;`
+#     splits this into independent lists: a failing ruff short-circuited its
+#     own chain but execution continued into pytest, and because only the
+#     LAST list decides the RUN exit status, green tests produced the marker
+#     and a successful build despite lint errors.
+# So: no `&&` between steps, capture each status, and gate on all of them.
+#
+# The two pytest invocations stay separate on purpose -- test_computation_service.py
 # spawns real child interpreters and binds the computation runtime, which must
-# not leak into the rest of the suite. Keep the two invocations, but do NOT
-# chain them with `&&` -- that made a failure in the first one skip the other
-# ~818 tests entirely, so a red computation test hid the whole suite.
-RUN pip install '.[dev]' \
-    && ruff check app tests \
-    && ruff format --check app tests \
-    && set +e; \
-       pytest -q tests/test_computation_service.py; sidecar=$?; \
-       pytest -q tests --ignore=tests/test_computation_service.py; rest=$?; \
-       echo "test exit codes: sidecar=$sidecar rest=$rest"; \
-       [ "$sidecar" -eq 0 ] && [ "$rest" -eq 0 ] \
-    && touch /app/.tests-passed
+# not leak into the rest of the suite.
+RUN pip install '.[dev]' || exit 1; \
+    ruff check app tests; lint=$?; \
+    ruff format --check app tests; fmt=$?; \
+    pytest -q tests/test_computation_service.py; sidecar=$?; \
+    pytest -q tests --ignore=tests/test_computation_service.py; rest=$?; \
+    echo "gate exit codes: lint=$lint fmt=$fmt sidecar=$sidecar rest=$rest"; \
+    [ "$lint" -eq 0 ] && [ "$fmt" -eq 0 ] \
+      && [ "$sidecar" -eq 0 ] && [ "$rest" -eq 0 ] \
+      && touch /app/.tests-passed
 
 FROM base AS runtime
 
