@@ -7,3 +7,5 @@ __pycache__
 .coverage
 htmlcov
 data
+node_modules
+app/static/vendor

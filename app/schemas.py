@@ -4,6 +4,14 @@ from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic.json_schema import SkipJsonSchema
+
+from .computation import ComputationProfile
+from .math_text import (
+    validate_critique_math,
+    validate_hint_math,
+    validate_question_math,
+)
 
 
 class Paragraph(BaseModel):
@@ -13,11 +21,19 @@ class Paragraph(BaseModel):
     end: int = Field(gt=0)
 
 
+class SourceLicenseMetadata(BaseModel):
+    code: str = Field(min_length=1, max_length=40)
+    version: str | None = Field(default=None, max_length=20)
+    label: str = Field(min_length=1, max_length=120)
+    evidence_url: str = Field(min_length=1, max_length=4_096)
+
+
 class SourceInfo(BaseModel):
     backend: str = "cxone_sandbox"
     canonical_url: str
     path: str
     page_id: str | None = None
+    license: SourceLicenseMetadata | None = None
 
 
 class NormalizedPage(BaseModel):
@@ -227,14 +243,67 @@ class ParameterVariable(BaseModel):
 
 class ParameterizedItemSpec(BaseModel):
     engine: Literal["webwork", "imathas"]
-    variables: list[ParameterVariable] = Field(min_length=1, max_length=12)
+    # Keep the accepted provider-facing schema at minItems=1 while permitting
+    # the server-owned formula profile to contain only a learner response
+    # symbol. The validator below still rejects empty numeric parameter lists.
+    variables: (
+        Annotated[
+            list[ParameterVariable],
+            Field(min_length=1, max_length=12),
+        ]
+        | SkipJsonSchema[
+            Annotated[
+                list[ParameterVariable],
+                Field(max_length=12),
+            ]
+        ]
+    )
     prompt_template: str = Field(min_length=5, max_length=4_000)
     answer_expression: str = Field(min_length=1, max_length=1_000)
+    answer_kind: SkipJsonSchema[Literal["numeric", "formula"]] = Field(
+        default="numeric",
+        exclude_if=lambda value: value == "numeric",
+    )
+    compiler_profile: SkipJsonSchema[Literal["legacy", "assessment_computation_v0"]] = (
+        Field(default="legacy", exclude_if=lambda value: value == "legacy")
+    )
+    response_symbols: SkipJsonSchema[
+        list[Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,31}$")]]
+    ] = Field(
+        default_factory=list,
+        max_length=4,
+        exclude_if=lambda value: not value,
+    )
     explanation_template: str = Field(min_length=5, max_length=4_000)
     constraints: list[str] = Field(default_factory=list, max_length=20)
     tolerance: float = Field(default=0, ge=0)
     units: str | None = Field(default=None, max_length=100)
     seed_policy: Literal["per_student", "per_attempt"] = "per_student"
+
+    @model_validator(mode="after")
+    def validate_response_symbols(self) -> "ParameterizedItemSpec":
+        response_symbols = set(self.response_symbols)
+        if len(response_symbols) != len(self.response_symbols):
+            raise ValueError("response symbols must be unique")
+        parameter_names = {variable.name for variable in self.variables}
+        if response_symbols & parameter_names:
+            raise ValueError(
+                "response symbols must be disjoint from parameter variables"
+            )
+        if self.answer_kind == "formula" and not response_symbols:
+            raise ValueError("formula answers require at least one response symbol")
+        if (
+            self.answer_kind == "formula"
+            and self.compiler_profile != "assessment_computation_v0"
+        ):
+            raise ValueError(
+                "formula answers require the assessment computation compiler profile"
+            )
+        if self.answer_kind == "numeric" and response_symbols:
+            raise ValueError("numeric answers cannot declare response symbols")
+        if self.answer_kind == "numeric" and not self.variables:
+            raise ValueError("numeric parameterized answers require a variable")
+        return self
 
 
 class ItemResponse(BaseModel):
@@ -318,6 +387,7 @@ class GeneratedHintLadderDraft(HintLadderDraft):
                 "generated hint ladder self-reports answer leakage in: "
                 + ", ".join(leaking)
             )
+        validate_hint_math(self)
         return self
 
 
@@ -466,14 +536,15 @@ class QuestionDraft(BaseModel):
             parameterized = self.response.parameterized
             if parameterized is None or parameterized.engine != self.item_type.value:
                 raise ValueError("parameterized drafts require a matching engine spec")
-            # Keep the provider retry boundary aligned with the publication boundary.
-            # A structurally valid JSON response can still contain malformed template
-            # placeholders, unsafe expressions, or unusable constraints. Validating the
-            # constrained DSL here lets the structured-output client return actionable
-            # feedback to the provider and prevents an uncompilable draft from existing.
-            from .parameterized import compile_parameterized_item
+            if parameterized.compiler_profile == "legacy":
+                # Keep the accepted provider retry boundary aligned with the
+                # publication boundary for BUILD-08 items. Computation-owned
+                # specs are deliberately not reparsed here: their persisted
+                # strings are display metadata, while source and previews are
+                # compiled only from the owning typed blueprint.
+                from .parameterized import compile_parameterized_item
 
-            compile_parameterized_item(parameterized, validation_seeds=25)
+                compile_parameterized_item(parameterized, validation_seeds=25)
         if (
             self.context_type
             in {
@@ -486,6 +557,51 @@ class QuestionDraft(BaseModel):
             raise ValueError("scenario and shared-stimulus items require stimulus text")
         if self.context_type == ItemContextType.SHARED_STIMULUS and not self.set_key:
             raise ValueError("shared-stimulus items require a set key")
+        return self
+
+
+class GeneratedQuestionDraft(QuestionDraft):
+    """Strict provider contract; stored legacy reviewer drafts remain loadable."""
+
+    @model_validator(mode="after")
+    def require_canonical_math(self) -> "GeneratedQuestionDraft":
+        validate_question_math(self)
+        return self
+
+
+COMPUTATION_TASK_SLOT = "[[computed_task]]"
+COMPUTATION_RESULT_SLOT = "[[computed_result]]"
+
+
+class ComputationQuestionDraft(QuestionDraft):
+    """Provider prose contract for a computation-owned assessment draft.
+
+    The provider can author the source-grounded framing and pedagogy, but it
+    must leave the two answer-bearing spans as typed server slots.  The
+    computation workflow replaces those slots only after the typed result has
+    been frozen.
+    """
+
+    @model_validator(mode="after")
+    def require_server_owned_computation_slots(self) -> "ComputationQuestionDraft":
+        if self.stem.count(COMPUTATION_TASK_SLOT) != 1:
+            raise ValueError(
+                f"computation stem must contain exactly one {COMPUTATION_TASK_SLOT} slot"
+            )
+        if self.explanation.count(COMPUTATION_RESULT_SLOT) != 1:
+            raise ValueError(
+                "computation explanation must contain exactly one "
+                f"{COMPUTATION_RESULT_SLOT} slot"
+            )
+        return self
+
+
+class GeneratedComputationQuestionDraft(ComputationQuestionDraft):
+    """Computation prose slots plus the strict human-facing math contract."""
+
+    @model_validator(mode="after")
+    def require_canonical_math(self) -> "GeneratedComputationQuestionDraft":
+        validate_question_math(self)
         return self
 
 
@@ -515,6 +631,13 @@ class Critique(BaseModel):
     revision_required: bool
 
 
+class GeneratedCritique(Critique):
+    @model_validator(mode="after")
+    def require_canonical_math(self) -> "GeneratedCritique":
+        validate_critique_math(self)
+        return self
+
+
 class ReviewStatus(StrEnum):
     DRAFT = "draft"
     READY_FOR_REVIEW = "ready_for_review"
@@ -534,6 +657,10 @@ class GenerateRequest(BaseModel):
     item_types: list[AssessmentItemType] = Field(default_factory=list, max_length=8)
     item_count: int = Field(default=4, ge=1, le=8)
     include_hint_ladder: bool = True
+    computation_profile: ComputationProfile | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
     @model_validator(mode="after")
     def validate_generation_selection(self) -> "GenerateRequest":
@@ -541,6 +668,12 @@ class GenerateRequest(BaseModel):
             raise ValueError("choose at least one item type")
         if len(self.item_types) != len(set(self.item_types)):
             raise ValueError("item type selections must not contain duplicates")
+        if self.generation_mode == "selected" and self.item_count < len(
+            self.item_types
+        ):
+            raise ValueError(
+                "total item count must be at least the number of selected item types"
+            )
         return self
 
 

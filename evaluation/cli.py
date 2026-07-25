@@ -16,6 +16,76 @@ from .corpus import build_public_corpus_manifest, load_corpus_source_catalog
 from .adapt_seed import build_adapt_seed_items, finalize_seed_receipts
 from .adapt_browser import build_adapt_browser_manifest
 from .browser_canary import seed_browser_canary
+from .computation import (
+    AcceptanceMetrics,
+    AlgebraNativeExecutionObservation,
+    AlgebraNativeExecutionRequest,
+    AlgebraNativeQualificationReceipt,
+    AlgebraNativeQualificationReport,
+    Build08CompatibilityQualification,
+    Build08CompatibilityTrustPolicy,
+    CanaryQualificationReport,
+    CanaryStageEvent,
+    CanaryStageExecutionRequest,
+    CanaryStageObserverAttestation,
+    CanaryStageReceipt,
+    ComputationEvaluationManifest,
+    EngineSeedPlanCase,
+    LocalCanaryStageArtifacts,
+    NativeExecutionObservation,
+    NativeExecutionRequest,
+    NativeQualificationReceipt,
+    NativeQualificationReport,
+    NativeQualificationTrustPolicy,
+    OfflineMutationQualificationReport,
+    PairedDraftEvidence,
+    PairedStudyEvidenceLedger,
+    PairedStudyQualificationReport,
+    QualificationMergedObservationEvidence,
+    SmeReviewQualificationReport,
+    SmeReviewRecord,
+    SafetyMonitorReceipt,
+    SpikeSafetyEvidence,
+    UcumQualificationReport,
+    UcumArtifactEquivalenceAttestation,
+    WorkflowEvidenceTrustPolicy,
+    WorkflowObservationEvidence,
+    WorkflowPositiveReceipt,
+    UnixSocketAlgebraNativeExecutor,
+    UnixSocketNativeExecutor,
+    build_algebra_native_execution_plan,
+    build_computation_evaluation_manifest,
+    build_computation_seed_plan,
+    build_qualification_merged_observation_evidence,
+    build_workflow_observation_evidence,
+    execute_algebra_native_plan,
+    execute_computation_native_plan,
+    execute_local_canary_stage,
+    execute_workflow_positive_plan,
+    load_algebra_native_execution_plan,
+    load_algebra_native_qualification_receipts,
+    load_build08_adapt_attestations,
+    load_build08_compatibility_trust_policy,
+    load_build08_engine_probes,
+    load_build08_seed_receipts,
+    load_canary_stage_execution_request,
+    load_canary_stage_receipts,
+    load_native_qualification_receipts,
+    load_native_qualification_trust_policy,
+    load_paired_study_evidence,
+    load_sme_review_records,
+    load_ucum_artifact_equivalence_attestation,
+    load_workflow_evidence_trust_policy,
+    load_workflow_positive_receipts,
+    qualify_ucum_subset,
+    run_offline_mutation_qualification,
+    validate_algebra_native_qualification_receipts,
+    validate_build08_compatibility_receipts,
+    validate_canary_stage_receipts,
+    validate_native_qualification_receipts,
+    validate_paired_study_evidence,
+    validate_sme_review_records,
+)
 from .engine_probe import IMathASProbeClient, run_imathas_probes, run_webwork_probes
 from .fixtures import build_fixture_bundle, build_seed_plan
 from .generation import (
@@ -69,6 +139,216 @@ def build_parser() -> argparse.ArgumentParser:
 
     fixtures = commands.add_parser("build-fixtures")
     fixtures.add_argument("--output", type=Path, required=True)
+
+    computation_fixtures = commands.add_parser("build-computation-fixtures")
+    computation_fixtures.add_argument("--output", type=Path, required=True)
+
+    computation_seed_plan = commands.add_parser("build-computation-seed-plan")
+    computation_seed_plan.add_argument("--output", type=Path, required=True)
+    computation_seed_plan.add_argument(
+        "--run-id", default="assessment-computation-v0-planned"
+    )
+
+    computation_mutations = commands.add_parser(
+        "run-computation-mutations",
+        help="execute all 200 typed mutations locally without native-engine calls",
+    )
+    computation_mutations.add_argument("--output", type=Path, required=True)
+
+    computation_native = commands.add_parser(
+        "validate-computation-native-receipts",
+        help="import and validate an offline native-engine receipt ledger",
+    )
+    computation_native.add_argument("receipts", type=Path)
+    computation_native.add_argument("--trust-policy", type=Path, required=True)
+    computation_native.add_argument("--output", type=Path, required=True)
+
+    computation_algebra_plan = commands.add_parser(
+        "build-computation-algebra-native-plan",
+        help="write the exact 40-request qualification-only algebra plan",
+    )
+    computation_algebra_plan.add_argument("--run-id", required=True)
+    computation_algebra_plan.add_argument("--imathas-namespace", required=True)
+    computation_algebra_plan.add_argument("--output", type=Path, required=True)
+
+    computation_algebra_execute = commands.add_parser(
+        "execute-computation-algebra-native-plan",
+        help=(
+            "execute one engine half of the sealed algebra plan through a bounded "
+            "Unix-socket canary runner"
+        ),
+    )
+    computation_algebra_execute.add_argument("plan", type=Path)
+    computation_algebra_execute.add_argument(
+        "--engine", choices=("webwork", "imathas"), required=True
+    )
+    computation_algebra_execute.add_argument(
+        "--runner-socket", type=Path, required=True
+    )
+    computation_algebra_execute.add_argument("--run-id", required=True)
+    computation_algebra_execute.add_argument("--output", type=Path, required=True)
+    computation_algebra_execute.add_argument(
+        "--webwork-engine-image-digest", required=True
+    )
+    computation_algebra_execute.add_argument(
+        "--imathas-engine-image-digest", required=True
+    )
+    computation_algebra_execute.add_argument(
+        "--imathas-adapter-image-digest", required=True
+    )
+    computation_algebra_execute.add_argument(
+        "--network-attestation-sha256", required=True
+    )
+    computation_algebra_execute.add_argument("--imathas-namespace", required=True)
+    computation_algebra_execute.add_argument("--concurrency", type=int, default=4)
+    computation_algebra_execute.add_argument("--max-cases", type=int)
+
+    computation_algebra_validate = commands.add_parser(
+        "validate-computation-algebra-native-receipts",
+        help="validate the exact raw 40-receipt algebra qualification ledger",
+    )
+    computation_algebra_validate.add_argument("receipts", type=Path)
+    computation_algebra_validate.add_argument(
+        "--trust-policy", type=Path, required=True
+    )
+    computation_algebra_validate.add_argument("--output", type=Path, required=True)
+
+    computation_observation_merge = commands.add_parser(
+        "merge-computation-qualified-observations",
+        help=(
+            "derive qualified evaluation observations from exact workflow and "
+            "native qualification reports"
+        ),
+    )
+    computation_observation_merge.add_argument(
+        "--workflow-evidence", type=Path, required=True
+    )
+    computation_observation_merge.add_argument(
+        "--native-report", type=Path, required=True
+    )
+    computation_observation_merge.add_argument(
+        "--algebra-native-report", type=Path, required=True
+    )
+    computation_observation_merge.add_argument("--output", type=Path, required=True)
+
+    computation_native_execute = commands.add_parser(
+        "execute-computation-native-plan",
+        help=(
+            "execute sealed typed cases through an isolated Unix-socket canary runner"
+        ),
+    )
+    computation_native_execute.add_argument("seed_plan", type=Path)
+    computation_native_execute.add_argument(
+        "--engine", choices=("webwork", "imathas"), required=True
+    )
+    computation_native_execute.add_argument("--runner-socket", type=Path, required=True)
+    computation_native_execute.add_argument("--run-id", required=True)
+    computation_native_execute.add_argument("--output", type=Path, required=True)
+    computation_native_execute.add_argument(
+        "--webwork-engine-image-digest", required=True
+    )
+    computation_native_execute.add_argument(
+        "--imathas-engine-image-digest", required=True
+    )
+    computation_native_execute.add_argument(
+        "--imathas-adapter-image-digest", required=True
+    )
+    computation_native_execute.add_argument(
+        "--network-attestation-sha256", required=True
+    )
+    computation_native_execute.add_argument("--imathas-namespace", required=True)
+    computation_native_execute.add_argument("--concurrency", type=int, default=4)
+    computation_native_execute.add_argument("--max-cases", type=int)
+
+    computation_workflow_execute = commands.add_parser(
+        "execute-computation-workflow-positives",
+        help=(
+            "derive the exact 100 positive receipts from the isolated computation "
+            "Unix socket"
+        ),
+    )
+    computation_workflow_execute.add_argument(
+        "--computation-socket",
+        type=Path,
+        required=True,
+    )
+    computation_workflow_execute.add_argument(
+        "--expected-runtime-manifest-sha256",
+        required=True,
+    )
+    computation_workflow_execute.add_argument("--run-id", required=True)
+    computation_workflow_execute.add_argument("--output", type=Path, required=True)
+
+    computation_workflow = commands.add_parser(
+        "validate-computation-workflow-evidence",
+        help="derive all workflow observations from exact raw receipt ledgers",
+    )
+    computation_workflow.add_argument("positive_receipts", type=Path)
+    computation_workflow.add_argument("--mutation-report", type=Path, required=True)
+    computation_workflow.add_argument("--trust-policy", type=Path, required=True)
+    computation_workflow.add_argument("--output", type=Path, required=True)
+
+    computation_build08 = commands.add_parser(
+        "validate-computation-build08-compatibility",
+        help="rebuild the unchanged BUILD-08 suite from its three raw ledgers",
+    )
+    computation_build08.add_argument("--seed-receipts", type=Path, required=True)
+    computation_build08.add_argument("--engine-probes", type=Path, required=True)
+    computation_build08.add_argument("--adapt-attestations", type=Path, required=True)
+    computation_build08.add_argument("--trust-policy", type=Path, required=True)
+    computation_build08.add_argument("--output", type=Path, required=True)
+
+    computation_canary = commands.add_parser(
+        "validate-computation-canary-stages",
+        help="validate the exact ten-stage disposable canary ledger",
+    )
+    computation_canary.add_argument("receipts", type=Path)
+    computation_canary.add_argument("--output", type=Path, required=True)
+
+    computation_canary_execute = commands.add_parser(
+        "execute-local-computation-canary-stage",
+        help="derive one stage receipt from a bounded local disposable command",
+    )
+    computation_canary_execute.add_argument("request", type=Path)
+    computation_canary_execute.add_argument(
+        "--disposable-root", type=Path, required=True
+    )
+    computation_canary_execute.add_argument(
+        "--working-directory", type=Path, required=True
+    )
+    computation_canary_execute.add_argument("--input-state", type=Path, required=True)
+    computation_canary_execute.add_argument("--output-state", type=Path, required=True)
+    computation_canary_execute.add_argument("--event-ledger", type=Path, required=True)
+    computation_canary_execute.add_argument(
+        "--observer-attestation", type=Path, required=True
+    )
+    computation_canary_execute.add_argument(
+        "--timeout-seconds", type=float, default=300.0
+    )
+    computation_canary_execute.add_argument("--output", type=Path, required=True)
+
+    computation_ucum = commands.add_parser(
+        "qualify-computation-ucum",
+        help="check a local checksum-pinned UCUM functional-test artifact",
+    )
+    computation_ucum.add_argument("--artifact", type=Path)
+    computation_ucum.add_argument("--sha256")
+    computation_ucum.add_argument("--equivalence-attestation", type=Path)
+    computation_ucum.add_argument("--output", type=Path, required=True)
+
+    computation_sme = commands.add_parser(
+        "validate-computation-sme-reviews",
+        help="validate append-only SME approvals bound to the fixture manifest",
+    )
+    computation_sme.add_argument("reviews", type=Path)
+    computation_sme.add_argument("--output", type=Path, required=True)
+
+    computation_study = commands.add_parser(
+        "validate-computation-paired-study",
+        help="recompute the blinded paired-study gates from its raw review ledger",
+    )
+    computation_study.add_argument("ledger", type=Path)
+    computation_study.add_argument("--output", type=Path, required=True)
 
     browser_canary = commands.add_parser("seed-browser-canary")
     browser_canary.add_argument("--database-url", required=True)
@@ -198,6 +478,378 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build-fixtures":
         _write_json(args.output, build_fixture_bundle())
         return 0
+    if args.command == "build-computation-fixtures":
+        manifest = build_computation_evaluation_manifest()
+        _write_json(args.output, manifest)
+        print(
+            json.dumps(
+                {
+                    "positive_surfaces": manifest.total_positive_surfaces,
+                    "mutations": manifest.total_mutations,
+                    "planned_engine_executions": (
+                        manifest.total_planned_engine_executions
+                    ),
+                    "review_status": manifest.provenance.review_status,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "build-computation-seed-plan":
+        plan = build_computation_seed_plan(args.run_id)
+        _write_jsonl(args.output, plan)
+        print(
+            json.dumps(
+                {
+                    "planned": len(plan),
+                    "execution_status": "planned_not_executed",
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "run-computation-mutations":
+        report = run_offline_mutation_qualification()
+        _write_json(args.output, report)
+        print(
+            json.dumps(
+                {
+                    "executed": report.executed_mutations,
+                    "detected": report.detected_mutations,
+                    "execution_status": report.execution_status,
+                    "native_engine_executions": report.native_engine_executions,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "validate-computation-native-receipts":
+        receipts = load_native_qualification_receipts(args.receipts)
+        trust_policy = load_native_qualification_trust_policy(args.trust_policy)
+        report = validate_native_qualification_receipts(
+            receipts,
+            trust_policy=trust_policy,
+        )
+        _write_json(args.output, report)
+        print(
+            json.dumps(
+                {
+                    "execution_status": report.execution_status,
+                    "imported": report.imported_receipts,
+                    "valid": report.valid_receipts,
+                    "qualified": report.qualified,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0 if report.qualified else 1
+    if args.command == "build-computation-algebra-native-plan":
+        plan = build_algebra_native_execution_plan(
+            run_id=args.run_id,
+            imathas_namespace=args.imathas_namespace,
+        )
+        _write_jsonl(args.output, plan)
+        print(
+            json.dumps(
+                {
+                    "planned": len(plan),
+                    "execution_status": "planned_not_executed",
+                    "production_delivery_enabled": False,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "execute-computation-algebra-native-plan":
+        plan = load_algebra_native_execution_plan(args.plan)
+        if {case.run_id for case in plan} != {args.run_id}:
+            raise ValueError("algebra native plan run ID does not match --run-id")
+        attempted, written = asyncio.run(
+            execute_algebra_native_plan(
+                plan,
+                output=args.output,
+                executor=UnixSocketAlgebraNativeExecutor(args.runner_socket),
+                engine=args.engine,
+                run_id=args.run_id,
+                webwork_engine_image_digest=args.webwork_engine_image_digest,
+                imathas_engine_image_digest=args.imathas_engine_image_digest,
+                imathas_adapter_image_digest=args.imathas_adapter_image_digest,
+                network_attestation_sha256=args.network_attestation_sha256,
+                imathas_namespace=args.imathas_namespace,
+                concurrency=args.concurrency,
+                max_cases=args.max_cases,
+            )
+        )
+        print(
+            json.dumps(
+                {
+                    "attempted": attempted,
+                    "receipts_written": written,
+                    "engine": args.engine,
+                    "qualification_only": True,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "validate-computation-algebra-native-receipts":
+        report = validate_algebra_native_qualification_receipts(
+            load_algebra_native_qualification_receipts(args.receipts),
+            trust_policy=load_native_qualification_trust_policy(args.trust_policy),
+        )
+        _write_json(args.output, report)
+        print(
+            json.dumps(
+                {
+                    "execution_status": report.execution_status,
+                    "imported": report.imported_receipts,
+                    "valid": report.valid_receipts,
+                    "qualified": report.qualified,
+                    "production_delivery_enabled": False,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0 if report.qualified else 1
+    if args.command == "merge-computation-qualified-observations":
+        evidence = build_qualification_merged_observation_evidence(
+            WorkflowObservationEvidence.model_validate(
+                _read_json(args.workflow_evidence)
+            ),
+            native_qualification=NativeQualificationReport.model_validate(
+                _read_json(args.native_report)
+            ),
+            algebra_native_qualification=(
+                AlgebraNativeQualificationReport.model_validate(
+                    _read_json(args.algebra_native_report)
+                )
+            ),
+        )
+        _write_json(args.output, evidence)
+        print(
+            json.dumps(
+                {
+                    "observations": len(evidence.observations),
+                    "upgraded_positives": evidence.upgraded_positive_count,
+                    "solution_set_production_delivery_enabled": False,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "execute-computation-native-plan":
+        plan = _read_jsonl(args.seed_plan, EngineSeedPlanCase)
+        if {case.run_id for case in plan} != {args.run_id}:
+            raise ValueError("typed seed plan run ID does not match --run-id")
+        attempted, written = asyncio.run(
+            execute_computation_native_plan(
+                plan,
+                output=args.output,
+                executor=UnixSocketNativeExecutor(args.runner_socket),
+                engine=args.engine,
+                run_id=args.run_id,
+                webwork_engine_image_digest=args.webwork_engine_image_digest,
+                imathas_engine_image_digest=args.imathas_engine_image_digest,
+                imathas_adapter_image_digest=args.imathas_adapter_image_digest,
+                network_attestation_sha256=args.network_attestation_sha256,
+                imathas_namespace=args.imathas_namespace,
+                concurrency=args.concurrency,
+                max_cases=args.max_cases,
+            )
+        )
+        print(
+            json.dumps(
+                {
+                    "attempted": attempted,
+                    "receipts_written": written,
+                    "engine": args.engine,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "execute-computation-workflow-positives":
+        receipts = asyncio.run(
+            execute_workflow_positive_plan(
+                socket_path=args.computation_socket,
+                expected_runtime_manifest_sha256=(
+                    args.expected_runtime_manifest_sha256
+                ),
+                output=args.output,
+                run_id=args.run_id,
+            )
+        )
+        print(
+            json.dumps(
+                {
+                    "receipts_written": len(receipts),
+                    "case_service_responses_observed": sum(
+                        receipt.service_response_count for receipt in receipts
+                    ),
+                    "transport": "unix_socket",
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "validate-computation-workflow-evidence":
+        mutation_report = OfflineMutationQualificationReport.model_validate(
+            _read_json(args.mutation_report)
+        )
+        report = build_workflow_observation_evidence(
+            load_workflow_positive_receipts(args.positive_receipts),
+            mutation_qualification=mutation_report,
+            trust_policy=load_workflow_evidence_trust_policy(args.trust_policy),
+        )
+        _write_json(args.output, report)
+        print(
+            json.dumps(
+                {
+                    "observations": len(report.observations),
+                    "raw_ledger_bound": True,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "validate-computation-build08-compatibility":
+        report = validate_build08_compatibility_receipts(
+            load_build08_seed_receipts(args.seed_receipts),
+            load_build08_engine_probes(args.engine_probes),
+            load_build08_adapt_attestations(args.adapt_attestations),
+            trust_policy=load_build08_compatibility_trust_policy(args.trust_policy),
+        )
+        _write_json(args.output, report)
+        print(
+            json.dumps(
+                {
+                    "execution_status": report.execution_status,
+                    "valid": report.valid_receipts,
+                    "qualified": report.qualified,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0 if report.qualified else 1
+    if args.command == "execute-local-computation-canary-stage":
+        if args.output.is_symlink() or args.output.exists():
+            raise SystemExit("canary stage receipt output must not pre-exist")
+        output_identity = args.output.resolve(strict=False)
+        evidence_identities = {
+            path.resolve(strict=False)
+            for path in (
+                args.request,
+                args.input_state,
+                args.output_state,
+                args.event_ledger,
+                args.observer_attestation,
+            )
+        }
+        if output_identity in evidence_identities:
+            raise SystemExit(
+                "canary stage receipt output must not overwrite source evidence"
+            )
+        receipt = asyncio.run(
+            execute_local_canary_stage(
+                load_canary_stage_execution_request(args.request),
+                LocalCanaryStageArtifacts(
+                    working_directory=args.working_directory,
+                    input_state=args.input_state,
+                    output_state=args.output_state,
+                    raw_event_ledger=args.event_ledger,
+                    observer_attestation=args.observer_attestation,
+                    timeout_seconds=args.timeout_seconds,
+                ),
+                disposable_root=args.disposable_root,
+            )
+        )
+        _write_json(args.output, receipt)
+        print(
+            json.dumps(
+                {
+                    "stage": receipt.stage,
+                    "sequence": receipt.sequence,
+                    "receipt_sha256": receipt.receipt_sha256,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0
+    if args.command == "validate-computation-canary-stages":
+        report = validate_canary_stage_receipts(
+            load_canary_stage_receipts(args.receipts)
+        )
+        _write_json(args.output, report)
+        print(
+            json.dumps(
+                {
+                    "execution_status": report.execution_status,
+                    "stages": report.imported_stages,
+                    "qualified": report.qualified,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0 if report.qualified else 1
+    if args.command == "qualify-computation-ucum":
+        if (args.artifact is None) != (args.sha256 is None):
+            raise SystemExit("--artifact and --sha256 must be supplied together")
+        if args.equivalence_attestation is not None and args.artifact is None:
+            raise SystemExit(
+                "--equivalence-attestation requires --artifact and --sha256"
+            )
+        report = qualify_ucum_subset(
+            args.artifact,
+            expected_sha256=args.sha256,
+            equivalence_attestation=(
+                load_ucum_artifact_equivalence_attestation(args.equivalence_attestation)
+                if args.equivalence_attestation is not None
+                else None
+            ),
+        )
+        _write_json(args.output, report)
+        print(
+            json.dumps(
+                {
+                    "artifact_status": report.artifact_status,
+                    "qualification_status": report.qualification_status,
+                    "executed": report.subset_cases_executed,
+                    "qualified": report.subset_qualified,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0 if report.subset_qualified else 1
+    if args.command == "validate-computation-sme-reviews":
+        report = validate_sme_review_records(load_sme_review_records(args.reviews))
+        _write_json(args.output, report)
+        print(
+            json.dumps(
+                {
+                    "execution_status": report.execution_status,
+                    "reviewed": report.reviewed_targets,
+                    "approved": report.approved_targets,
+                    "qualified": report.qualified,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0 if report.qualified else 1
+    if args.command == "validate-computation-paired-study":
+        report = validate_paired_study_evidence(load_paired_study_evidence(args.ledger))
+        _write_json(args.output, report)
+        print(
+            json.dumps(
+                {
+                    "execution_status": report.execution_status,
+                    "concepts": report.concept_count,
+                    "provider_cost_usd": report.provider_cost_usd,
+                    "qualified": report.qualified,
+                },
+                sort_keys=True,
+            )
+        )
+        return 0 if report.qualified else 1
     if args.command == "seed-browser-canary":
         manifest = seed_browser_canary(
             args.database_url,
@@ -475,9 +1127,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result.passed else 2
     if args.command == "report":
         provider_calls = _read_jsonl(args.provider_calls, ProviderCallReceipt)
-        budget_state = ProviderBudgetState.model_validate(
-            _read_json(args.budget_state)
-        )
+        budget_state = ProviderBudgetState.model_validate(_read_json(args.budget_state))
         sections = [
             validate_corpus_manifest(
                 CorpusManifest.model_validate(_read_json(args.corpus))
@@ -566,6 +1216,57 @@ def _write_schemas(output_dir: Path) -> None:
         "draft-qualification-receipt.schema.json": DraftQualificationReceipt,
         "draft-qualification-plan.schema.json": DraftQualificationPlan,
         "fixture-bundle.schema.json": FixtureBundle,
+        "computation-evaluation-manifest.schema.json": ComputationEvaluationManifest,
+        "computation-seed-plan.schema.json": EngineSeedPlanCase,
+        "computation-mutation-report.schema.json": OfflineMutationQualificationReport,
+        "computation-native-receipt.schema.json": NativeQualificationReceipt,
+        "computation-native-execution-request.schema.json": NativeExecutionRequest,
+        "computation-native-execution-observation.schema.json": (
+            NativeExecutionObservation
+        ),
+        "computation-native-trust-policy.schema.json": NativeQualificationTrustPolicy,
+        "computation-native-report.schema.json": NativeQualificationReport,
+        "computation-algebra-native-execution-request.schema.json": (
+            AlgebraNativeExecutionRequest
+        ),
+        "computation-algebra-native-execution-observation.schema.json": (
+            AlgebraNativeExecutionObservation
+        ),
+        "computation-algebra-native-receipt.schema.json": (
+            AlgebraNativeQualificationReceipt
+        ),
+        "computation-algebra-native-report.schema.json": (
+            AlgebraNativeQualificationReport
+        ),
+        "computation-ucum-report.schema.json": UcumQualificationReport,
+        "computation-ucum-equivalence-attestation.schema.json": (
+            UcumArtifactEquivalenceAttestation
+        ),
+        "computation-sme-review.schema.json": SmeReviewRecord,
+        "computation-sme-review-report.schema.json": SmeReviewQualificationReport,
+        "computation-paired-draft.schema.json": PairedDraftEvidence,
+        "computation-paired-study.schema.json": PairedStudyEvidenceLedger,
+        "computation-paired-study-report.schema.json": PairedStudyQualificationReport,
+        "computation-workflow-observations.schema.json": WorkflowObservationEvidence,
+        "computation-qualified-observations.schema.json": (
+            QualificationMergedObservationEvidence
+        ),
+        "computation-workflow-positive-receipt.schema.json": WorkflowPositiveReceipt,
+        "computation-workflow-trust-policy.schema.json": WorkflowEvidenceTrustPolicy,
+        "computation-build08-native-evidence.schema.json": (
+            Build08CompatibilityQualification
+        ),
+        "computation-build08-trust-policy.schema.json": (
+            Build08CompatibilityTrustPolicy
+        ),
+        "computation-canary-execution.schema.json": CanaryStageExecutionRequest,
+        "computation-canary-event.schema.json": CanaryStageEvent,
+        "computation-canary-observer.schema.json": CanaryStageObserverAttestation,
+        "computation-canary-stage.schema.json": CanaryStageReceipt,
+        "computation-canary-report.schema.json": CanaryQualificationReport,
+        "computation-safety-monitor.schema.json": SafetyMonitorReceipt,
+        "computation-safety-evidence.schema.json": SpikeSafetyEvidence,
+        "computation-acceptance-metrics.schema.json": AcceptanceMetrics,
         "review-record.schema.json": ReviewRecord,
         "seed-plan.schema.json": SeedPlanCase,
         "seed-receipt.schema.json": SeedReceipt,

@@ -1,10 +1,19 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+from app import main as main_module
 from app.config import Settings
-from app.db import DraftRepository, DraftWrite
+from app.content import PublicLibreTextsContentAdapter
+from app.db import (
+    DraftRepository,
+    DraftWrite,
+    HintGroundingIssue,
+    PublicationState,
+)
 from app.main import create_app
 from app.schemas import (
     BloomLevel,
@@ -12,11 +21,16 @@ from app.schemas import (
     Concept,
     Critique,
     Difficulty,
+    HintLadderDraft,
+    HintRungDraft,
+    HintRungType,
     NormalizedPage,
     Paragraph,
     QuestionDraft,
+    ReviewDecision,
     ReviewStatus,
     SourceInfo,
+    SourceLicenseMetadata,
 )
 
 
@@ -90,6 +104,55 @@ def seed(repository: DraftRepository, source_page: NormalizedPage | None = None)
     return stored.draft_ids[0]
 
 
+def mark_published(
+    repository: DraftRepository,
+    draft_id: int,
+    *,
+    adapt_question_id: int = 125,
+) -> None:
+    draft = repository.require_draft(draft_id)
+    publication, created = repository.create_or_get_publication(
+        {
+            "draft_id": draft.id,
+            "edit_count": draft.edit_count,
+            "question_snapshot_json": draft.current_json,
+            "source_snapshot_json": {"source_id": draft.source_snapshot_id},
+            "reviewer_identity": "reviewer@example.org",
+            "approved_at": datetime.now(UTC),
+            "destination_folder_id": 42,
+            "destination_folder_name": "Assessment AI — Approved",
+            "author": "LibreTexts",
+            "public": True,
+            "license": "CC BY",
+            "license_version": "4.0",
+            "license_label": "CC BY 4.0",
+            "license_evidence_url": "https://example.invalid/license",
+            "framework_id": 7,
+            "framework_title": "Test framework",
+            "alignment_json": {
+                "topic": {
+                    "text": "Energy conservation",
+                    "stable_id": "energy",
+                }
+            },
+            "stable_topic_ids_json": ["energy"],
+            "hint_ladder_snapshot_json": None,
+            "publication_key": f"{draft.id:064x}",
+            "payload_hash": f"{adapt_question_id:064x}",
+            "payload_mapper_version": "test-1",
+            "qti_exporter_version": "test-1",
+        }
+    )
+    assert created is True
+    repository.update_publication(
+        publication.id,
+        state=PublicationState.SUCCEEDED,
+        adapt_question_id=adapt_question_id,
+        adapt_page_id=adapt_question_id,
+        finalized_at=datetime.now(UTC),
+    )
+
+
 def public_page() -> NormalizedPage:
     return page()
 
@@ -148,6 +211,35 @@ def test_gemini_can_make_generation_ready_without_ollama_key(
         assert client.get("/healthz").json()["generation"] == "configured"
         assert client.get("/readyz").status_code == 200
         assert client.get("/readyz").json() == {"status": "ready"}
+
+
+def test_enforce_readiness_fails_closed_without_promoted_runtime(
+    tmp_path: Path,
+) -> None:
+    configured = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path / 'unqualified.db'}",
+        allowed_origin="http://testserver",
+        llm_provider_order="gemini",
+        gemini_api_key=SecretStr("gemini-key"),
+        computation_mode="enforce",
+        computation_family_allowlist="numeric",
+        computation_image_reference=(
+            f"registry.example/assessment-computation@sha256:{'a' * 64}"
+        ),
+    )
+
+    with TestClient(create_app(configured)) as client:
+        health = client.get("/healthz").json()
+        assert health["assessment_computation"]["runtime_qualification"] == (
+            "unqualified"
+        )
+        readiness = client.get("/readyz")
+        assert readiness.status_code == 503
+        assert readiness.json() == {
+            "status": "computation_unqualified",
+            "assessment_computation": "unqualified",
+        }
 
 
 def test_generation_form_rejects_cross_origin_before_provider_calls(
@@ -210,12 +302,82 @@ def test_public_only_form_and_public_feature_disabled_behavior(tmp_path: Path) -
         assert "not+enabled" in response.headers["location"]
 
     enabled_settings = settings(tmp_path).model_copy(
-        update={"public_sources_enabled": True}
+        update={
+            "public_sources_enabled": True,
+            "advanced_items_enabled": True,
+        }
     )
     with TestClient(create_app(enabled_settings)) as client:
         form = client.get("/")
+        assert "Select All That Apply" in form.text
+        assert "not a control that checks every format" in form.text
+        assert "Select Exactly N" in form.text
         assert 'type="hidden" name="source_type" value="public"' in form.text
         assert "sandbox" not in form.text.casefold()
+
+
+def test_invalid_choose_types_requests_return_friendly_errors(
+    tmp_path: Path,
+) -> None:
+    configured = settings(tmp_path).model_copy(
+        update={
+            "advanced_items_enabled": True,
+            "public_sources_enabled": True,
+        }
+    )
+    with TestClient(create_app(configured)) as client:
+        too_many = client.post(
+            "/generate",
+            data={
+                "source_type": "public",
+                "source_locator": ("https://chem.libretexts.org/Bookshelves/Test/Page"),
+                "generation_mode": "selected",
+                "item_count": "8",
+                "item_types": [
+                    "multiple_choice",
+                    "true_false",
+                    "numerical",
+                    "multiple_response",
+                    "select_all",
+                    "select_n",
+                    "fill_in_blank",
+                    "matching",
+                    "ordering",
+                ],
+            },
+            headers={
+                "Origin": "http://testserver",
+                "X-Reviewer": "reviewer@example.org",
+            },
+            follow_redirects=False,
+        )
+        assert too_many.status_code == 303
+        assert "Choose+no+more+than+8+item+types" in too_many.headers["location"]
+        assert "pydantic" not in too_many.headers["location"]
+
+        total_too_small = client.post(
+            "/generate",
+            data={
+                "source_type": "public",
+                "source_locator": ("https://chem.libretexts.org/Bookshelves/Test/Page"),
+                "generation_mode": "selected",
+                "item_count": "1",
+                "item_types": [
+                    "multiple_choice",
+                    "true_false",
+                    "numerical",
+                    "ordering",
+                ],
+            },
+            headers={
+                "Origin": "http://testserver",
+                "X-Reviewer": "reviewer@example.org",
+            },
+            follow_redirects=False,
+        )
+        assert total_too_small.status_code == 303
+        assert "Set+Total+number+of+items" in total_too_small.headers["location"]
+        assert "pydantic" not in total_too_small.headers["location"]
 
 
 def test_sandbox_and_legacy_requests_are_blocked_before_adapter_creation(
@@ -319,6 +481,78 @@ def test_public_source_provenance_is_clickable_on_review_page(tmp_path: Path) ->
     assert "Paragraph 0" in detail.text
 
 
+def test_verified_page_license_is_stored_and_rendered_without_manual_fields(
+    tmp_path: Path,
+) -> None:
+    app = create_app(settings(tmp_path))
+    source_page = public_page()
+    source_page.source.license = SourceLicenseMetadata(
+        code="ccbyncsa",
+        version="4.0",
+        label="CC BY-NC-SA 4.0",
+        evidence_url=source_page.source.canonical_url,
+    )
+
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository, source_page)
+        approved = client.post(
+            f"/drafts/{draft_id}/review",
+            data={
+                "decision": "ready_to_publish",
+                "bloom_confirmed": "true",
+                "difficulty_confirmed": "true",
+            },
+            headers={
+                "Origin": "http://testserver",
+                "X-Reviewer": "reviewer@example.org",
+            },
+            follow_redirects=False,
+        )
+        assert approved.status_code == 303
+        detail = client.get(f"/drafts/{draft_id}")
+
+    stored = app.state.repository.require_draft(draft_id)
+    assert stored.source.license_metadata == source_page.source.license
+    assert "Source license: CC BY-NC-SA 4.0" in detail.text
+    assert "filled automatically" in detail.text
+    assert 'name="license_code"' not in detail.text
+    assert "outside the currently curated framework" in detail.text
+
+
+def test_existing_draft_license_is_backfilled_from_page_tags(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config = settings(tmp_path).model_copy(update={"public_sources_enabled": True})
+    app = create_app(config)
+
+    async def fake_fetch_license(
+        _adapter: PublicLibreTextsContentAdapter,
+        source_url: str,
+    ) -> SourceLicenseMetadata:
+        return SourceLicenseMetadata(
+            code="ccbyncsa",
+            version="4.0",
+            label="CC BY-NC-SA 4.0",
+            evidence_url=source_url,
+        )
+
+    monkeypatch.setattr(
+        PublicLibreTextsContentAdapter,
+        "fetch_license",
+        fake_fetch_license,
+    )
+
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository, public_page())
+        detail = client.get(f"/drafts/{draft_id}")
+
+    stored = app.state.repository.require_draft(draft_id)
+    assert detail.status_code == 200
+    assert stored.source.license_metadata is not None
+    assert stored.source.license_metadata.label == "CC BY-NC-SA 4.0"
+
+
 def test_edit_and_independent_review_gates(tmp_path: Path) -> None:
     app = create_app(settings(tmp_path))
     with TestClient(app) as client:
@@ -364,18 +598,12 @@ def test_edit_and_independent_review_gates(tmp_path: Path) -> None:
             },
             follow_redirects=False,
         )
-        assert blocked.status_code == 303
-        blocked_location = blocked.headers["location"]
-        assert "error=" in blocked_location
-        assert (
-            "Confirm+both+the+Bloom+level+and+difficulty+before+approving+this+draft."
-        ) in blocked_location
-        assert "validation" not in blocked_location.casefold()
-        assert "pydantic" not in blocked_location.casefold()
-        blocked_page = client.get(blocked_location)
+        assert blocked.status_code == 422
+        blocked_page = blocked
         assert (
             "Confirm both the Bloom level and difficulty before approving this draft."
         ) in blocked_page.text
+        assert "Looks good." in blocked_page.text
         assert "input_value" not in blocked_page.text
         assert "pydantic.dev" not in blocked_page.text
         assert (
@@ -402,3 +630,394 @@ def test_edit_and_independent_review_gates(tmp_path: Path) -> None:
         assert stored.status == ReviewStatus.READY_TO_PUBLISH
         assert stored.bloom_confirmed is True
         assert stored.difficulty_confirmed is True
+
+
+def test_hint_validation_preserves_posted_edits_and_persisted_version(
+    tmp_path: Path,
+) -> None:
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        ladder = HintLadderDraft(
+            concept_label="Energy conservation",
+            rungs=[
+                HintRungDraft(
+                    rung=rung,
+                    text=f"Saved {rung.value} hint.",
+                    citation_paragraphs=[0],
+                )
+                for rung in HintRungType
+            ],
+        )
+        original = app.state.repository.save_hint_ladder(
+            draft_id,
+            ladder,
+            editor="reviewer@example.org",
+        )
+
+        response = client.post(
+            f"/drafts/{draft_id}/hints/edit",
+            data={
+                "conceptual_text": "Unsaved conceptual wording.",
+                "conceptual_citations": "47",
+                "strategic_text": "Unsaved strategic wording.",
+                "strategic_citations": "0",
+                "specific_text": "Unsaved specific wording.",
+                "specific_citations": "0",
+                "reviewer_notes": "Keep these edits visible.",
+            },
+            headers={
+                "X-Reviewer": "reviewer@example.org",
+                "Origin": "http://testserver",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 422
+        assert "Unsaved conceptual wording." in response.text
+        assert 'value="47"' in response.text
+        assert "Keep these edits visible." in response.text
+        assert "Allowed paragraphs: 0" in response.text
+        assert 'aria-invalid="true"' in response.text
+        current = app.state.repository.require_draft(draft_id).current_hint_ladder
+        assert current is not None
+        assert current.id == original.id
+        assert current.ladder.rungs[0].text == "Saved conceptual hint."
+
+
+def test_failed_hint_edit_keeps_the_approved_disclosure_open(tmp_path: Path) -> None:
+    """An approved ladder wraps its edit form in a collapsed <details>.
+
+    A rejected edit must reopen it, or the preserved values, inline errors, and
+    aria-invalid markers are rendered where the reviewer cannot see them.
+    """
+
+    configured = settings(tmp_path).model_copy(
+        update={
+            "hint_generation_enabled": True,
+            "hint_publication_canary_enabled": True,
+        }
+    )
+    app = create_app(configured)
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.save_hint_ladder(
+            draft_id,
+            HintLadderDraft(
+                concept_label="Energy conservation",
+                rungs=[
+                    HintRungDraft(
+                        rung=rung,
+                        text=f"Review {rung.value} evidence.",
+                        citation_paragraphs=[0],
+                    )
+                    for rung in HintRungType
+                ],
+            ),
+            editor="reviewer@example.org",
+        )
+        approval = client.post(
+            f"/drafts/{draft_id}/hints/review",
+            data={
+                "conceptual_confirmed": "true",
+                "strategic_confirmed": "true",
+                "specific_confirmed": "true",
+            },
+            headers={
+                "X-Reviewer": "reviewer@example.org",
+                "Origin": "http://testserver",
+            },
+            follow_redirects=False,
+        )
+        assert approval.status_code == 303
+
+        rejected = client.post(
+            f"/drafts/{draft_id}/hints/edit",
+            data={
+                "conceptual_text": "Unsaved conceptual wording.",
+                "conceptual_citations": "47",
+                "strategic_text": "Unsaved strategic wording.",
+                "strategic_citations": "0",
+                "specific_text": "Unsaved specific wording.",
+                "specific_citations": "0",
+                "reviewer_notes": "Keep these edits visible.",
+            },
+            headers={
+                "X-Reviewer": "reviewer@example.org",
+                "Origin": "http://testserver",
+            },
+            follow_redirects=False,
+        )
+
+        assert rejected.status_code == 422
+        assert 'aria-invalid="true"' in rejected.text
+        assert "Unsaved conceptual wording." in rejected.text
+        assert '<details class="edit-box" open>' in rejected.text
+
+
+def test_ladder_wide_grounding_issue_is_shown_on_the_hint_form(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A grounding issue with no rung must still reach the reviewer.
+
+    `inspect_hint_grounding` reports a concept mismatch against the ladder as a
+    whole, so it carries no rung. The per-rung error map drops those, which
+    would block publication with nothing on the page naming the cause. Persisted
+    ladders cannot reach that state today — `edit_draft` refuses to change a
+    concept and ladders are pinned to an edit count — so the issue is injected
+    here to cover the display path that would otherwise fail silently.
+    """
+
+    configured = settings(tmp_path).model_copy(
+        update={
+            "hint_generation_enabled": True,
+            "hint_publication_canary_enabled": True,
+        }
+    )
+    app = create_app(configured)
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.save_hint_ladder(
+            draft_id,
+            HintLadderDraft(
+                concept_label="Energy conservation",
+                rungs=[
+                    HintRungDraft(
+                        rung=rung,
+                        text=f"Review {rung.value} evidence.",
+                        citation_paragraphs=[0],
+                    )
+                    for rung in HintRungType
+                ],
+            ),
+            editor="reviewer@example.org",
+        )
+
+        message = "A hint ladder cannot change the selected concept."
+        monkeypatch.setattr(
+            main_module,
+            "inspect_hint_grounding",
+            lambda question, ladder: (
+                HintGroundingIssue(code="concept_mismatch", message=message),
+            ),
+        )
+        page = client.get(f"/drafts/{draft_id}")
+
+        assert page.status_code == 200
+        assert message in page.text
+
+
+def test_hint_approval_button_is_not_statically_disabled(tmp_path: Path) -> None:
+    """The approve button is gated by JavaScript.
+
+    Shipping `disabled` in the markup makes hint approval impossible whenever
+    the script fails to load. The server independently rejects an incomplete
+    confirmation set, so the button itself must start enabled.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.save_hint_ladder(
+            draft_id,
+            HintLadderDraft(
+                concept_label="Energy conservation",
+                rungs=[
+                    HintRungDraft(
+                        rung=rung,
+                        text=f"Review {rung.value} evidence.",
+                        citation_paragraphs=[0],
+                    )
+                    for rung in HintRungType
+                ],
+            ),
+            editor="reviewer@example.org",
+        )
+
+        detail = client.get(f"/drafts/{draft_id}")
+
+        assert "data-hint-approve>" in detail.text
+        assert "data-hint-approve disabled" not in detail.text
+
+
+def test_incomplete_hint_confirmation_is_rejected_without_javascript(
+    tmp_path: Path,
+) -> None:
+    """Removing the static `disabled` must not weaken the server gate."""
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.save_hint_ladder(
+            draft_id,
+            HintLadderDraft(
+                concept_label="Energy conservation",
+                rungs=[
+                    HintRungDraft(
+                        rung=rung,
+                        text=f"Review {rung.value} evidence.",
+                        citation_paragraphs=[0],
+                    )
+                    for rung in HintRungType
+                ],
+            ),
+            editor="reviewer@example.org",
+        )
+
+        response = client.post(
+            f"/drafts/{draft_id}/hints/review",
+            data={"conceptual_confirmed": "true"},
+            headers={
+                "X-Reviewer": "reviewer@example.org",
+                "Origin": "http://testserver",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 422
+        assert "confirm all three hint rungs" in response.text
+        ladder = app.state.repository.require_draft(draft_id).current_hint_ladder
+        assert ladder is not None
+        assert ladder.status != "approved"
+
+
+def test_saved_hint_and_question_approvals_render_as_summaries(tmp_path: Path) -> None:
+    configured = settings(tmp_path).model_copy(
+        update={
+            "hint_generation_enabled": True,
+            "hint_publication_canary_enabled": True,
+        }
+    )
+    app = create_app(configured)
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.save_hint_ladder(
+            draft_id,
+            HintLadderDraft(
+                concept_label="Energy conservation",
+                rungs=[
+                    HintRungDraft(
+                        rung=rung,
+                        text=f"Review {rung.value} evidence.",
+                        citation_paragraphs=[0],
+                    )
+                    for rung in HintRungType
+                ],
+            ),
+            editor="reviewer@example.org",
+        )
+        hint_approval = client.post(
+            f"/drafts/{draft_id}/hints/review",
+            data={
+                "conceptual_confirmed": "true",
+                "strategic_confirmed": "true",
+                "specific_confirmed": "true",
+                "reviewer_notes": "All hint checks complete.",
+            },
+            headers={
+                "X-Reviewer": "reviewer@example.org",
+                "Origin": "http://testserver",
+            },
+            follow_redirects=False,
+        )
+        assert hint_approval.status_code == 303
+        question_approval = client.post(
+            f"/drafts/{draft_id}/review",
+            data={
+                "decision": "ready_to_publish",
+                "bloom_confirmed": "true",
+                "difficulty_confirmed": "true",
+            },
+            headers={
+                "X-Reviewer": "reviewer@example.org",
+                "Origin": "http://testserver",
+            },
+            follow_redirects=False,
+        )
+        assert question_approval.status_code == 303
+
+        detail = client.get(f"/drafts/{draft_id}")
+
+        assert "All three hints approved" in detail.text
+        assert "Question approved" in detail.text
+        assert "Approve saved hint version" not in detail.text
+        assert "Approve question revision" not in detail.text
+
+
+def test_current_successful_publication_drives_queue_and_detail_state(
+    tmp_path: Path,
+) -> None:
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.apply_review_decision(
+            draft_id,
+            ReviewDecision(
+                status=ReviewStatus.READY_TO_PUBLISH,
+                bloom_confirmed=True,
+                difficulty_confirmed=True,
+            ),
+            reviewer="reviewer@example.org",
+        )
+        mark_published(app.state.repository, draft_id)
+
+        queue = client.get("/")
+        assert queue.status_code == 200
+        assert "Published to ADAPT" in queue.text
+        assert "Approved — not yet published" not in queue.text
+        assert "Current revision 0" in queue.text
+        assert "Published to ADAPT as question 125" in queue.text
+
+        detail = client.get(f"/drafts/{draft_id}")
+        assert detail.status_code == 200
+        assert "Approved — not yet published" not in detail.text
+        assert "Publication status" in detail.text
+        assert "ADAPT question ID: 125" in detail.text
+        assert "This publication is bound to the current draft revision." in detail.text
+        assert f'action="/drafts/{draft_id}/publish"' not in detail.text
+
+
+def test_earlier_publication_does_not_mark_a_new_revision_as_published(
+    tmp_path: Path,
+) -> None:
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.apply_review_decision(
+            draft_id,
+            ReviewDecision(
+                status=ReviewStatus.READY_TO_PUBLISH,
+                bloom_confirmed=True,
+                difficulty_confirmed=True,
+            ),
+            reviewer="reviewer@example.org",
+        )
+        mark_published(app.state.repository, draft_id)
+        app.state.repository.edit_draft(
+            draft_id,
+            question("Which revised statement about energy is accurate?"),
+            editor="editor@example.org",
+        )
+        app.state.repository.apply_review_decision(
+            draft_id,
+            ReviewDecision(
+                status=ReviewStatus.READY_TO_PUBLISH,
+                bloom_confirmed=True,
+                difficulty_confirmed=True,
+            ),
+            reviewer="reviewer@example.org",
+        )
+
+        queue = client.get("/")
+        assert queue.status_code == 200
+        assert "Approved — not yet published" in queue.text
+        assert "Current revision 1" in queue.text
+        assert "Revision 0 remains published to ADAPT as question 125." in queue.text
+
+        detail = client.get(f"/drafts/{draft_id}")
+        assert detail.status_code == 200
+        assert "Approved — not yet published" in detail.text
+        assert "Current revision 1 is not yet published." in detail.text
+        assert "Revision 0 remains published to ADAPT as question 125." in detail.text
+        assert "Earlier revision" in detail.text

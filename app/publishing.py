@@ -16,23 +16,54 @@ from app.adapt import (
     build_assessment_payload,
     build_external_engine_payload,
 )
-from app.catalog import SourceLicense, source_license
+from app.catalog import (
+    CuratedAlignment,
+    SourceLicense,
+    alignment_for_source,
+    source_license,
+)
+from app.computation_policy import (
+    ComputationGateDecision,
+    ComputationPolicyError,
+    require_computation_gate,
+)
+from app.computation import AssessmentComputationBlueprint, deterministic_seeds
+from app.computation_workflow import (
+    parameterized_spec_from_blueprint,
+    parameterized_typed_inputs,
+)
 from app.config import Settings
-from app.engines import EnginePublishingError, IMathASBridgeClient
 from app.db import (
+    ComputationEvidenceError,
     Draft,
     DraftRepository,
+    EngineValidationBinding,
+    HintLadderBinding,
     Publication,
+    PublicationComputationEvidenceWrite,
     PublicationState,
+    ReviewTransitionError,
+    approved_hint_ladder_snapshot,
+    draft_content_sha256,
+    hint_ladder_evidence_sha256,
+    inspect_hint_grounding,
     utc_now,
+    validate_computation_evidence,
+    validate_computation_engine_binding,
 )
+from app.engines import EnginePublishingError, IMathASBridgeClient
 from app.qti import (
     QTI_EXPORTER_VERSION,
     QTIExportError,
     preflight_qti,
     write_qti_package,
 )
-from app.parameterized import compile_parameterized_item
+from app.parameterized import (
+    CompiledParameterizedItem,
+    ParameterizedCompileError,
+    compile_parameterized_item,
+    compile_typed_parameterized_item,
+)
 from app.schemas import AssessmentItemType, QuestionDraft, ReviewStatus
 
 
@@ -41,6 +72,42 @@ PAYLOAD_MAPPER_VERSION = "adapt-assessment-items-v3"
 
 class PublicationValidationError(ValueError):
     pass
+
+
+@dataclass(frozen=True)
+class PublicationBlocker:
+    code: str
+    message: str
+
+
+@dataclass(frozen=True)
+class PublicationReadiness:
+    alignment: CuratedAlignment | None
+    blockers: tuple[PublicationBlocker, ...]
+
+    @property
+    def ready(self) -> bool:
+        return not self.blockers
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "ready": self.ready,
+            "alignment": (
+                {
+                    "framework_title": self.alignment.framework.title,
+                    "framework_source_url": self.alignment.framework.source_url,
+                    "topic_stable_id": self.alignment.topic.stable_id,
+                    "topic_title": self.alignment.topic.title,
+                    "chapter_title": self.alignment.topic.chapter_title,
+                }
+                if self.alignment is not None
+                else None
+            ),
+            "blockers": [
+                {"code": blocker.code, "message": blocker.message}
+                for blocker in self.blockers
+            ],
+        }
 
 
 @dataclass(frozen=True)
@@ -63,25 +130,100 @@ class PublicationService:
         self._adapt = adapt
         self._imathas = IMathASBridgeClient(settings)
 
-    async def publish(
+    def readiness(
         self,
         draft_id: int,
         *,
-        publisher: str,
-        topic_stable_id: str,
-        alignment_confirmed: bool,
-        selected_license: LicenseSelection | None = None,
-        license_confirmed: bool = False,
-    ) -> Publication:
-        if self._settings.adapt_publishing_status != "configured":
-            raise PublicationValidationError(
-                "ADAPT publishing is not configured for this service."
-            )
+        license_resolved: bool,
+    ) -> PublicationReadiness:
         draft = self._repository.require_draft(draft_id)
-        if draft.status is not ReviewStatus.READY_TO_PUBLISH:
-            raise PublicationValidationError(
-                "Approve the draft before publishing it to ADAPT."
+        return self._local_readiness(
+            draft,
+            license_resolved=license_resolved,
+        )
+
+    def _local_readiness(
+        self,
+        draft: Draft,
+        *,
+        license_resolved: bool,
+    ) -> PublicationReadiness:
+        readiness, _ = self._evaluate_readiness(
+            draft,
+            license_resolved=license_resolved,
+        )
+        return readiness
+
+    def _evaluate_readiness(
+        self,
+        draft: Draft,
+        *,
+        license_resolved: bool,
+    ) -> tuple[PublicationReadiness, ComputationGateDecision | None]:
+        """Collect every blocker, and return the gate decision when it passed.
+
+        `publish()` needs the decision itself, not just "did the gate block".
+        Returning it here keeps the gate evaluated exactly once per publish
+        attempt instead of running its five repository reads twice.
+        """
+
+        blockers: list[PublicationBlocker] = []
+        if draft.status != ReviewStatus.READY_TO_PUBLISH:
+            blockers.append(
+                PublicationBlocker(
+                    "question_not_approved",
+                    "Approve the current question revision.",
+                )
             )
+
+        hint_record = draft.current_hint_ladder
+        if self._settings.hint_publication_enabled:
+            if hint_record is None:
+                blockers.append(
+                    PublicationBlocker(
+                        "hints_missing",
+                        "Generate and review the three-rung hint ladder.",
+                    )
+                )
+            else:
+                grounding = inspect_hint_grounding(
+                    draft.current,
+                    hint_record.ladder,
+                )
+                if grounding:
+                    # A concept mismatch is not a citation problem, so naming it
+                    # "repair citations" sends the reviewer to the wrong field.
+                    citation_issues = [
+                        issue for issue in grounding if issue.rung is not None
+                    ]
+                    blockers.append(
+                        PublicationBlocker(
+                            "hints_need_repair",
+                            (
+                                "Repair hint citations outside the current "
+                                "question source before approval."
+                                if citation_issues
+                                else grounding[0].message
+                            ),
+                        )
+                    )
+                elif any(
+                    rung.answer_leak_detected for rung in hint_record.ladder.rungs
+                ):
+                    blockers.append(
+                        PublicationBlocker(
+                            "hints_need_repair",
+                            "Resolve possible answer leakage before hint approval.",
+                        )
+                    )
+                elif hint_record.status != "approved":
+                    blockers.append(
+                        PublicationBlocker(
+                            "hints_not_approved",
+                            "Approve all three current hint rungs.",
+                        )
+                    )
+
         if draft.current.item_type in {
             AssessmentItemType.WEBWORK,
             AssessmentItemType.IMATHAS,
@@ -92,22 +234,121 @@ class PublicationService:
                 or validation.status != "passed"
                 or validation.seed_count < 25
             ):
-                raise PublicationValidationError(
-                    "The parameterized item needs a successful 25-seed engine validation."
+                blockers.append(
+                    PublicationBlocker(
+                        "engine_validation_missing",
+                        "Complete a successful 25-seed engine validation.",
+                    )
                 )
-        hint_snapshot = self._approved_hint_snapshot(draft)
-        if not alignment_confirmed:
-            raise PublicationValidationError(
-                "Confirm the curated framework topic before publishing."
+
+        computation_decision: ComputationGateDecision | None = None
+        try:
+            computation_decision = require_computation_gate(
+                self._settings,
+                self._repository,
+                draft,
+                action="publication",
             )
+        except ComputationPolicyError as exc:
+            blockers.append(
+                PublicationBlocker(
+                    "computation_evidence_invalid",
+                    str(exc),
+                )
+            )
+
+        alignment = alignment_for_source(draft.source.canonical_url)
+        if alignment is None:
+            blockers.append(
+                PublicationBlocker(
+                    "framework_unmapped",
+                    "This source does not yet have a curated framework topic.",
+                )
+            )
+        if not license_resolved:
+            blockers.append(
+                PublicationBlocker(
+                    "license_unresolved",
+                    "Verify and select the source license.",
+                )
+            )
+        if self._settings.adapt_publishing_status != "configured":
+            blockers.append(
+                PublicationBlocker(
+                    "publishing_not_configured",
+                    "ADAPT publishing is not configured for this service.",
+                )
+            )
+        return (
+            PublicationReadiness(
+                alignment=alignment,
+                blockers=tuple(blockers),
+            ),
+            computation_decision,
+        )
+
+    async def publish(
+        self,
+        draft_id: int,
+        *,
+        publisher: str,
+        topic_stable_id: str,
+        alignment_confirmed: bool,
+        selected_license: LicenseSelection | None = None,
+        license_confirmed: bool = False,
+    ) -> Publication:
+        draft = self._repository.require_draft(draft_id)
+        # Readiness first: a reviewer with several blockers should be told to
+        # approve the revision before being told to pick a license, which is
+        # the order the readiness panel already shows them in.
+        readiness, computation_decision = self._evaluate_readiness(
+            draft,
+            license_resolved=True,
+        )
+        if readiness.blockers:
+            raise PublicationValidationError(readiness.blockers[0].message)
         license_selection = self._resolve_license(
             draft,
             selected=selected_license,
             manually_confirmed=license_confirmed,
         )
+        if readiness.alignment is None:
+            # Not an assert: `python -O` strips those, which would turn this
+            # guard into an AttributeError on the publication path.
+            raise PublicationValidationError(
+                "This source does not yet have a curated framework topic."
+            )
+        expected_alignment = readiness.alignment
+        if topic_stable_id != expected_alignment.topic.stable_id:
+            raise PublicationValidationError(
+                "The selected framework topic does not match this source."
+            )
+        if computation_decision is None:
+            # Unreachable while the gate is evaluated unconditionally above and
+            # every failure becomes a blocker, but not an assert: `python -O`
+            # strips those, which would turn this into an AttributeError deeper
+            # in the publication path.
+            raise PublicationValidationError(
+                "The computation policy gate did not produce a decision."
+            )
+        compiled = None
+        engine_binding = None
+        if computation_decision.mode == "enforce":
+            compiled, engine_binding = self._verified_external_compilation(
+                draft,
+                computation_decision=computation_decision,
+            )
+        hint_snapshot, hint_binding = self._approved_hint_snapshot(
+            draft,
+            bind_evidence=computation_decision.mode == "enforce",
+        )
+        if not alignment_confirmed:
+            raise PublicationValidationError(
+                "Confirm the curated framework topic before publishing."
+            )
         alignment = await self._adapt.resolve_destination(
             license_code=license_selection.code,
-            topic_stable_id=topic_stable_id,
+            topic_stable_id=expected_alignment.topic.stable_id,
         )
         title = self._title(draft)
         destination = AdaptDestination(
@@ -123,30 +364,33 @@ class PublicationService:
             license_selection=license_selection,
             alignment=alignment,
             hint_snapshot=hint_snapshot,
+            computation_decision=computation_decision,
+            engine_binding=engine_binding,
         )
         publication_key = _sha256_json(key_material)
         tag = f"assessment-ai-{publication_key}"
         tags = ["assessment-ai", tag]
         if draft.current.set_key:
             tags.append(f"assessment-ai-set-{draft.current.set_key}")
-        compiled = None
-        if draft.current.item_type in {
-            AssessmentItemType.WEBWORK,
-            AssessmentItemType.IMATHAS,
-        }:
-            assert draft.current.response.parameterized is not None
-            compiled = compile_parameterized_item(
-                draft.current.response.parameterized, validation_seeds=25
+        if computation_decision.mode != "enforce":
+            # Preserve the accepted BUILD-08 ordering and gate surface exactly:
+            # the existing engine receipt was checked above, lookup has already
+            # completed, and publication does not bind new computation evidence.
+            compiled, engine_binding = self._verified_external_compilation(
+                draft,
+                computation_decision=computation_decision,
             )
-            payload_hash = _sha256_json(
-                {
-                    "engine": draft.current.item_type.value,
-                    "source_sha256": compiled.source_sha256,
-                    "destination": destination.model_dump(mode="json"),
-                    "alignment": alignment.payload.model_dump(mode="json"),
-                    "tags": tags,
-                }
-            )
+        if compiled is not None:
+            engine_payload_identity = {
+                "engine": compiled.engine,
+                "source_sha256": compiled.source_sha256,
+                "destination": destination.model_dump(mode="json"),
+                "alignment": alignment.payload.model_dump(mode="json"),
+                "tags": tags,
+            }
+            if computation_decision.enforced:
+                engine_payload_identity["compiler_version"] = compiled.compiler_version
+            payload_hash = _sha256_json(engine_payload_identity)
         else:
             payload = build_assessment_payload(
                 draft.current,
@@ -161,38 +405,71 @@ class PublicationService:
             draft,
             license_selection=license_selection,
             alignment=alignment,
+            computation_decision=computation_decision,
+            engine_binding=engine_binding,
         )
-        publication, reserved = self._repository.create_or_get_publication(
-            {
-                "draft_id": draft.id,
-                "edit_count": draft.edit_count,
-                "question_snapshot_json": draft.current.model_dump(mode="json"),
-                "source_snapshot_json": self._source_snapshot(draft),
-                "reviewer_identity": draft.last_reviewed_by or publisher,
-                "approved_at": draft.last_reviewed_at or utc_now(),
-                "destination_folder_id": destination.folder_id,
-                "destination_folder_name": self._settings.adapt_folder_name,
-                "author": destination.author,
-                "public": destination.public,
-                "license": license_selection.code,
-                "license_version": license_selection.version,
-                "license_label": license_selection.label,
-                "license_evidence_url": license_selection.evidence_url,
-                "framework_id": alignment.framework_id,
-                "framework_title": alignment.framework_title,
-                "alignment_json": alignment.model_dump(mode="json"),
-                "stable_topic_ids_json": [
-                    alignment.chapter_stable_id,
-                    alignment.topic_stable_id,
-                ],
-                "hint_ladder_snapshot_json": hint_snapshot,
-                "publication_key": publication_key,
-                "payload_hash": payload_hash,
-                "payload_mapper_version": PAYLOAD_MAPPER_VERSION,
-                "qti_exporter_version": QTI_EXPORTER_VERSION,
-                "state": PublicationState.PENDING.value,
-            }
-        )
+        publication_values = {
+            "draft_id": draft.id,
+            "edit_count": draft.edit_count,
+            "question_snapshot_json": draft.current.model_dump(mode="json"),
+            "source_snapshot_json": self._source_snapshot(draft),
+            "reviewer_identity": draft.last_reviewed_by or publisher,
+            "approved_at": draft.last_reviewed_at or utc_now(),
+            "destination_folder_id": destination.folder_id,
+            "destination_folder_name": self._settings.adapt_folder_name,
+            "author": destination.author,
+            "public": destination.public,
+            "license": license_selection.code,
+            "license_version": license_selection.version,
+            "license_label": license_selection.label,
+            "license_evidence_url": license_selection.evidence_url,
+            "framework_id": alignment.framework_id,
+            "framework_title": alignment.framework_title,
+            "alignment_json": alignment.model_dump(mode="json"),
+            "stable_topic_ids_json": [
+                alignment.chapter_stable_id,
+                alignment.topic_stable_id,
+            ],
+            "hint_ladder_snapshot_json": hint_snapshot,
+            "publication_key": publication_key,
+            "payload_hash": payload_hash,
+            "payload_mapper_version": PAYLOAD_MAPPER_VERSION,
+            "qti_exporter_version": QTI_EXPORTER_VERSION,
+            "state": PublicationState.PENDING.value,
+        }
+        try:
+            computation_evidence = (
+                PublicationComputationEvidenceWrite(
+                    report_sha256=computation_decision.report_sha256,
+                    attestation_sha256s=(computation_decision.attestation_sha256s),
+                    engine_validation=engine_binding,
+                )
+                if computation_decision.mode == "enforce"
+                and computation_decision.scoped
+                and computation_decision.report_sha256 is not None
+                else None
+            )
+            if computation_decision.mode == "enforce":
+                publication, reserved = (
+                    self._repository.create_or_get_publication_guarded(
+                        publication_values,
+                        computation_binding=computation_decision.atomic_binding(
+                            self._settings
+                        ),
+                        computation_evidence=computation_evidence,
+                        engine_binding=engine_binding,
+                        hint_binding=hint_binding,
+                    )
+                )
+            else:
+                publication, reserved = self._repository.create_or_get_publication(
+                    publication_values
+                )
+        except (ComputationEvidenceError, ReviewTransitionError) as exc:
+            raise PublicationValidationError(
+                "The approved draft or its computation evidence changed before "
+                "publication reservation; no external create request was sent."
+            ) from exc
         if (
             publication.draft_id != draft.id
             or publication.edit_count != draft.edit_count
@@ -507,6 +784,182 @@ class PublicationService:
         )
         return succeeded
 
+    def _verified_external_compilation(
+        self,
+        draft: Draft,
+        *,
+        computation_decision: ComputationGateDecision,
+    ) -> tuple[CompiledParameterizedItem | None, EngineValidationBinding | None]:
+        if draft.current.item_type not in {
+            AssessmentItemType.WEBWORK,
+            AssessmentItemType.IMATHAS,
+        }:
+            return None, None
+        validation = draft.current_engine_validation
+        if (
+            validation is None
+            or validation.status != "passed"
+            or validation.seed_count < 25
+        ):
+            raise PublicationValidationError(
+                "The parameterized item needs a successful 25-seed engine validation."
+            )
+        parameterized = draft.current.response.parameterized
+        if parameterized is None:
+            raise PublicationValidationError(
+                "The external-engine item is missing its typed parameterized spec."
+            )
+        if (
+            computation_decision.mode == "off"
+            and parameterized.compiler_profile == "legacy"
+        ):
+            # BUILD-08 compiled the current structured spec after destination
+            # lookup and relied only on its existing passed/25-seed gate.
+            return (
+                compile_parameterized_item(
+                    parameterized,
+                    validation_seeds=25,
+                ),
+                None,
+            )
+        draft_hash = draft_content_sha256(draft.current_json)
+        current_computation = None
+        try:
+            if parameterized.compiler_profile == "assessment_computation_v0":
+                current_computation = (
+                    self._repository.get_current_computation_validation(
+                        draft.id,
+                        expected_edit_count=draft.edit_count,
+                        draft_sha256=draft_hash,
+                    )
+                )
+                if current_computation is None:
+                    raise ComputationEvidenceError(
+                        "typed external compilation requires its current blueprint"
+                    )
+                report = validate_computation_evidence(current_computation)
+                if report.result is None:
+                    raise ComputationEvidenceError(
+                        "typed external compilation requires a frozen result"
+                    )
+                blueprint = AssessmentComputationBlueprint.model_validate_json(
+                    current_computation.blueprint_json
+                )
+                expected_spec = parameterized_spec_from_blueprint(
+                    blueprint,
+                    report.result,
+                )
+                if parameterized != expected_spec:
+                    raise ComputationEvidenceError(
+                        "external specification drifted from its typed blueprint"
+                    )
+                answer_expression, constraints = parameterized_typed_inputs(
+                    blueprint,
+                    report.result,
+                )
+                compiled = compile_typed_parameterized_item(
+                    parameterized,
+                    answer_expression=answer_expression,
+                    constraints=constraints,
+                    validation_seeds=25,
+                    validation_seed_values=deterministic_seeds(blueprint),
+                )
+            else:
+                compiled = compile_parameterized_item(
+                    parameterized,
+                    validation_seeds=25,
+                )
+        except (ComputationEvidenceError, ParameterizedCompileError, ValueError) as exc:
+            raise PublicationValidationError(
+                "The external-engine item no longer compiles; revalidate it "
+                "before publication."
+            ) from exc
+        if computation_decision.mode in {"off", "assist"}:
+            # A computation-owned draft is always compiled from its typed
+            # blueprint, including after an operator returns the feature to
+            # off. Neither off nor assist turns that reconstruction into a new
+            # approval/publication authorization gate or atomic binding.
+            if parameterized.compiler_profile == "assessment_computation_v0":
+                current_draft = self._repository.require_draft(draft.id)
+                current_validation = current_draft.current_engine_validation
+                expected_previews = [
+                    {
+                        "seed": preview.seed,
+                        "variables": preview.variables,
+                        "prompt": preview.prompt,
+                        "answer": preview.answer,
+                        "explanation": preview.explanation,
+                    }
+                    for preview in compiled.previews
+                ]
+                if (
+                    current_draft.edit_count != draft.edit_count
+                    or draft_content_sha256(current_draft.current_json) != draft_hash
+                    or current_validation is None
+                    or current_validation.draft_id != draft.id
+                    or current_validation.edit_count != draft.edit_count
+                    or current_validation.status != "passed"
+                    or current_validation.engine != compiled.engine
+                    or current_validation.compiler_version != compiled.compiler_version
+                    or current_validation.source_sha256 != compiled.source_sha256
+                    or current_validation.seed_count != len(compiled.previews)
+                    or current_validation.previews_json != expected_previews
+                ):
+                    raise PublicationValidationError(
+                        "The freshly compiled engine artifact no longer matches "
+                        "the exact current engine validation; revalidate it "
+                        "before publication."
+                    )
+            return compiled, None
+        binding = EngineValidationBinding(
+            validation_record_id=validation.id,
+            draft_id=draft.id,
+            expected_edit_count=draft.edit_count,
+            expected_draft_sha256=draft_hash,
+            engine=compiled.engine,
+            compiler_version=compiled.compiler_version,
+            source_sha256=compiled.source_sha256,
+            seed_count=validation.seed_count,
+        )
+        if (
+            validation.draft_id != draft.id
+            or validation.edit_count != draft.edit_count
+            or validation.engine != binding.engine
+            or validation.compiler_version != binding.compiler_version
+            or validation.source_sha256 != binding.source_sha256
+        ):
+            raise PublicationValidationError(
+                "The current engine evidence no longer matches the freshly "
+                "compiled exact artifact; revalidate it before publication."
+            )
+        if computation_decision.enforced:
+            report_hash = computation_decision.report_sha256
+            current = current_computation
+            if current is None and report_hash is not None:
+                current = self._repository.get_current_computation_validation(
+                    draft.id,
+                    expected_edit_count=draft.edit_count,
+                    draft_sha256=draft_hash,
+                    report_sha256=report_hash,
+                )
+            if (
+                current is None
+                or report_hash is None
+                or current.report_sha256 != report_hash
+            ):
+                raise PublicationValidationError(
+                    "The computation report changed before engine publication "
+                    "preflight; reload and retry."
+                )
+            try:
+                validate_computation_engine_binding(current, binding)
+            except ComputationEvidenceError as exc:
+                raise PublicationValidationError(
+                    "The computation report's engine evidence no longer matches "
+                    "the compiled artifact; revalidate it before publication."
+                ) from exc
+        return compiled, binding
+
     @staticmethod
     def _resolve_license(
         draft: Draft,
@@ -514,7 +967,10 @@ class PublicationService:
         selected: LicenseSelection | None,
         manually_confirmed: bool,
     ) -> LicenseSelection:
-        mapped: SourceLicense | None = source_license(draft.source.canonical_url)
+        mapped: SourceLicense | None = source_license(
+            draft.source.canonical_url,
+            draft.source.license_metadata,
+        )
         if mapped is not None:
             if selected is not None and (
                 selected.code != mapped.code or selected.version != mapped.version
@@ -546,8 +1002,10 @@ class PublicationService:
         license_selection: LicenseSelection,
         alignment: ResolvedAlignment,
         hint_snapshot: dict[str, Any] | None,
+        computation_decision: ComputationGateDecision,
+        engine_binding: EngineValidationBinding | None,
     ) -> dict[str, Any]:
-        return {
+        material = {
             "question": draft.current.model_dump(mode="json"),
             "source_content_hash": draft.source.content_hash,
             "edit_count": draft.edit_count,
@@ -570,6 +1028,12 @@ class PublicationService:
             "payload_mapper_version": PAYLOAD_MAPPER_VERSION,
             "qti_exporter_version": QTI_EXPORTER_VERSION,
         }
+        computation_evidence = computation_decision.publication_evidence
+        if computation_evidence is not None:
+            material["computation_evidence"] = computation_evidence
+        if engine_binding is not None and computation_decision.enforced:
+            material["engine_validation"] = engine_binding.artifact_identity
+        return material
 
     @staticmethod
     def _source_snapshot(draft: Draft) -> dict[str, Any]:
@@ -595,6 +1059,8 @@ class PublicationService:
         *,
         license_selection: LicenseSelection,
         alignment: ResolvedAlignment,
+        computation_decision: ComputationGateDecision,
+        engine_binding: EngineValidationBinding | None,
     ) -> dict[str, Any]:
         cited = {
             int(item["index"]): item["text"] for item in draft.source.paragraphs_json
@@ -609,7 +1075,7 @@ class PublicationService:
             ),
             None,
         )
-        return {
+        metadata = {
             "bloom": draft.current.bloom.value,
             "difficulty": draft.current.difficulty.value,
             "license": license_selection.label,
@@ -638,25 +1104,55 @@ class PublicationService:
                 else None
             ),
         }
+        computation_evidence = computation_decision.publication_evidence
+        if computation_evidence is not None:
+            metadata["computation_evidence"] = computation_evidence
+        if engine_binding is not None and computation_decision.enforced:
+            metadata["engine_validation"] = engine_binding.artifact_identity
+        return metadata
 
-    def _approved_hint_snapshot(self, draft: Draft) -> dict[str, Any] | None:
+    def _approved_hint_snapshot(
+        self,
+        draft: Draft,
+        *,
+        bind_evidence: bool,
+    ) -> tuple[dict[str, Any] | None, HintLadderBinding | None]:
         if not self._settings.hint_publication_enabled:
-            return None
+            return None, None
         record = draft.current_hint_ladder
         if record is None:
             raise PublicationValidationError(
                 "Generate and approve the three-rung hint ladder before publishing."
             )
+        grounding = inspect_hint_grounding(draft.current, record.ladder)
+        if grounding:
+            raise PublicationValidationError(grounding[0].message)
+        if any(rung.answer_leak_detected for rung in record.ladder.rungs):
+            raise PublicationValidationError(
+                "Resolve answer-leak flags before publishing the hint ladder."
+            )
         if record.status != "approved":
             raise PublicationValidationError(
                 "Approve all three hint rungs before publishing."
             )
-        return {
-            "version": record.version,
-            "rungs": record.ladder.model_dump(mode="json")["rungs"],
-            "reviewed_by": record.reviewed_by,
-            "reviewed_at": _iso(record.reviewed_at),
-        }
+        if not bind_evidence:
+            # Keep BUILD-08's exact snapshot representation in off/assist,
+            # including its original datetime serialization.
+            snapshot = {
+                "version": record.version,
+                "rungs": record.ladder.model_dump(mode="json")["rungs"],
+                "reviewed_by": record.reviewed_by,
+                "reviewed_at": _iso(record.reviewed_at),
+            }
+            return snapshot, None
+        snapshot = approved_hint_ladder_snapshot(record)
+        return snapshot, HintLadderBinding(
+            record_id=record.id,
+            draft_id=record.draft_id,
+            expected_edit_count=record.edit_count,
+            version=record.version,
+            evidence_sha256=hint_ladder_evidence_sha256(record),
+        )
 
 
 def _sha256_json(value: Any) -> str:

@@ -40,25 +40,61 @@
               </select>
             </label>
             <label>
-              Number of items
-              <input type="number" name="item_count" value="4" min="1" max="8">
+              Total number of items
+              <input id="item-count" type="number" name="item_count" value="4"
+                     min="1" max="8" required
+                     aria-describedby="item-count-help item-type-help">
             </label>
           </div>
           <div class="item-type-grid" id="item-type-options" aria-describedby="item-type-help">
             {% for item_type in item_type_options %}
               <label class="check compact">
                 <input type="checkbox" name="item_types" value="{{ item_type }}">
-                <span>{{ item_type.replace('_', ' ') }}</span>
+                <span>{{ item_type_labels.get(item_type, item_type.replace('_', ' ')|title) }}</span>
               </label>
             {% endfor %}
           </div>
-          <p id="item-type-help" class="help">Auto mix favors different interaction types appropriate for the source. Choose types to request specific formats.</p>
+          <p id="item-count-help" class="help">This is the total output, not the number generated for each selected type.</p>
+          <p id="item-type-help" class="help">Auto mix favors different interaction types appropriate for the source. When choosing types, select up to 8 formats; the total must be at least the number selected so each requested type is created once before any type repeats. “Select All That Apply” is a question format, not a control that checks every format.</p>
           {% if hint_generation_enabled %}
             <label class="check">
               <input type="checkbox" name="include_hint_ladder" value="true" checked>
               <span>Also draft conceptual, strategic, and specific cited hints.</span>
             </label>
           {% endif %}
+        </fieldset>
+      {% endif %}
+      {% set active_computation_mode = computation_mode|default('off', true) %}
+      {% set allowed_computation_families = computation_families|default([], true) %}
+      {% if active_computation_mode != 'off' and allowed_computation_families %}
+        <fieldset class="generation-options computation-options" aria-describedby="computation-profile-help">
+          <legend>Optional assessment computation</legend>
+          <div class="two-column">
+            <label for="computation_family">
+              Computation family
+              <select name="computation_family" id="computation_family">
+                <option value="">No computation profile</option>
+                {% for family in allowed_computation_families %}
+                  <option value="{{ family }}">{{ family.replace('_', ' ')|title }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label for="computation_delivery">
+              Delivery format
+              <select name="computation_delivery" id="computation_delivery">
+                <option value="">Use the standard item selection</option>
+                <option value="numerical">Numerical response</option>
+                <option value="multiple_choice">Multiple choice</option>
+                <option value="webwork">WeBWorK</option>
+                <option value="imathas">IMathAS</option>
+              </select>
+            </label>
+          </div>
+          <p id="computation-profile-help" class="help">
+            Select both fields to request the typed, deterministic computation pipeline.
+            Leaving either field blank preserves standard generation. A computation report
+            supports—but does not replace—human review.
+          </p>
         </fieldset>
       {% endif %}
       <div id="generation-status" class="generation-status" role="status"
@@ -90,10 +126,20 @@
               <span class="status status-{{ draft.status }}">{{ draft.status_label }}</span>
               <span class="muted">{{ draft.source_type }} · #{{ draft.id }}</span>
             </div>
+            <p class="revision-state">
+              <strong>Current revision {{ draft.edit_count }}</strong>
+              {% if draft.current_publication %}
+                · Published to ADAPT{% if draft.current_publication.adapt_question_id %} as question {{ draft.current_publication.adapt_question_id }}{% endif %}
+              {% elif draft.latest_publication %}
+                · Not yet published
+                <br>
+                <span>Revision {{ draft.latest_publication.edit_count }} remains published to ADAPT{% if draft.latest_publication.adapt_question_id %} as question {{ draft.latest_publication.adapt_question_id }}{% endif %}.</span>
+              {% endif %}
+            </p>
             <h3>{{ draft.source_title }}</h3>
-            <p>{{ draft.stem }}</p>
+            <p class="math-content">{{ draft.stem }}</p>
             <div class="meta">
-              <span>Type: {{ draft.item_type.replace('_', ' ') }}</span>
+              <span>Type: {{ item_type_labels.get(draft.item_type, draft.item_type.replace('_', ' ')|title) }}</span>
               <span>Context: {{ draft.context_type.replace('_', ' ') }}</span>
               <span>Bloom: {{ draft.bloom }}</span>
               <span>Difficulty: {{ draft.difficulty }}</span>

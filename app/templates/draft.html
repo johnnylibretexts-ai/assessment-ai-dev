@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Draft {{ draft.id }}{% endblock %}
 {% block content %}
+  {% set publication_readiness = publication_readiness|default({'ready': false, 'alignment': none, 'blockers': []}, true) %}
+  {% set publication_can_submit = publication_can_submit|default(false, true) %}
+  {% set adapt_folder_name = adapt_folder_name|default('Not configured', true) %}
+  {% set adapt_public = adapt_public|default(false, true) %}
+  {% set adapt_publishing_status = adapt_publishing_status|default('disabled', true) %}
+  {% set mapped_license = mapped_license|default(none, true) %}
+  {% set manual_license_options = manual_license_options|default([], true) %}
+  {% set active_form = active_form|default(none, true) %}
+  {% set form_values = form_values|default({}, true) %}
+  {% set form_errors = form_errors|default({}, true) %}
+  {% set current_publication = draft.current_publication|default(none, true) %}
+  {% set latest_publication = draft.latest_publication|default(none, true) %}
   <nav class="back"><a href="/">← Back to queue</a></nav>
   {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
   {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
@@ -20,24 +32,55 @@
       {% for paragraph in draft.cited_paragraphs %}
         <article class="source-paragraph">
           <span>Paragraph {{ paragraph.index }}</span>
-          <p>{{ paragraph.text }}</p>
+          <p class="math-content">{{ paragraph.display_text }}</p>
         </article>
       {% endfor %}
     </section>
 
     <section class="panel review-pane">
       <div class="card-topline">
-        <span><span class="status status-{{ draft.status }}">{{ draft.status_label }}</span> <span class="status">{{ draft.item_type_label }}</span> <span class="status">{{ draft.context_type.replace('_', ' ') }} context</span></span>
+        <span><span class="status status-{{ draft.display_status|default(draft.status) }}">{{ draft.status_label }}</span> <span class="status">{{ draft.item_type_label }}</span> <span class="status">{{ draft.context_type.replace('_', ' ') }} context</span></span>
         <span class="muted">{{ draft.model_id }} · {{ draft.prompt_version }}</span>
       </div>
+      <section class="workflow-readiness" aria-labelledby="workflow-readiness-heading">
+        <h2 id="workflow-readiness-heading">Review and publishing status</h2>
+        <ol>
+          <li>
+            <strong>Question review</strong>
+            <span>{% if draft.status == 'ready_to_publish' %}Approved{% else %}Pending{% endif %}</span>
+          </li>
+          <li>
+            <strong>Hint review</strong>
+            <span>
+              {% if not draft.hint_ladder %}Missing
+              {% elif draft.hint_ladder.needs_repair %}Needs repair
+              {% elif draft.hint_ladder.status == 'approved' %}Approved
+              {% else %}Ready for review{% endif %}
+            </span>
+          </li>
+          <li>
+            <strong>Framework alignment</strong>
+            <span>{% if publication_readiness.alignment %}Exact topic mapped{% else %}Blocked{% endif %}</span>
+          </li>
+          <li>
+            <strong>Publication</strong>
+            <span>
+              {% if current_publication %}Published
+              {% elif latest_publication %}Current revision not published; revision {{ latest_publication.edit_count }} published
+              {% elif publication_readiness.ready %}Ready
+              {% else %}Blocked ({{ publication_readiness.blockers|length }}){% endif %}
+            </span>
+          </li>
+        </ol>
+      </section>
       <p class="eyebrow">Revised AI draft</p>
-      {% if draft.stimulus %}<div class="stimulus"><strong>Stimulus</strong><p>{{ draft.stimulus }}</p></div>{% endif %}
-      <h2>{{ draft.stem }}</h2>
+      {% if draft.stimulus %}<div class="stimulus"><strong>Stimulus</strong><p class="math-content">{{ draft.display.stimulus }}</p></div>{% endif %}
+      <h2 class="math-content">{{ draft.display.stem }}</h2>
       {% if draft.choices %}
         <ol class="choices" type="A">
           {% for choice in draft.choices %}
             <li class="{% if choice.correct %}correct{% endif %}">
-              {{ choice.text }}
+              <span class="math-content">{{ draft.display.choices[loop.index0].text }}</span>
               {% if choice.correct %}<strong>Correct answer</strong>{% endif %}
             </li>
           {% endfor %}
@@ -47,24 +90,34 @@
         <div class="interaction-preview"><strong>Correct order:</strong> {{ draft.response.correct_order|join(' → ') }}</div>
       {% elif draft.item_type == 'matching' %}
         <table class="interaction-table"><thead><tr><th>Prompt</th><th>Match</th></tr></thead><tbody>
-          {% for pair in draft.response.matching_pairs %}<tr><td>{{ pair.prompt }}</td><td>{{ pair.target }}</td></tr>{% endfor %}
+          {% for pair in draft.display.response.matching_pairs %}<tr><td class="math-content">{{ pair.prompt }}</td><td class="math-content">{{ pair.target }}</td></tr>{% endfor %}
         </tbody></table>
       {% elif draft.item_type in ['fill_in_blank', 'drag_drop_cloze'] %}
         <ul>{% for blank in draft.response.blanks %}<li><strong>{{ blank.id }}:</strong> {{ blank.correct|join(' or ') }}</li>{% endfor %}</ul>
       {% elif draft.item_type == 'numerical' %}
         <div class="interaction-preview"><strong>Answer:</strong> {{ draft.response.numeric_answer }} ± {{ draft.response.numeric_tolerance }}</div>
       {% elif draft.item_type == 'image_hotspot' %}
-        <div class="interaction-preview"><strong>Image:</strong> {{ draft.response.image_alt }}<br><span class="muted">{{ draft.response.image_url }}</span>
-          <ul>{% for region in draft.response.hotspot_regions %}<li>{% if region.correct %}<strong>Correct: </strong>{% endif %}{{ region.label }} ({{ region.shape }})</li>{% endfor %}</ul>
+        <div class="interaction-preview"><strong>Image:</strong> <span class="math-content">{{ draft.display.response.image_alt }}</span><br><span class="muted">{{ draft.response.image_url }}</span>
+          <ul>{% for region in draft.display.response.hotspot_regions %}<li>{% if region.correct %}<strong>Correct: </strong>{% endif %}<span class="math-content">{{ region.label }}</span> ({{ region.shape }})</li>{% endfor %}</ul>
         </div>
       {% elif draft.item_type in ['highlight_text', 'highlight_table'] %}
-        <div class="interaction-preview">{% for segment in draft.response.highlight_segments %}<span class="highlight-segment {% if segment.correct %}correct{% endif %}">{{ segment.text }}</span>{% endfor %}</div>
+        <div class="interaction-preview math-content">{% for segment in draft.display.response.highlight_segments %}<span class="highlight-segment {% if segment.correct %}correct{% endif %}">{{ segment.text }}</span>{% endfor %}</div>
       {% elif draft.item_type == 'matrix' %}
+        <div class="interaction-preview">
+          <strong>Columns</strong>
+          <ul>{% for column in draft.display.response.matrix_columns %}<li><strong>{{ column.id }}:</strong> <span class="math-content">{{ column.text }}</span></li>{% endfor %}</ul>
+        </div>
         <table class="interaction-table"><thead><tr><th>Row</th><th>Correct column(s)</th></tr></thead><tbody>
-          {% for row in draft.response.matrix_rows %}<tr><td>{{ row.text }}</td><td>{{ row.correct_column_ids|join(', ') }}</td></tr>{% endfor %}
+          {% for row in draft.display.response.matrix_rows %}<tr><td class="math-content">{{ row.text }}</td><td>{{ row.correct_column_ids|join(', ') }}</td></tr>{% endfor %}
         </tbody></table>
       {% elif draft.item_type == 'bow_tie' %}
-        <div class="interaction-preview"><strong>Clinical bow-tie structure</strong><p>Actions, central condition, and monitored parameters require specialist review.</p></div>
+        <div class="interaction-preview math-content">
+          <strong>Bow-tie structure</strong>
+          {% for label, group in [('Actions', draft.display.response.bow_tie_actions), ('Condition', draft.display.response.bow_tie_condition), ('Parameters', draft.display.response.bow_tie_parameters)] %}
+            <h3>{{ label }}</h3>
+            <ul>{% for choice in group.choices %}<li class="{% if choice.correct %}correct{% endif %}">{{ choice.text }}</li>{% endfor %}</ul>
+          {% endfor %}
+        </div>
       {% elif draft.item_type in ['webwork', 'imathas'] %}
         <div class="interaction-preview"><strong>{{ draft.item_type_label }} parameter specification</strong><pre tabindex="0" aria-label="Scrollable {{ draft.item_type_label }} parameter specification">{{ draft.response.parameterized|tojson(indent=2) }}</pre></div>
         {% if draft.engine_validation %}
@@ -72,7 +125,7 @@
             <strong>Fixed-seed validation:</strong> {{ draft.engine_validation.seed_count }} seeds passed with {{ draft.engine_validation.compiler_version }}.
             <div class="table-scroll" tabindex="0" aria-label="Scrollable fixed-seed validation previews">
               <table class="interaction-table parameter-preview-table"><thead><tr><th>Seed</th><th>Generated prompt</th><th>Correct answer</th><th>Explanation</th></tr></thead><tbody>
-                {% for preview in draft.engine_validation.previews %}<tr><td>{{ preview.seed }}</td><td>{{ preview.prompt }}</td><td>{{ preview.answer }}</td><td>{{ preview.explanation }}</td></tr>{% endfor %}
+                {% for preview in draft.engine_validation.previews %}<tr><td>{{ preview.seed }}</td><td class="math-content">{{ preview.display_prompt }}</td><td class="math-content">{{ preview.display_answer }}</td><td class="math-content">{{ preview.display_explanation }}</td></tr>{% endfor %}
               </tbody></table>
             </div>
           </div>
@@ -80,33 +133,427 @@
       {% endif %}
       <div class="explanation">
         <h3>Explanation</h3>
-        <p>{{ draft.explanation }}</p>
+        <p class="math-content">{{ draft.display.explanation }}</p>
       </div>
       {% if draft.critique_issues %}
         <details>
           <summary>See critique used for revision</summary>
-          <ul>{% for issue in draft.critique_issues %}<li>{{ issue }}</li>{% endfor %}</ul>
+          <ul class="math-content">{% for issue in draft.critique_issues %}<li>{{ issue }}</li>{% endfor %}</ul>
         </details>
+      {% endif %}
+
+      {% set computation_report = computation|default(draft.computation|default(none, true), true) %}
+      {% if computation_report %}
+        {% set computation_status = computation_report.status|default('unsupported', true) %}
+        {% set computation_status_label = computation_report.status_label|default(computation_status.replace('_', ' ')|title, true) %}
+        {% set computation_is_current = computation_report.current|default(true) %}
+        {% set computation_is_stale = computation_report.stale|default(false) %}
+        <section class="computation-panel computation-panel-{{ computation_status }}"
+                 aria-labelledby="computation-heading">
+          <div class="card-topline computation-heading-row">
+            <div>
+              <p class="eyebrow">Assessment computation</p>
+              <h3 id="computation-heading">Validation report</h3>
+            </div>
+            <span class="status computation-status computation-status-{{ computation_status }}">
+              Status: {{ computation_status_label }}
+            </span>
+          </div>
+
+          {% if computation_is_stale or not computation_is_current %}
+            <p class="computation-evidence-state computation-evidence-stale">
+              <strong>Stale evidence:</strong> this report does not apply to the current
+              draft revision. A fresh validation report is required.
+            </p>
+          {% else %}
+            <p class="computation-evidence-state">
+              <strong>Current evidence:</strong> this report is bound to the current
+              draft revision.
+            </p>
+          {% endif %}
+
+          {% if computation_report.legacy_reason|default('') == 'legacy_without_blueprint' %}
+            <p class="computation-evidence-state computation-evidence-warning math-content">
+              <strong>Unsupported legacy draft:</strong> this item predates the typed
+              computation blueprint and must be explicitly revalidated.
+            </p>
+            <details class="computation-revalidation">
+              <summary>Explicitly revalidate with a typed blueprint</summary>
+              <p id="computation-revalidation-help" class="help">
+                Paste one strict <code>assessment-computation-v0</code> blueprint.
+                Revalidation runs in the isolated computation service, replaces
+                answer-bearing fields from the computed result, creates a fresh
+                draft revision, and resets human approval. Expression strings,
+                URLs, paths, files, and executable code are not accepted.
+              </p>
+              <form method="post"
+                    action="/drafts/{{ draft.id }}/computation/revalidate">
+                <input type="hidden" name="expected_edit_count"
+                       value="{{ draft.edit_count }}">
+                <label for="computation-blueprint-json">
+                  Typed computation blueprint JSON
+                </label>
+                <textarea id="computation-blueprint-json" name="blueprint_json"
+                          rows="18" maxlength="65536" required
+                          spellcheck="false"
+                          aria-describedby="computation-revalidation-help"></textarea>
+                <button type="submit">Rebind and revalidate this revision</button>
+              </form>
+            </details>
+          {% elif computation_report.legacy_reason|default('') %}
+            <p class="computation-evidence-state computation-evidence-warning">
+              <strong>Legacy limitation:</strong>
+              {{ computation_report.legacy_reason.replace('_', ' ') }}.
+            </p>
+          {% endif %}
+
+          <div class="computation-scope-note" role="note">
+            <strong>Human review is still mandatory.</strong>
+            This report validates structured computational assertions only. It does
+            not validate source alignment, wording, accessibility, or pedagogy; those
+            remain human-reviewed.
+          </div>
+
+          {% if computation_report.exact_result is defined
+                or computation_report.approximate_result is defined
+                or computation_report.target_unit|default(none) %}
+            <dl class="computation-facts" aria-label="Computed result">
+              {% if computation_report.exact_result is defined and computation_report.exact_result is not none %}
+                <div>
+                  <dt>Exact result</dt>
+                  <dd><code>{% if computation_report.exact_result is string or computation_report.exact_result is number %}{{ computation_report.exact_result }}{% else %}{{ computation_report.exact_result|tojson }}{% endif %}</code></dd>
+                </div>
+              {% endif %}
+              {% if computation_report.approximate_result is defined and computation_report.approximate_result is not none %}
+                <div>
+                  <dt>Approximate result</dt>
+                  <dd><code>{% if computation_report.approximate_result is string or computation_report.approximate_result is number %}{{ computation_report.approximate_result }}{% else %}{{ computation_report.approximate_result|tojson }}{% endif %}</code></dd>
+                </div>
+              {% endif %}
+              {% if computation_report.target_unit|default(none) %}
+                <div>
+                  <dt>Target unit</dt>
+                  <dd><code>{{ computation_report.target_unit }}</code></dd>
+                </div>
+              {% endif %}
+            </dl>
+          {% endif %}
+
+          {% if computation_report.domain|default(none) %}
+            <div class="computation-section">
+              <h4>Domain</h4>
+              <p class="{% if computation_report.domain is string %}math-content{% else %}math-raw{% endif %}">{% if computation_report.domain is string %}{{ computation_report.domain }}{% else %}<code>{{ computation_report.domain|tojson }}</code>{% endif %}</p>
+            </div>
+          {% endif %}
+
+          {% if computation_report.assumptions|default([], true) %}
+            <div class="computation-section">
+              <h4>Structured assumptions</h4>
+              <ul>
+                {% for assumption in computation_report.assumptions %}
+                  <li class="{% if assumption is string %}math-content{% else %}math-raw{% endif %}">{% if assumption is string %}{{ assumption }}{% else %}<code>{{ assumption|tojson }}</code>{% endif %}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          {% if computation_report.checks|default([], true) %}
+            <div class="computation-section table-scroll" tabindex="0"
+                 aria-label="Scrollable computation validation checks">
+              <table class="interaction-table computation-checks">
+                <caption>Deterministic validation checks</caption>
+                <thead>
+                  <tr><th scope="col">Check</th><th scope="col">Status</th><th scope="col">Detail</th></tr>
+                </thead>
+                <tbody>
+                  {% for check in computation_report.checks %}
+                    {% set check_status = check.status|default('unknown', true) %}
+                    <tr>
+                      <th scope="row">{{ check.name|default('Unnamed check', true) }}</th>
+                      <td><span class="check-status check-status-{{ check_status }}">{{ check_status.replace('_', ' ') }}</span></td>
+                      <td class="math-content">
+                        {{ check.detail|default('No detail recorded.', true) }}
+                        {% if check.details|default({}, true) %}
+                          <details>
+                            <summary>Show bounded structured evidence</summary>
+                            <pre tabindex="0"
+                                 aria-label="Scrollable bounded evidence for {{ check.name|default('validation check', true) }}">{{ check.details|tojson(indent=2) }}</pre>
+                            {% if check.details_truncated|default(false) %}
+                              <p class="muted">Additional or oversized detail was omitted from this display.</p>
+                            {% endif %}
+                          </details>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
+
+          {% if computation_report.limitations|default([], true) %}
+            <div class="computation-section computation-limitations">
+              <h4>Limitations</h4>
+              <ul>
+                {% for limitation in computation_report.limitations %}
+                  <li class="{% if limitation is string %}math-content{% else %}math-raw{% endif %}">{% if limitation is string %}{{ limitation }}{% else %}<code>{{ limitation|tojson }}</code>{% endif %}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          <details class="computation-technical">
+            <summary>Technical evidence and reproducibility</summary>
+            <dl class="computation-facts">
+              <div><dt>Schema</dt><dd><code>{{ computation_report.schema_version|default('Not recorded', true) }}</code></dd></div>
+              <div><dt>Validator</dt><dd><code>{{ computation_report.validator_revision|default('Not recorded', true) }}</code></dd></div>
+              <div><dt>Container digest</dt><dd><code>{{ computation_report.container_digest|default('Not recorded', true) }}</code></dd></div>
+              <div><dt>Duration</dt><dd>{% if computation_report.duration_ms is defined and computation_report.duration_ms is not none %}{{ computation_report.duration_ms }} ms{% else %}Not recorded{% endif %}</dd></div>
+            </dl>
+
+            {% if computation_report.dependency_versions|default(none) %}
+              <h4>Dependency versions</h4>
+              <pre tabindex="0" aria-label="Scrollable computation dependency versions">{{ computation_report.dependency_versions|tojson(indent=2) }}</pre>
+            {% endif %}
+
+            <h4>Evidence hashes</h4>
+            <dl class="computation-hashes">
+              {% set computation_hashes = computation_report.hashes|default({}, true) %}
+              {% for hash_key, hash_label in [('source', 'Source'), ('draft', 'Draft'), ('blueprint', 'Blueprint'), ('report', 'Report')] %}
+                <div>
+                  <dt>{{ hash_label }}</dt>
+                  <dd><code>{{ computation_hashes[hash_key]|default('Not recorded', true) }}</code></dd>
+                </div>
+              {% endfor %}
+            </dl>
+
+            {% set computation_seeds = (computation_report.seeds|default([], true))[:25] %}
+            {% if computation_seeds %}
+              <h4>Bounded deterministic seed evidence ({{ computation_seeds|length }})</h4>
+              <pre tabindex="0" aria-label="Scrollable bounded deterministic seed evidence">{{ computation_seeds|tojson(indent=2) }}</pre>
+            {% endif %}
+
+            {% set computation_seed_samples = (computation_report.seed_samples|default([], true))[:25] %}
+            {% if computation_seed_samples %}
+              <div class="table-scroll" tabindex="0"
+                   aria-label="Scrollable bounded computation seed samples">
+                <table class="interaction-table computation-checks">
+                  <caption>Bounded computation seed samples ({{ computation_seed_samples|length }})</caption>
+                  <thead>
+                    <tr><th scope="col">Kind</th><th scope="col">Seed</th><th scope="col">Variable values</th></tr>
+                  </thead>
+                  <tbody>
+                    {% for sample in computation_seed_samples %}
+                      <tr>
+                        <th scope="row">{{ sample.kind|default('sample', true) }}</th>
+                        <td>{% if sample.seed is defined and sample.seed is not none %}<code>{{ sample.seed }}</code>{% else %}Boundary{% endif %}</td>
+                        <td><code>{{ sample['values']|default({}, true)|tojson }}</code></td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endif %}
+
+            {% set native_seed_observations = (computation_report.native_seed_observations|default([], true))[:25] %}
+            {% if native_seed_observations %}
+              <div class="table-scroll" tabindex="0"
+                   aria-label="Scrollable native-engine seed observations">
+                <table class="interaction-table computation-checks">
+                  <caption>Native-engine seed observations ({{ native_seed_observations|length }}, bounded to 25)</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Seed</th>
+                      <th scope="col">Observed variables</th>
+                      <th scope="col">Engine checks</th>
+                      <th scope="col">Runtime counts</th>
+                      <th scope="col">Evidence hashes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for observation in native_seed_observations %}
+                      <tr>
+                        <th scope="row"><code>{{ observation.seed }}</code></th>
+                        <td><code>{{ observation.observed_variables|default({}, true)|tojson }}</code></td>
+                        <td>
+                          <dl aria-label="Native-engine checks for seed {{ observation.seed }}">
+                            {% for field, label in [
+                              ('parameters_satisfied', 'Parameters satisfied'),
+                              ('constraints_satisfied', 'Constraints satisfied'),
+                              ('correct_answer_accepted', 'Correct answer accepted'),
+                              ('alternate_correct_answer_accepted', 'Alternate correct answer accepted'),
+                              ('wrong_answer_rejected', 'Wrong answer rejected'),
+                              ('rendered', 'Rendered')
+                            ] %}
+                              {% if field in observation %}
+                                <div><dt>{{ label }}</dt><dd><code>{{ observation[field] }}</code></dd></div>
+                              {% endif %}
+                            {% endfor %}
+                          </dl>
+                        </td>
+                        <td>
+                          <dl aria-label="Native-engine runtime counts for seed {{ observation.seed }}">
+                            {% for field, label in [
+                              ('warnings_count', 'Warnings'),
+                              ('errors_count', 'Errors'),
+                              ('outbound_request_count', 'Outbound requests')
+                            ] %}
+                              {% if field in observation %}
+                                <div><dt>{{ label }}</dt><dd><code>{{ observation[field] }}</code></dd></div>
+                              {% endif %}
+                            {% endfor %}
+                          </dl>
+                        </td>
+                        <td>
+                          <dl aria-label="Native-engine hashes for seed {{ observation.seed }}">
+                            <div><dt>Observation</dt><dd><code>{{ observation.observation_sha256 }}</code></dd></div>
+                            <div><dt>Render</dt><dd><code>{{ observation.render_sha256 }}</code></dd></div>
+                            <div><dt>Repeat render</dt><dd><code>{{ observation.repeat_render_sha256 }}</code></dd></div>
+                          </dl>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endif %}
+
+            {% set compiled_engine_evidence = computation_report.engine_evidence|default({}, true) %}
+            {% set native_receipt_evidence = computation_report.native_receipt_evidence|default({}, true) %}
+            {% if compiled_engine_evidence or native_receipt_evidence %}
+              <h4>External-engine evidence</h4>
+              {% for evidence_label, evidence in [('Compiled source', compiled_engine_evidence), ('Native receipt', native_receipt_evidence)] %}
+                {% if evidence %}
+                  <h5>{{ evidence_label }}</h5>
+                  <dl class="computation-hashes" aria-label="{{ evidence_label }} evidence">
+                    {% for field, label in [
+                      ('engine', 'Engine'),
+                      ('answer_kind', 'Answer kind'),
+                      ('native_grader', 'Native grader'),
+                      ('compiler_version', 'Compiler'),
+                      ('source_sha256', 'Source SHA-256'),
+                      ('blueprint_sha256', 'Blueprint SHA-256'),
+                      ('draft_sha256', 'Draft SHA-256'),
+                      ('request_sha256', 'Request SHA-256'),
+                      ('receipt_sha256', 'Receipt SHA-256'),
+                      ('seed_plan_sha256', 'Seed plan SHA-256'),
+                      ('seed_receipts_sha256', 'Seed receipts SHA-256'),
+                      ('runner_id', 'Runner'),
+                      ('runner_version', 'Runner version'),
+                      ('runner_manifest_sha256', 'Runner manifest SHA-256'),
+                      ('runner_image_digest', 'Runner image digest'),
+                      ('qualification_report_sha256', 'Qualification report SHA-256'),
+                      ('promotion_approval_sha256', 'Promotion approval SHA-256'),
+                      ('manifest_sha256', 'Manifest SHA-256'),
+                      ('plan_sha256', 'Plan SHA-256'),
+                      ('fixture_sha256', 'Fixture SHA-256'),
+                      ('lineage_sha256', 'Lineage SHA-256'),
+                      ('lineage_blueprint_sha256', 'Lineage blueprint SHA-256'),
+                      ('engine_observed_values_sha256', 'Observed values SHA-256'),
+                      ('network_attestation_sha256', 'Network attestation SHA-256'),
+                      ('render_sha256', 'Render SHA-256'),
+                      ('repeat_render_sha256', 'Repeat render SHA-256'),
+                      ('engine_image_digest', 'Engine image digest'),
+                      ('adapter_image_digest', 'Adapter image digest'),
+                      ('status', 'Status'),
+                      ('execution_status', 'Execution status'),
+                      ('seed', 'Seed'),
+                      ('seed_count', 'Compiled preview count'),
+                      ('seeds_validated', 'Seeds validated'),
+                      ('warnings_count', 'Warnings'),
+                      ('errors_count', 'Errors'),
+                      ('outbound_request_count', 'Outbound request count'),
+                      ('passed', 'Passed'),
+                      ('server_verified', 'Server verified'),
+                      ('constraints_satisfied', 'Constraints satisfied'),
+                      ('correct_answer_accepted', 'Correct answer accepted'),
+                      ('wrong_answer_rejected', 'Wrong answer rejected'),
+                      ('rendered', 'Rendered')
+                    ] %}
+                      {% if field in evidence %}
+                        <div>
+                          <dt>{{ label }}</dt>
+                          <dd><code>{{ evidence[field] }}</code></dd>
+                        </div>
+                      {% endif %}
+                    {% endfor %}
+                  </dl>
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+          </details>
+
+          {% if computation_report.attestations|default([], true) %}
+            <div class="computation-section" aria-labelledby="computation-attestations-heading">
+              <h4 id="computation-attestations-heading">Specialist attestations</h4>
+              <ul class="attestation-list">
+                {% for attestation in computation_report.attestations %}
+                  <li>
+                    <div class="card-topline">
+                      <strong>{{ attestation.specialist_identity|default(attestation.identity|default('Computation specialist', true), true) }}</strong>
+                      {% if attestation.created_at|default(none) %}<span class="muted">{{ attestation.created_at }}</span>{% endif %}
+                    </div>
+                    <p class="math-content">{{ attestation.rationale|default('No rationale recorded.', true) }}</p>
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          {% if computation_status in ['partially_validated', 'unsupported']
+                and computation_report.specialist_allowed|default(false)
+                and computation_is_current
+                and not computation_is_stale %}
+            <section class="computation-attestation" aria-labelledby="computation-attestation-heading">
+              <h4 id="computation-attestation-heading">Computation-specialist attestation</h4>
+              <p id="computation-attestation-help" class="help">
+                Explain why this exact draft revision is acceptable despite its
+                incomplete or unsupported validation. The attestation is append-only
+                and bound to the current report hash.
+              </p>
+              <form method="post" action="/drafts/{{ draft.id }}/computation/attest">
+                <label for="computation-attestation-rationale">Specialist rationale</label>
+                <textarea id="computation-attestation-rationale" name="rationale"
+                          rows="4" minlength="20" maxlength="2000" required
+                          aria-describedby="computation-attestation-help"></textarea>
+                <button type="submit">Record specialist attestation</button>
+              </form>
+            </section>
+          {% endif %}
+        </section>
       {% endif %}
 
       <details class="edit-box">
         <summary>Edit this draft</summary>
+        {% if computation_report
+              and computation_report.status|default('not_applicable', true) != 'not_applicable'
+              and not computation_report.legacy_reason|default('') %}
+          <p class="help">
+            Edit the qualitative framing and pedagogy around the computed task and
+            result. Saving rebinds all answer-bearing values, units, choices,
+            correctness flags, tolerances, and parameter expressions to the frozen
+            typed blueprint; changing those computed spans is rejected or overwritten.
+          </p>
+        {% endif %}
         <form method="post" action="/drafts/{{ draft.id }}/edit" class="review-form">
           {% if draft.item_type == 'multiple_choice' %}
           <label for="stem">Question</label>
-          <textarea id="stem" name="stem" rows="3" required>{{ draft.stem }}</textarea>
+          <textarea id="stem" class="math-raw" name="stem" rows="3" required>{{ draft.stem }}</textarea>
+          <div class="math-preview math-content" data-math-preview-for="stem" aria-label="Rendered question preview"></div>
           <fieldset>
             <legend>Choices and correct answer</legend>
             {% for choice in draft.choices %}
               <div class="choice-edit">
                 <input aria-label="Correct answer {{ choice.id }}" type="radio" name="correct_choice" value="{{ choice.id }}" {% if choice.correct %}checked{% endif %} required>
                 <label for="choice_{{ choice.id }}">{{ choice.id }}</label>
-                <input id="choice_{{ choice.id }}" name="choice_{{ choice.id|lower }}" value="{{ choice.text }}" required>
+                <input id="choice_{{ choice.id }}" class="math-raw" name="choice_{{ choice.id|lower }}" value="{{ choice.text }}" required>
               </div>
+              <div class="math-preview math-content" data-math-preview-for="choice_{{ choice.id }}" aria-label="Rendered choice {{ choice.id }} preview"></div>
             {% endfor %}
           </fieldset>
           <label for="explanation">Explanation</label>
-          <textarea id="explanation" name="explanation" rows="4" required>{{ draft.explanation }}</textarea>
+          <textarea id="explanation" class="math-raw" name="explanation" rows="4" required>{{ draft.explanation }}</textarea>
+          <div class="math-preview math-content" data-math-preview-for="explanation" aria-label="Rendered explanation preview"></div>
           <div class="two-column">
             <label>Bloom level
               <select name="bloom">
@@ -125,7 +572,7 @@
           <p class="help">Saving an edit resets both human confirmation checks.</p>
           {% else %}
             <label for="item_json">Typed assessment item JSON</label>
-            <textarea id="item_json" name="item_json" rows="24" required>{{ draft.item_json }}</textarea>
+            <textarea id="item_json" class="math-raw" name="item_json" rows="24" required>{{ draft.item_json }}</textarea>
             <label for="advanced_edit_notes">Edit note</label>
             <textarea id="advanced_edit_notes" name="reviewer_notes" rows="2"></textarea>
             <button type="submit">Validate and save item</button>
@@ -138,112 +585,214 @@
         <section class="hint-review" aria-labelledby="hint-review-heading">
           <p class="eyebrow">Graduated hints</p>
           <h3 id="hint-review-heading">Three-rung hint ladder</h3>
-          <form method="post" action="/drafts/{{ draft.id }}/hints/edit">
+          <p class="help">
+            Save edits first. Saving creates a new hint version and resets hint
+            confirmations. Then verify and approve that saved version once.
+            Allowed source paragraphs for every hint:
+            <strong>{{ draft.hint_ladder.allowed_citations_text }}</strong>.
+          </p>
+          {% if draft.hint_ladder.status == 'approved' %}
+            {# Stay open when a rejected edit is being re-rendered, or the
+               preserved values and inline errors are hidden from the reviewer. #}
+            <details class="edit-box"{% if active_form == 'hint_edit' %} open{% endif %}>
+              <summary>Edit approved hints</summary>
+          {% endif %}
+          <form method="post" action="/drafts/{{ draft.id }}/hints/edit"
+                data-hint-edit-form>
+            {# Ladder-wide problems (a concept mismatch) belong to no single
+               rung, so without this block they would block publication with
+               nothing on the page naming the cause. #}
+            {% set hint_general_error = form_errors.get('general') if active_form == 'hint_edit' else draft.hint_ladder.grounding_error %}
+            {% if hint_general_error %}
+              <p class="error-text" role="alert">{{ hint_general_error }}</p>
+            {% endif %}
             {% for rung in draft.hint_ladder.rungs %}
               <fieldset class="hint-rung">
                 <legend>{{ rung.rung|capitalize }} hint</legend>
-                <label>Hint text<textarea name="{{ rung.rung }}_text" rows="3" required>{{ rung.text }}</textarea></label>
-                <label>Cited paragraphs<input name="{{ rung.rung }}_citations" value="{{ rung.citations_text }}" required></label>
+                <label for="hint-{{ rung.rung }}-text">Hint text</label>
+                <textarea id="hint-{{ rung.rung }}-text" class="math-raw" name="{{ rung.rung }}_text" rows="3" required>{% if active_form == 'hint_edit' %}{{ form_values.get(rung.rung ~ '_text', rung.text) }}{% else %}{{ rung.text }}{% endif %}</textarea>
+                <div class="math-preview math-content" data-math-preview-for="hint-{{ rung.rung }}-text" aria-label="Rendered {{ rung.rung }} hint preview">{{ rung.display_text }}</div>
+                <label for="hint-{{ rung.rung }}-citations">Cited paragraphs</label>
+                <input id="hint-{{ rung.rung }}-citations"
+                       name="{{ rung.rung }}_citations"
+                       value="{% if active_form == 'hint_edit' %}{{ form_values.get(rung.rung ~ '_citations', rung.citations_text) }}{% else %}{{ rung.citations_text }}{% endif %}"
+                       aria-describedby="hint-{{ rung.rung }}-source"
+                       {% if form_errors.get(rung.rung) or rung.grounding_error %}aria-invalid="true" aria-errormessage="hint-{{ rung.rung }}-error"{% endif %}
+                       required>
+                <p id="hint-{{ rung.rung }}-source" class="help">
+                  Use one or more of: {{ draft.hint_ladder.allowed_citations_text }}.
+                </p>
+                {% if form_errors.get(rung.rung) %}
+                  <p id="hint-{{ rung.rung }}-error" class="error-text" role="alert">{{ form_errors.get(rung.rung) }}</p>
+                {% elif rung.grounding_error %}
+                  <p id="hint-{{ rung.rung }}-error" class="error-text" role="alert">{{ rung.grounding_error }}</p>
+                {% endif %}
                 {% if rung.answer_leak_detected %}<p class="error-text">The generator flagged possible answer leakage. Edit this rung before approval.</p>{% endif %}
               </fieldset>
             {% endfor %}
-            <label>Edit note<textarea name="reviewer_notes" rows="2"></textarea></label>
+            <label>Edit note<textarea name="reviewer_notes" rows="2">{% if active_form == 'hint_edit' %}{{ form_values.get('reviewer_notes', '') }}{% endif %}</textarea></label>
             <button type="submit">Save hint edits</button>
+            <p class="help" data-hint-dirty-message hidden>
+              Save these changes before approval.
+            </p>
           </form>
-          <form method="post" action="/drafts/{{ draft.id }}/hints/review" class="review-form">
-            {% for rung in draft.hint_ladder.rungs %}
-              <label class="check"><input type="checkbox" name="{{ rung.rung }}_confirmed" value="true" {% if draft.hint_ladder.confirmations.get(rung.rung) %}checked{% endif %}><span>I verified the {{ rung.rung }} hint, its citation, and that it does not reveal the answer.</span></label>
-            {% endfor %}
-            <label>Hint review notes<textarea name="reviewer_notes" rows="2">{{ draft.hint_ladder.reviewer_notes }}</textarea></label>
-            <button type="submit">Approve all three hints</button>
-            <p class="help">Hint approval is separate from question approval. Progressive student enforcement remains disabled.</p>
-          </form>
+          {% if draft.hint_ladder.status == 'approved' %}
+            </details>
+          {% endif %}
+          {% if draft.hint_ladder.status == 'approved' %}
+            <div class="approval-summary" role="status">
+              <strong>All three hints approved</strong>
+              {% if draft.hint_ladder.reviewed_by %}
+                <p>Approved by {{ draft.hint_ladder.reviewed_by }}{% if draft.hint_ladder.reviewed_at %} on {{ draft.hint_ladder.reviewed_at }}{% endif %}.</p>
+              {% endif %}
+              <p class="help">Editing any hint creates a new version that must be approved again.</p>
+            </div>
+          {% elif draft.hint_ladder.needs_repair %}
+            <div class="notice error" role="status">
+              Hint approval is unavailable until every citation uses the allowed
+              question-source paragraphs and all answer-leak flags are resolved.
+            </div>
+          {% else %}
+            <form method="post" action="/drafts/{{ draft.id }}/hints/review"
+                  class="review-form" data-hint-review-form>
+              {% for rung in draft.hint_ladder.rungs %}
+                <label class="check"><input type="checkbox" name="{{ rung.rung }}_confirmed" value="true" {% if active_form == 'hint_review' %}{% if form_values.get(rung.rung ~ '_confirmed') %}checked{% endif %}{% elif draft.hint_ladder.confirmations.get(rung.rung) %}checked{% endif %}><span>I verified the {{ rung.rung }} hint, its citation, and that it does not reveal the answer.</span></label>
+              {% endfor %}
+              <label>Hint review notes<textarea name="reviewer_notes" rows="2">{% if active_form == 'hint_review' %}{{ form_values.get('reviewer_notes', '') }}{% else %}{{ draft.hint_ladder.reviewer_notes }}{% endif %}</textarea></label>
+              {# Disabled state is owned by review-workflow.js so the control is
+                 never permanently dead when the script fails to load. The server
+                 independently rejects an incomplete confirmation set. #}
+              <button type="submit" data-hint-approve>Approve saved hint version</button>
+              <p class="help">All three checks are required. Hint approval is separate from question approval.</p>
+            </form>
+          {% endif %}
         </section>
       {% endif %}
 
-      <form method="post" action="/drafts/{{ draft.id }}/review" class="review-form">
-        <fieldset>
-          <legend>Required human checks</legend>
-          <label class="check">
-            <input type="checkbox" name="bloom_confirmed" value="true" {% if draft.bloom_confirmed %}checked{% endif %}>
-            <span><strong>Bloom level:</strong> {{ draft.bloom }} is accurate for the work the learner must do.</span>
-          </label>
-          {% if draft.specialist_review_required %}
-            <label class="check">
-              <input type="checkbox" name="specialist_confirmed" value="true">
-              <span><strong>Specialist review:</strong> I am qualified to verify this clinical or parameterized item and its scoring behavior.</span>
-            </label>
-          {% endif %}
-          <label class="check">
-            <input type="checkbox" name="difficulty_confirmed" value="true" {% if draft.difficulty_confirmed %}checked{% endif %}>
-            <span><strong>Difficulty:</strong> {{ draft.difficulty }} is accurate for the intended learner.</span>
-          </label>
-        </fieldset>
-        <label for="reviewer_notes">Reviewer notes</label>
-        <textarea id="reviewer_notes" name="reviewer_notes" rows="4">{{ draft.reviewer_notes }}</textarea>
-        <div class="button-row">
-          <button type="submit" name="decision" value="ready_to_publish">Approve draft</button>
-          <button class="secondary" type="submit" name="decision" value="rejected">Reject draft</button>
-        </div>
-        <p class="help">Approval records the human review decision. Publishing to ADAPT is a separate action below.</p>
-      </form>
-
       {% if draft.status == 'ready_to_publish' %}
-        <section class="publication-panel" aria-labelledby="publish-heading">
-          <p class="eyebrow">Publication</p>
-          <h3 id="publish-heading">Publish this approved revision</h3>
-          <dl class="publication-facts">
-            <div><dt>Destination</dt><dd>ADAPT shared question bank</dd></div>
-            <div><dt>Folder</dt><dd>{{ adapt_folder_name }}</dd></div>
-            <div><dt>Visibility</dt><dd>{% if adapt_public %}Public in ADAPT{% else %}Private{% endif %}</dd></div>
-          </dl>
+        <section class="approval-summary" aria-labelledby="question-approval-heading">
+          <h3 id="question-approval-heading">Question approved</h3>
+          {% if draft.last_reviewed_by %}
+            <p>Approved by {{ draft.last_reviewed_by }}{% if draft.last_reviewed_at %} on {{ draft.last_reviewed_at }}{% endif %}.</p>
+          {% endif %}
+          <p class="help">This approval applies to revision {{ draft.edit_count }}. Editing the question resets it.</p>
+        </section>
+      {% else %}
+        <form method="post" action="/drafts/{{ draft.id }}/review" class="review-form" data-question-review-form>
+          <fieldset>
+            <legend>Required human checks</legend>
+            <label class="check">
+              <input type="checkbox" name="bloom_confirmed" value="true" {% if active_form == 'question_review' %}{% if form_values.get('bloom_confirmed') %}checked{% endif %}{% elif draft.bloom_confirmed %}checked{% endif %}>
+              <span><strong>Bloom level:</strong> {{ draft.bloom }} is accurate for the work the learner must do.</span>
+            </label>
+            {% if draft.specialist_review_required %}
+              <label class="check">
+                <input type="checkbox" name="specialist_confirmed" value="true" {% if active_form == 'question_review' and form_values.get('specialist_confirmed') %}checked{% endif %}>
+                <span><strong>Specialist review:</strong> I am qualified to verify this clinical or parameterized item and its scoring behavior.</span>
+              </label>
+            {% endif %}
+            <label class="check">
+              <input type="checkbox" name="difficulty_confirmed" value="true" {% if active_form == 'question_review' %}{% if form_values.get('difficulty_confirmed') %}checked{% endif %}{% elif draft.difficulty_confirmed %}checked{% endif %}>
+              <span><strong>Difficulty:</strong> {{ draft.difficulty }} is accurate for the intended learner.</span>
+            </label>
+          </fieldset>
+          <label for="reviewer_notes">Reviewer notes</label>
+          <textarea id="reviewer_notes" name="reviewer_notes" rows="4">{% if active_form == 'question_review' %}{{ form_values.get('reviewer_notes', '') }}{% else %}{{ draft.reviewer_notes }}{% endif %}</textarea>
+          <div class="button-row">
+            <button type="submit" name="decision" value="ready_to_publish">Approve question revision</button>
+            <button class="secondary" type="submit" name="decision" value="rejected">Reject question revision</button>
+          </div>
+          <p class="help">Question approval is saved independently from hint approval. Publishing is the final, separate action.</p>
+        </form>
+      {% endif %}
+
+      <section class="publication-panel" aria-labelledby="publish-heading">
+        <p class="eyebrow">Publication</p>
+        <h3 id="publish-heading">{% if current_publication %}Publication status{% else %}Publication readiness{% endif %}</h3>
+        {% if current_publication %}
+          <div class="notice publication-success" role="status">
+            <strong>Published to ADAPT</strong>
+            {% if current_publication.adapt_question_id %}
+              <p>ADAPT question ID: {{ current_publication.adapt_question_id }}</p>
+            {% endif %}
+            {% if current_publication.finalized_at %}
+              <p>Published {{ current_publication.finalized_at }}.</p>
+            {% endif %}
+            <p>This publication is bound to the current draft revision. Editing the question creates a new revision that must be reviewed and published separately.</p>
+          </div>
+        {% elif latest_publication %}
+          <div class="notice publication-previous" role="status">
+            <strong>Current revision {{ draft.edit_count }} is not yet published.</strong>
+            <p>
+              Revision {{ latest_publication.edit_count }} remains published to ADAPT{% if latest_publication.adapt_question_id %} as question {{ latest_publication.adapt_question_id }}{% endif %}.
+              Publishing the current approved revision creates or updates only its own immutable publication record.
+            </p>
+          </div>
+        {% elif publication_readiness.ready %}
+          <p class="notice">All required review evidence is saved. Publishing remains a separate action.</p>
+        {% else %}
+          <ul class="readiness-list" aria-label="Publication blockers">
+            {% for blocker in publication_readiness.blockers %}
+              <li><strong>Not ready:</strong> {{ blocker.message }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+        <dl class="publication-facts">
+          <div><dt>Destination</dt><dd>ADAPT shared question bank</dd></div>
+          <div><dt>Folder</dt><dd>{{ adapt_folder_name }}</dd></div>
+          <div><dt>Visibility</dt><dd>{% if adapt_public %}Public in ADAPT{% else %}Private{% endif %}</dd></div>
+        </dl>
+        {% if mapped_license %}
+          <div class="license-evidence">
+            <strong>Source license: {{ mapped_license.label }}</strong>
+            <p>This verified LibreTexts page metadata is filled automatically, enforced during publishing, and cannot be overridden.</p>
+            <a href="{{ mapped_license.evidence_url }}" target="_blank" rel="noopener noreferrer">Open license evidence</a>
+          </div>
+        {% endif %}
+        {% if publication_readiness.alignment %}
+          <div class="alignment-evidence">
+            <strong>Exact curated alignment</strong>
+            <p>{{ publication_readiness.alignment.framework_title }} · {{ publication_readiness.alignment.chapter_title }} · {{ publication_readiness.alignment.topic_title }}</p>
+            <p class="help">The source URL determines this topic. A merely similar topic cannot be selected.</p>
+          </div>
+        {% else %}
+          <div class="notice error">
+            This exact source is outside the currently curated framework catalog.
+            Publishing is unavailable; no substitute topic can be selected.
+          </div>
+        {% endif %}
+        {% if publication_readiness.alignment and not current_publication %}
           <form method="post" action="/drafts/{{ draft.id }}/publish">
-            {% if mapped_license %}
-              <div class="license-evidence">
-                <strong>Source license: {{ mapped_license.label }}</strong>
-                <p>This verified book-level license is enforced and cannot be overridden.</p>
-                <a href="{{ mapped_license.evidence_url }}" target="_blank" rel="noopener noreferrer">Open license evidence</a>
-              </div>
-            {% else %}
+            <input type="hidden" name="topic_stable_id"
+                   value="{{ publication_readiness.alignment.topic_stable_id }}">
+            {% if not mapped_license %}
               <fieldset>
                 <legend>Source license</legend>
-                <label>License
-                  <select name="license_code" required>
+                <p class="help">This page does not expose a supported license tag. Check the license shown on the source page before confirming this fallback.</p>
+                <label for="license-code">License</label>
+                  <select id="license-code" name="license_code" required>
                     <option value="">Choose a license</option>
-                    {% for code, label in manual_license_options %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+                    {% for code, label in manual_license_options %}<option value="{{ code }}" data-license-label="{{ label }}" {% if active_form == 'publish' and form_values.get('license_code') == code %}selected{% endif %}>{{ label }}</option>{% endfor %}
                   </select>
-                </label>
-                <label>License version
-                  <input name="license_version" placeholder="For example, 4.0">
-                </label>
-                <label>Display label
-                  <input name="license_label" placeholder="For example, CC BY 4.0" required>
-                </label>
-                <label>Evidence URL
-                  <input name="license_evidence_url" type="url" required>
-                </label>
+                <label for="license-version">License version</label>
+                  <input id="license-version" name="license_version" value="{% if active_form == 'publish' %}{{ form_values.get('license_version', '') }}{% endif %}" placeholder="For example, 4.0">
+                <label for="license-label">Display label</label>
+                  <input id="license-label" name="license_label" value="{% if active_form == 'publish' %}{{ form_values.get('license_label', '') }}{% endif %}" placeholder="For example, CC BY 4.0" required>
+                <label for="license-evidence-url">Evidence URL</label>
+                  <input id="license-evidence-url" name="license_evidence_url" type="url"
+                         value="{% if active_form == 'publish' %}{{ form_values.get('license_evidence_url', draft.source_url) }}{% else %}{{ draft.source_url }}{% endif %}" required>
+                <p class="help">The source page URL is filled in because its license footer is the publication evidence.</p>
                 <label class="check">
-                  <input type="checkbox" name="license_confirmed" value="true" required>
+                  <input type="checkbox" name="license_confirmed" value="true" {% if active_form == 'publish' and form_values.get('license_confirmed') %}checked{% endif %} required>
                   <span>I verified this license against the source.</span>
                 </label>
               </fieldset>
             {% endif %}
-            <label for="topic_stable_id">Curated Chemistry framework topic</label>
-            <select id="topic_stable_id" name="topic_stable_id" required>
-              <option value="">Choose a topic</option>
-              {% for group in topic_groups %}
-                <optgroup label="{{ group.title }}">
-                  {% for topic in group.topics %}
-                    <option value="{{ topic.stable_id }}" {% if topic.stable_id == suggested_topic_id %}selected{% endif %}>{{ topic.title }}</option>
-                  {% endfor %}
-                </optgroup>
-              {% endfor %}
-            </select>
             <label class="check">
-              <input type="checkbox" name="alignment_confirmed" value="true" required>
-              <span>I confirmed that this framework topic accurately matches the question.</span>
+              <input type="checkbox" name="alignment_confirmed" value="true" {% if active_form == 'publish' and form_values.get('alignment_confirmed') %}checked{% endif %} required>
+              <span>I confirmed this exact source-to-topic alignment.</span>
             </label>
-            <button type="submit" {% if adapt_publishing_status != 'configured' %}disabled{% endif %}>Publish to ADAPT</button>
+            <button type="submit" {% if not publication_can_submit %}disabled{% endif %}>Publish approved revision to ADAPT</button>
             {% if adapt_publishing_status == 'disabled' %}
               <p class="help">ADAPT publishing is disabled during rollout verification.</p>
             {% elif adapt_publishing_status == 'misconfigured' %}
@@ -252,8 +801,8 @@
               <p class="help">Creates one public item in the shared question bank and an immutable QTI 3.0.1 package. It does not change the textbook or any assignment.</p>
             {% endif %}
           </form>
-        </section>
-      {% endif %}
+        {% endif %}
+      </section>
 
       {% if draft.publications %}
         <section class="publication-history" aria-labelledby="publication-history-heading">
@@ -268,7 +817,10 @@
                   {% elif publication.state == 'failed' %}Publication failed
                   {% else %}Publication pending{% endif %}
                 </strong>
-                <span class="muted">Revision {{ publication.edit_count }}</span>
+                <span class="muted">
+                  Revision {{ publication.edit_count }}
+                  · {% if publication.is_current_edit %}Current revision{% else %}Earlier revision{% endif %}
+                </span>
               </div>
               {% if publication.adapt_question_id %}<p>ADAPT question ID: <strong>{{ publication.adapt_question_id }}</strong></p>{% endif %}
               <p>{{ publication.topic }} · {{ publication.license_label }}</p>

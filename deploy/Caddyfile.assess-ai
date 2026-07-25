@@ -2,16 +2,24 @@ assess-ai.libretexts.dev {
 	import secheaders
 	import gate
 	header {
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
 		Permissions-Policy "camera=(), geolocation=(), microphone=()"
 		X-Frame-Options "DENY"
 	}
+	encode zstd gzip
 
 	request_body {
 		max_size 256KB
 	}
 
 	reverse_proxy 127.0.0.1:8093 {
+		# Rebuild specialist identity only from the authenticated edge context.
+		# The token is supplied to the Caddy process at runtime; an unset value
+		# remains fail-closed in the backend.
+		header_up -X-Assessment-AI-Proxy-Token
+		header_up -{$ASSESSMENT_AI_COMPUTATION_SPECIALIST_SUBJECT_HEADER:X-Assessment-AI-Authenticated-Subject}
 		header_up X-Reviewer {http.auth.user.id}
+		header_up {$ASSESSMENT_AI_COMPUTATION_SPECIALIST_SUBJECT_HEADER:X-Assessment-AI-Authenticated-Subject} {http.auth.user.id}
+		header_up X-Assessment-AI-Proxy-Token "{$ASSESSMENT_AI_COMPUTATION_TRUSTED_PROXY_TOKEN}"
 	}
 }
