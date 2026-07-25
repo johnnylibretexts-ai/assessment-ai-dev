@@ -34,8 +34,18 @@ MAX_CONCURRENT_CHILDREN = 1
 NUMERIC_TIMEOUT_SECONDS = 2.0
 ALGEBRAIC_TIMEOUT_SECONDS = 5.0
 ADMISSION_TIMEOUT_SECONDS = 0.25
+# Children are spawned, not forked, so each one pays for a fresh interpreter
+# plus the SymPy/Pint/ucumvert imports (ucumvert also parses the UCUM essence
+# XML). That is seconds of startup before any computation happens. It is bounded
+# separately from the compute budget above so the timeouts mean what they say:
+# without this the 2s numeric budget was spent almost entirely on imports, which
+# left roughly no compute allowance on a modest host and made every request 504.
+STARTUP_ALLOWANCE_SECONDS = 10.0
 
 _PIPE_OVERHEAD_BYTES = 1
+# Startup handshake. Distinct from every response code the child can send
+# (O ok, V rejected, D dependency, S oversized, E failed closed).
+_CHILD_READY = b"R"
 _PROCESS_POLL_SECONDS = 0.05
 _PROCESS_EXIT_GRACE_SECONDS = 0.25
 
@@ -248,20 +258,16 @@ def _execute_isolated(
     sender.close()
 
     message: bytes | None = None
-    deadline = time.monotonic() + timeout_seconds
     try:
-        while time.monotonic() < deadline:
-            remaining = deadline - time.monotonic()
-            if receiver.poll(min(_PROCESS_POLL_SECONDS, max(0.0, remaining))):
-                try:
-                    message = receiver.recv_bytes(
-                        MAX_RESPONSE_BYTES + _PIPE_OVERHEAD_BYTES
-                    )
-                except (EOFError, OSError):
-                    message = None
-                break
-            if not process.is_alive():
-                break
+        # Two phases: a bounded startup allowance for the child to boot and
+        # import its pinned runtime, then the compute budget proper measured
+        # from readiness. A child that dies or fails during startup answers with
+        # its own status byte instead of ``_CHILD_READY``.
+        first = _await_child_message(receiver, process, STARTUP_ALLOWANCE_SECONDS)
+        if first == _CHILD_READY:
+            message = _await_child_message(receiver, process, timeout_seconds)
+        else:
+            message = first
         if message is None:
             if process.is_alive():
                 _stop_process(process)
@@ -305,6 +311,26 @@ def _execute_isolated(
     raise _IsolatedExecutionError(500, "The computation request failed closed.")
 
 
+def _await_child_message(
+    receiver: Connection,
+    process: multiprocessing.Process,
+    budget_seconds: float,
+) -> bytes | None:
+    """Wait up to ``budget_seconds`` for one framed message from the child."""
+
+    deadline = time.monotonic() + budget_seconds
+    while time.monotonic() < deadline:
+        remaining = deadline - time.monotonic()
+        if receiver.poll(min(_PROCESS_POLL_SECONDS, max(0.0, remaining))):
+            try:
+                return receiver.recv_bytes(MAX_RESPONSE_BYTES + _PIPE_OVERHEAD_BYTES)
+            except (EOFError, OSError):
+                return None
+        if not process.is_alive():
+            return None
+    return None
+
+
 def _child_entrypoint(
     sender: Connection,
     operation: _Operation,
@@ -312,11 +338,35 @@ def _child_entrypoint(
     timeout_seconds: float,
 ) -> None:
     try:
-        _apply_resource_limits(timeout_seconds)
+        # The CPU rlimit has to cover startup too: importing SymPy burns real
+        # CPU seconds, so limiting the child to the compute budget alone got it
+        # SIGXCPU-killed mid-import and surfaced as a bogus 504.
+        _apply_resource_limits(STARTUP_ALLOWANCE_SECONDS + timeout_seconds)
     except BaseException:
         _send_child_message(sender, b"E")
         sender.close()
         return
+    try:
+        # Pay every fixed startup cost before announcing readiness so the
+        # caller's compute deadline covers computation only. Importing this
+        # module binds the pinned dependencies onto the computation core; the
+        # dependency assertion then forces the UCUM registry to be built (it
+        # parses the UCUM essence XML) and verifies the pinned versions and
+        # artifact checksum. The registry is built lazily on first use, so
+        # without this it would be constructed during the computation and eat
+        # the budget just as the imports used to.
+        from . import computation_runtime
+
+        computation_runtime.assert_computation_dependencies()
+    except ImportError:
+        _send_child_message(sender, b"D")
+        sender.close()
+        return
+    except BaseException as exc:
+        _send_child_message(sender, _classify_child_exception(exc))
+        sender.close()
+        return
+    _send_child_message(sender, _CHILD_READY)
     try:
         payload = _load_strict_json(body)
         result = _dispatch(operation, payload)
