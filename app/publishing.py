@@ -148,6 +148,25 @@ class PublicationService:
         *,
         license_resolved: bool,
     ) -> PublicationReadiness:
+        readiness, _ = self._evaluate_readiness(
+            draft,
+            license_resolved=license_resolved,
+        )
+        return readiness
+
+    def _evaluate_readiness(
+        self,
+        draft: Draft,
+        *,
+        license_resolved: bool,
+    ) -> tuple[PublicationReadiness, ComputationGateDecision | None]:
+        """Collect every blocker, and return the gate decision when it passed.
+
+        `publish()` needs the decision itself, not just "did the gate block".
+        Returning it here keeps the gate evaluated exactly once per publish
+        attempt instead of running its five repository reads twice.
+        """
+
         blockers: list[PublicationBlocker] = []
         if draft.status != ReviewStatus.READY_TO_PUBLISH:
             blockers.append(
@@ -172,11 +191,20 @@ class PublicationService:
                     hint_record.ladder,
                 )
                 if grounding:
+                    # A concept mismatch is not a citation problem, so naming it
+                    # "repair citations" sends the reviewer to the wrong field.
+                    citation_issues = [
+                        issue for issue in grounding if issue.rung is not None
+                    ]
                     blockers.append(
                         PublicationBlocker(
                             "hints_need_repair",
-                            "Repair hint citations outside the current question "
-                            "source before approval.",
+                            (
+                                "Repair hint citations outside the current "
+                                "question source before approval."
+                                if citation_issues
+                                else grounding[0].message
+                            ),
                         )
                     )
                 elif any(
@@ -213,8 +241,9 @@ class PublicationService:
                     )
                 )
 
+        computation_decision: ComputationGateDecision | None = None
         try:
-            require_computation_gate(
+            computation_decision = require_computation_gate(
                 self._settings,
                 self._repository,
                 draft,
@@ -250,9 +279,12 @@ class PublicationService:
                     "ADAPT publishing is not configured for this service.",
                 )
             )
-        return PublicationReadiness(
-            alignment=alignment,
-            blockers=tuple(blockers),
+        return (
+            PublicationReadiness(
+                alignment=alignment,
+                blockers=tuple(blockers),
+            ),
+            computation_decision,
         )
 
     async def publish(
@@ -266,14 +298,20 @@ class PublicationService:
         license_confirmed: bool = False,
     ) -> Publication:
         draft = self._repository.require_draft(draft_id)
+        # Readiness first: a reviewer with several blockers should be told to
+        # approve the revision before being told to pick a license, which is
+        # the order the readiness panel already shows them in.
+        readiness, computation_decision = self._evaluate_readiness(
+            draft,
+            license_resolved=True,
+        )
+        if readiness.blockers:
+            raise PublicationValidationError(readiness.blockers[0].message)
         license_selection = self._resolve_license(
             draft,
             selected=selected_license,
             manually_confirmed=license_confirmed,
         )
-        readiness = self._local_readiness(draft, license_resolved=True)
-        if readiness.blockers:
-            raise PublicationValidationError(readiness.blockers[0].message)
         if readiness.alignment is None:
             # Not an assert: `python -O` strips those, which would turn this
             # guard into an AttributeError on the publication path.
@@ -285,15 +323,14 @@ class PublicationService:
             raise PublicationValidationError(
                 "The selected framework topic does not match this source."
             )
-        try:
-            computation_decision = require_computation_gate(
-                self._settings,
-                self._repository,
-                draft,
-                action="publication",
+        if computation_decision is None:
+            # Unreachable while the gate is evaluated unconditionally above and
+            # every failure becomes a blocker, but not an assert: `python -O`
+            # strips those, which would turn this into an AttributeError deeper
+            # in the publication path.
+            raise PublicationValidationError(
+                "The computation policy gate did not produce a decision."
             )
-        except ComputationPolicyError as exc:
-            raise PublicationValidationError(str(exc)) from exc
         compiled = None
         engine_binding = None
         if computation_decision.mode == "enforce":

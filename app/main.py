@@ -1230,6 +1230,13 @@ def _draft_detail(
     hint_grounding_by_rung = {
         issue.rung: issue.message for issue in hint_grounding if issue.rung
     }
+    # Ladder-wide issues (a concept mismatch) carry no rung, so the per-rung map
+    # above drops them. Surface them separately or the reviewer sees a blocked
+    # publication with nothing on the page explaining why.
+    hint_grounding_general = next(
+        (issue.message for issue in hint_grounding if issue.rung is None),
+        None,
+    )
     engine_validation = draft.current_engine_validation
     return {
         "id": draft.id,
@@ -1316,6 +1323,7 @@ def _draft_detail(
             "reviewed_at": hint_record.reviewed_at,
             "needs_repair": bool(hint_grounding)
             or any(rung.answer_leak_detected for rung in hint_ladder.rungs),
+            "grounding_error": hint_grounding_general,
             "allowed_citations_text": ", ".join(
                 str(item) for item in current.citation_paragraphs
             ),

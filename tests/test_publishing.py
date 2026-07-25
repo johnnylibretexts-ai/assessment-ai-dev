@@ -27,6 +27,7 @@ from app.db import (
 from app.main import create_app
 from app.pipeline import ReviewService
 from app.parameterized import compile_parameterized_item
+from app import publishing as publishing_module
 from app.publishing import PublicationService, PublicationValidationError
 from app.schemas import (
     AssessmentItemType,
@@ -319,6 +320,133 @@ def publishing_headers() -> dict[str, str]:
         "Origin": "http://testserver",
         "X-Reviewer": "reviewer@example.org",
     }
+
+
+UNCURATED_URL = (
+    "https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/"
+    "A_Book_Outside_Every_Curated_Framework/"
+    "02%3A_Atoms_and_the_Periodic_Table/2.03%3A_Isotopes_and_Atomic_Weight"
+)
+
+
+def seed_unapproved_uncurated(repository: DraftRepository) -> int:
+    """Seed a draft that is neither approved nor license-mapped."""
+
+    text = "Isotopes have the same number of protons and different neutron counts."
+    page = NormalizedPage(
+        title="2.3: Isotopes and Atomic Weight",
+        plaintext=text,
+        htmlBody=f"<p>{text}</p>",
+        paragraphs=[Paragraph(index=0, text=text, start=0, end=len(text))],
+        source=SourceInfo(
+            backend="libretexts_public",
+            canonical_url=UNCURATED_URL,
+            path=(
+                "chem.libretexts.org/Bookshelves/Introductory_Chemistry/"
+                "A_Book_Outside_Every_Curated_Framework/"
+                "02:_Atoms_and_the_Periodic_Table/2.03:_Isotopes_and_Atomic_Weight"
+            ),
+            page_id="86191",
+        ),
+    )
+    stored = repository.replace_generated_drafts(
+        page=page,
+        pipeline_version="test-v1",
+        drafts=[
+            DraftWrite(
+                position=0,
+                concept=Concept(
+                    label="Isotopes",
+                    description="Atoms with varied neutron counts.",
+                    source_paragraphs=[0],
+                ),
+                raw=isotope_question(),
+                critique=Critique(issues=[], revision_required=False),
+                revised=isotope_question(),
+            )
+        ],
+        llm_calls=[],
+    )
+    return stored.draft_ids[0]
+
+
+@pytest.mark.asyncio
+async def test_publication_reports_the_unapproved_revision_before_the_license(
+    tmp_path: Path,
+) -> None:
+    """Readiness blockers outrank license resolution in the publish path.
+
+    Resolving the license first made an unapproved draft on an unmapped page
+    report "select a license" — the wrong next action, and not the blocker the
+    readiness panel shows first.
+    """
+
+    config = configured_settings(tmp_path)
+    app = create_app(config)
+    fake = FakeAdapt()
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_unapproved_uncurated(repository)
+        readiness = PublicationService(config, repository, fake).readiness(
+            draft_id,
+            license_resolved=False,
+        )
+        assert readiness.blockers[0].code == "question_not_approved"
+
+        with pytest.raises(
+            PublicationValidationError,
+            match="Approve the current question revision.",
+        ):
+            await PublicationService(config, repository, fake).publish(
+                draft_id,
+                publisher="reviewer@example.org",
+                topic_stable_id="any-topic",
+                alignment_confirmed=True,
+            )
+
+        assert fake.resolve_calls == 0
+        assert fake.create_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_publication_evaluates_the_computation_gate_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The gate performs repository reads, so publish must not run it twice."""
+
+    config = configured_settings(tmp_path)
+    app = create_app(config)
+    fake = FakeAdapt()
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_approved(repository)
+        approve_hint_ladder(repository, draft_id)
+
+        calls = 0
+        original = publishing_module.require_computation_gate
+
+        def counting_gate(*args: object, **kwargs: object) -> object:
+            nonlocal calls
+            calls += 1
+            return original(*args, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(
+            publishing_module,
+            "require_computation_gate",
+            counting_gate,
+        )
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+        publication = await PublicationService(config, repository, fake).publish(
+            draft_id,
+            publisher="reviewer@example.org",
+            topic_stable_id=topic.stable_id,
+            alignment_confirmed=True,
+        )
+
+        assert publication.state == PublicationState.SUCCEEDED.value
+        assert calls == 1
 
 
 @pytest.mark.asyncio

@@ -1,12 +1,19 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+from app import main as main_module
 from app.config import Settings
 from app.content import PublicLibreTextsContentAdapter
-from app.db import DraftRepository, DraftWrite, PublicationState
+from app.db import (
+    DraftRepository,
+    DraftWrite,
+    HintGroundingIssue,
+    PublicationState,
+)
 from app.main import create_app
 from app.schemas import (
     BloomLevel,
@@ -746,6 +753,59 @@ def test_failed_hint_edit_keeps_the_approved_disclosure_open(tmp_path: Path) -> 
         assert 'aria-invalid="true"' in rejected.text
         assert "Unsaved conceptual wording." in rejected.text
         assert '<details class="edit-box" open>' in rejected.text
+
+
+def test_ladder_wide_grounding_issue_is_shown_on_the_hint_form(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A grounding issue with no rung must still reach the reviewer.
+
+    `inspect_hint_grounding` reports a concept mismatch against the ladder as a
+    whole, so it carries no rung. The per-rung error map drops those, which
+    would block publication with nothing on the page naming the cause. Persisted
+    ladders cannot reach that state today — `edit_draft` refuses to change a
+    concept and ladders are pinned to an edit count — so the issue is injected
+    here to cover the display path that would otherwise fail silently.
+    """
+
+    configured = settings(tmp_path).model_copy(
+        update={
+            "hint_generation_enabled": True,
+            "hint_publication_canary_enabled": True,
+        }
+    )
+    app = create_app(configured)
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.save_hint_ladder(
+            draft_id,
+            HintLadderDraft(
+                concept_label="Energy conservation",
+                rungs=[
+                    HintRungDraft(
+                        rung=rung,
+                        text=f"Review {rung.value} evidence.",
+                        citation_paragraphs=[0],
+                    )
+                    for rung in HintRungType
+                ],
+            ),
+            editor="reviewer@example.org",
+        )
+
+        message = "A hint ladder cannot change the selected concept."
+        monkeypatch.setattr(
+            main_module,
+            "inspect_hint_grounding",
+            lambda question, ladder: (
+                HintGroundingIssue(code="concept_mismatch", message=message),
+            ),
+        )
+        page = client.get(f"/drafts/{draft_id}")
+
+        assert page.status_code == 200
+        assert message in page.text
 
 
 def test_hint_approval_button_is_not_statically_disabled(tmp_path: Path) -> None:
