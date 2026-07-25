@@ -91,6 +91,12 @@ from .schemas import (
 )
 from .source_policy import PublicSourceValidationError, canonicalize_public_identity
 
+# Column identifiers/types interpolated into ALTER TABLE below. Kept narrow
+# on purpose: anything outside these shapes is a programming error, not
+# something to quote and pass through.
+_SQL_IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_SQL_TYPE_RE = re.compile(r"[A-Za-z]+(?:\(\d+(?:,\s*\d+)?\))?")
+
 
 PIPELINE_TOOL_NAME = "LibreTexts Assessment AI"
 PIPELINE_TOOL_VENDOR = "LibreTexts"
@@ -1014,14 +1020,27 @@ class Database:
             "license_label": "VARCHAR(120)",
             "license_evidence_url": "VARCHAR(4096)",
         }
+        # The dicts above are hard-coded, but these statements interpolate
+        # their keys and values straight into SQL, so a future edit that pulled
+        # a column name from anywhere else would become an injection point.
+        # Validate the shape here rather than relying on the call site.
+        def _checked(identifier: str, declaration: str) -> tuple[str, str]:
+            if not _SQL_IDENTIFIER_RE.fullmatch(identifier):
+                raise ValueError(f"unsafe column identifier: {identifier!r}")
+            if not _SQL_TYPE_RE.fullmatch(declaration):
+                raise ValueError(f"unsafe column type: {declaration!r}")
+            return identifier, declaration
+
         with self.engine.begin() as connection:
             for name, data_type in publication_additions.items():
                 if name not in publication_columns:
+                    name, data_type = _checked(name, data_type)
                     connection.execute(
                         text(f"ALTER TABLE publications ADD COLUMN {name} {data_type}")
                     )
             for name, data_type in source_additions.items():
                 if name not in source_columns:
+                    name, data_type = _checked(name, data_type)
                     connection.execute(
                         text(
                             f"ALTER TABLE source_snapshots ADD COLUMN {name} {data_type}"
