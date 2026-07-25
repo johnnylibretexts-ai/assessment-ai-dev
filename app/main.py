@@ -209,7 +209,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "public_sources": "enabled"
                 if resolved_settings.public_sources_enabled
                 else "disabled",
-                "sandbox_sources": "disabled",
+                "sandbox_sources": "enabled"
+                if resolved_settings.sandbox_sources_enabled
+                else "disabled",
                 "adapt_publishing": resolved_settings.adapt_publishing_status,
                 "advanced_items": "enabled"
                 if resolved_settings.advanced_items_enabled
@@ -330,7 +332,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             locator = (source_locator or "").strip()
             selected_type = SourceType(source_type)
-            if selected_type is not SourceType.PUBLIC or sandbox_path is not None:
+            # Honour the configured flag rather than rejecting unconditionally.
+            # content.py already gates the sandbox adapter on
+            # sandbox_sources_enabled, so hard-coding the refusal here left the
+            # setting half-wired: enabling it changed the adapter layer while
+            # this endpoint still refused. Default stays False, so the shipped
+            # behaviour is unchanged.
+            if not resolved_settings.sandbox_sources_enabled and (
+                selected_type is not SourceType.PUBLIC or sandbox_path is not None
+            ):
                 raise ValueError("Dev sandbox sources are disabled for this service.")
             if not locator:
                 raise ValueError("Choose a public LibreTexts page to generate from.")
