@@ -6,7 +6,6 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 from fastapi import FastAPI, Form, HTTPException, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -15,6 +14,13 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from .adapt import AdaptClient, AdaptPublishingError
+from .assistant import (
+    AssistantService,
+    AssistantStore,
+    assistant_status,
+    build_assistant_router,
+    create_schema as create_assistant_schema,
+)
 from .catalog import SourceLicense, source_license
 from .computation import AssessmentComputationBlueprint, ComputationProfile
 from .computation_client import (
@@ -59,6 +65,10 @@ from .db import (
     draft_content_sha256,
     inspect_hint_grounding,
     init_database,
+)
+from .http_guards import (
+    require_same_origin as _require_same_origin,
+    reviewer_identity as _reviewer,
 )
 from .jobs import GenerationWorker, validate_computation_profile_settings
 from .llm import LLMError, build_llm_client, generation_status
@@ -162,6 +172,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             resolved_settings, source_type
         )
         app.state.llm_factory = lambda: build_llm_client(resolved_settings)
+        if resolved_settings.assistant_enabled:
+            # Schema and service exist only while the feature is on, so the
+            # demo assistant adds no tables and no state to a normal deployment.
+            create_assistant_schema(database.engine)
+            app.state.assistant_service = AssistantService(
+                resolved_settings,
+                AssistantStore(database.session_factory),
+                repository,
+            )
+        else:
+            app.state.assistant_service = None
         worker = GenerationWorker(
             resolved_settings,
             repository,
@@ -191,6 +212,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
         openapi_url=None,
     )
+    # Set outside the lifespan so templates can read it on any request, including
+    # in tests that render without a started lifespan.
+    app.state.assistant_enabled = resolved_settings.assistant_enabled
+    if resolved_settings.assistant_enabled:
+        app.include_router(build_assistant_router(resolved_settings))
     app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
     resolved_settings.hotspot_media_dir.mkdir(parents=True, exist_ok=True)
     app.mount(
@@ -222,6 +248,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 else "disabled",
                 "webwork": resolved_settings.webwork_status,
                 "imathas": resolved_settings.imathas_status,
+                "assistant": assistant_status(resolved_settings),
                 **(
                     {
                         "assessment_computation": (
@@ -1561,15 +1588,6 @@ async def _ensure_source_license(
     return source_license(draft.source.canonical_url, metadata)
 
 
-def _reviewer(request: Request) -> str:
-    value = request.headers.get("x-reviewer", "").strip()
-    if not value:
-        raise HTTPException(
-            status_code=403, detail="Trusted reviewer identity required"
-        )
-    return value[:255]
-
-
 def _trusted_computation_specialist_subject(
     request: Request,
     settings: Settings,
@@ -1608,25 +1626,6 @@ def _trusted_computation_specialist_subject(
     if subject not in settings.computation_specialist_subjects:
         return None
     return subject
-
-
-def _require_same_origin(request: Request, settings: Settings) -> None:
-    expected = settings.allowed_origin.rstrip("/")
-    origin = request.headers.get("origin")
-    if origin and origin.rstrip("/") != expected:
-        raise HTTPException(
-            status_code=403, detail="Cross-origin form submission refused"
-        )
-    referer = request.headers.get("referer")
-    if not origin and not referer:
-        raise HTTPException(status_code=403, detail="Form origin required")
-    if not origin and referer:
-        parsed = urlparse(referer)
-        supplied = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
-        if supplied != expected:
-            raise HTTPException(
-                status_code=403, detail="Cross-origin form submission refused"
-            )
 
 
 def _redirect_with_message(path: str, field: str, message: str) -> RedirectResponse:

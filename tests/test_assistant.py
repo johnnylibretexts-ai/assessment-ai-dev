@@ -1,0 +1,671 @@
+"""Tests for the demo assistant.
+
+The assistant is demo-support code, but it renders model output into a page and
+persists what testers type, so the interesting cases here are the boundaries:
+the flag, identity, origin, size, rate, provider failure, and reviewer scoping.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from collections.abc import AsyncIterator, Sequence
+from pathlib import Path
+
+import httpx
+import pytest
+from fastapi.testclient import TestClient
+from pydantic import SecretStr
+
+from app.assistant import assistant_status
+from app.assistant.corpus import CorpusError, corpus_files, corpus_text
+from app.assistant.context import page_context
+from app.assistant.llm import (
+    AssistantLLMError,
+    ChatTurn,
+    GeminiChatClient,
+    OllamaChatClient,
+    build_chat_client,
+)
+from app.assistant.prompt import build_system_prompt, runtime_facts
+from app.assistant.service import AssistantRateLimited, AssistantService, RateLimiter
+from app.assistant.store import AssistantStore, create_schema
+from app.config import Settings
+from app.db import DraftRepository, DraftWrite, init_database
+from app.main import create_app
+from app.schemas import (
+    BloomLevel,
+    Choice,
+    Concept,
+    Critique,
+    Difficulty,
+    NormalizedPage,
+    Paragraph,
+    QuestionDraft,
+    SourceInfo,
+)
+
+REVIEWER = {"X-Reviewer": "tester@libretexts.dev"}
+ORIGIN = {"Origin": "http://testserver"}
+
+
+def settings(tmp_path: Path, **overrides) -> Settings:
+    base = {
+        "_env_file": None,
+        "database_url": f"sqlite:///{tmp_path / 'app.db'}",
+        "allowed_origin": "http://testserver",
+        "assistant_enabled": True,
+        "llm_provider_order": "gemini",
+        "gemini_api_key": SecretStr("test-key"),
+        "ollama_api_key": None,
+    }
+    base.update(overrides)
+    return Settings(**base)
+
+
+def page() -> NormalizedPage:
+    text = "Energy changes form but is conserved."
+    return NormalizedPage(
+        title="Energy",
+        plaintext=text,
+        htmlBody=f"<p>{text}</p>",
+        paragraphs=[Paragraph(index=0, text=text, start=0, end=len(text))],
+        source=SourceInfo(
+            backend="libretexts_public",
+            canonical_url="https://chem.libretexts.org/Bookshelves/Test/Page",
+            path="chem.libretexts.org/Bookshelves/Test/Page",
+            page_id="86187",
+        ),
+    )
+
+
+def question() -> QuestionDraft:
+    return QuestionDraft(
+        concept_label="Energy conservation",
+        stem="Which statement about energy is accurate?",
+        choices=[
+            Choice(id="A", text="It is conserved.", correct=True),
+            Choice(id="B", text="It disappears.", correct=False),
+            Choice(id="C", text="It is matter.", correct=False),
+            Choice(id="D", text="It has no units.", correct=False),
+        ],
+        explanation="The source says energy changes form while remaining conserved.",
+        bloom=BloomLevel.UNDERSTAND,
+        difficulty=Difficulty.EASY,
+        citation_paragraphs=[0],
+    )
+
+
+def seed(repository: DraftRepository) -> int:
+    stored = repository.replace_generated_drafts(
+        page=page(),
+        pipeline_version="test-v1",
+        drafts=[
+            DraftWrite(
+                position=0,
+                concept=Concept(
+                    label="Energy conservation",
+                    description="Energy changes form without disappearing.",
+                    source_paragraphs=[0],
+                ),
+                raw=question(),
+                critique=Critique(
+                    issues=["The initial stem was vague."],
+                    revision_required=True,
+                ),
+                revised=question(),
+            )
+        ],
+        llm_calls=[],
+    )
+    return stored.draft_ids[0]
+
+
+class FakeChatClient:
+    """Emits a fixed set of deltas so stream shape can be asserted exactly."""
+
+    provider_name = "fake"
+    model = "fake-model"
+
+    def __init__(
+        self, pieces: Sequence[str] = ("Hello", " there"), *, fail: bool = False
+    ):
+        self.pieces = list(pieces)
+        self.fail = fail
+        self.closed = False
+        self.system = ""
+        self.history: list[ChatTurn] = []
+
+    async def stream(self, *, system, history, question) -> AsyncIterator[str]:
+        self.system = system
+        self.history = list(history)
+        for index, piece in enumerate(self.pieces):
+            if self.fail and index == 1:
+                raise AssistantLLMError("provider exploded")
+            yield piece
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+# --------------------------------------------------------------------------
+# Corpus
+# --------------------------------------------------------------------------
+
+
+def test_corpus_loads_every_file():
+    files = corpus_files()
+    assert len(files) >= 5
+    text = corpus_text()
+    for path in files:
+        assert path.name in text
+
+
+def test_corpus_carries_no_secrets():
+    """The corpus is shown verbatim to anyone who can reach the app."""
+
+    text = corpus_text()
+    forbidden = [
+        r"API_KEY\s*=\s*\S",
+        r"SECRET\s*=\s*\S",
+        r"PASSWORD\s*=\s*\S",
+        r"\$2[aby]\$\d\d\$",  # bcrypt hash
+        r"BEGIN [A-Z ]*PRIVATE KEY",
+        r"\b(?:10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}\b",
+        r"\b192\.168\.\d{1,3}\.\d{1,3}\b",
+        r"\b185\.211\.\d{1,3}\.\d{1,3}\b",
+    ]
+    for pattern in forbidden:
+        assert not re.search(pattern, text), f"corpus matched {pattern}"
+
+
+def test_corpus_error_for_missing_directory(monkeypatch):
+    monkeypatch.setattr(
+        "app.assistant.corpus.CORPUS_DIR", Path("/nonexistent-corpus-dir")
+    )
+    with pytest.raises(CorpusError):
+        corpus_files()
+
+
+# --------------------------------------------------------------------------
+# Flag behaviour
+# --------------------------------------------------------------------------
+
+
+def test_flag_off_removes_routes_and_launcher(tmp_path):
+    app = create_app(settings(tmp_path, assistant_enabled=False))
+    with TestClient(app) as client:
+        home = client.get("/")
+        assert "assistant-launcher" not in home.text
+        assert (
+            client.get("/assistant/conversation", headers=REVIEWER).status_code == 404
+        )
+        assert (
+            client.post("/assistant/message", json={"question": "hi"}).status_code
+            == 404
+        )
+
+
+def test_flag_on_renders_launcher(tmp_path):
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        home = client.get("/")
+        assert "assistant-launcher" in home.text
+        assert "Demo Assistant" in home.text
+        assert "not a source of record" in home.text
+
+
+def test_healthz_reports_assistant(tmp_path):
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        assert client.get("/healthz").json()["assistant"] == "enabled"
+
+    off = create_app(settings(tmp_path, assistant_enabled=False))
+    with TestClient(off) as client:
+        assert client.get("/healthz").json()["assistant"] == "disabled"
+
+
+def test_assistant_status_without_a_provider(tmp_path):
+    misconfigured = settings(tmp_path, gemini_api_key=None)
+    assert assistant_status(misconfigured) == "misconfigured"
+
+
+# --------------------------------------------------------------------------
+# Guards
+# --------------------------------------------------------------------------
+
+
+def _app_with_fake(tmp_path, fake: FakeChatClient, **overrides):
+    resolved = settings(tmp_path, **overrides)
+    app = create_app(resolved)
+
+    original_lifespan_state: dict = {}
+
+    def install(client: TestClient) -> None:
+        service = client.app.state.assistant_service
+        service._client_factory = lambda: fake  # noqa: SLF001 - test seam
+        original_lifespan_state["service"] = service
+
+    return app, install
+
+
+def test_missing_reviewer_identity_is_refused(tmp_path):
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        assert client.get("/assistant/conversation").status_code == 403
+        assert (
+            client.post(
+                "/assistant/message", json={"question": "hi"}, headers=ORIGIN
+            ).status_code
+            == 403
+        )
+
+
+def test_cross_origin_is_refused(tmp_path):
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        response = client.post(
+            "/assistant/message",
+            json={"question": "hi"},
+            headers={**REVIEWER, "Origin": "https://evil.example"},
+        )
+        assert response.status_code == 403
+
+
+def test_oversized_question_is_refused(tmp_path):
+    fake = FakeChatClient()
+    app, install = _app_with_fake(tmp_path, fake, assistant_max_message_chars=100)
+    with TestClient(app) as client:
+        install(client)
+        response = client.post(
+            "/assistant/message",
+            json={"question": "x " * 400},
+            headers={**REVIEWER, **ORIGIN},
+        )
+        assert response.status_code == 422
+
+
+def test_blank_question_is_refused(tmp_path):
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        response = client.post(
+            "/assistant/message",
+            json={"question": "   "},
+            headers={**REVIEWER, **ORIGIN},
+        )
+        assert response.status_code == 422
+
+
+# --------------------------------------------------------------------------
+# Streaming
+# --------------------------------------------------------------------------
+
+
+def _frames(text: str) -> list[tuple[str, str]]:
+    frames = []
+    for block in text.split("\n\n"):
+        if not block.strip():
+            continue
+        name = ""
+        data = ""
+        for line in block.split("\n"):
+            if line.startswith("event:"):
+                name = line[6:].strip()
+            elif line.startswith("data:"):
+                data += line[5:].strip()
+        frames.append((name, json.loads(data) if data else ""))
+    return frames
+
+
+def test_stream_emits_deltas_then_done(tmp_path):
+    fake = FakeChatClient(["Bloom ", "level ", "means..."])
+    app, install = _app_with_fake(tmp_path, fake)
+    with TestClient(app) as client:
+        install(client)
+        response = client.post(
+            "/assistant/message",
+            json={"question": "what is a Bloom level?"},
+            headers={**REVIEWER, **ORIGIN},
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+
+        frames = _frames(response.text)
+        assert [name for name, _ in frames] == ["delta", "delta", "delta", "done"]
+        assert "".join(payload for name, payload in frames if name == "delta") == (
+            "Bloom level means..."
+        )
+    assert fake.closed
+
+
+def test_provider_failure_emits_error_and_records_it(tmp_path):
+    fake = FakeChatClient(["partial", "boom"], fail=True)
+    app, install = _app_with_fake(tmp_path, fake)
+    with TestClient(app) as client:
+        install(client)
+        response = client.post(
+            "/assistant/message",
+            json={"question": "explain hints"},
+            headers={**REVIEWER, **ORIGIN},
+        )
+        names = [name for name, _ in _frames(response.text)]
+        assert "error" in names
+        assert "done" not in names
+
+        # The half-written answer must not be stored as though it completed.
+        history = client.get("/assistant/conversation", headers=REVIEWER).json()
+        roles = [message["role"] for message in history["messages"]]
+        assert roles == ["user"]
+
+
+def test_empty_completion_is_reported(tmp_path):
+    fake = FakeChatClient([""])
+    app, install = _app_with_fake(tmp_path, fake)
+    with TestClient(app) as client:
+        install(client)
+        response = client.post(
+            "/assistant/message",
+            json={"question": "say nothing"},
+            headers={**REVIEWER, **ORIGIN},
+        )
+        assert "error" in [name for name, _ in _frames(response.text)]
+
+
+# --------------------------------------------------------------------------
+# Persistence and scoping
+# --------------------------------------------------------------------------
+
+
+def test_conversation_persists_and_is_reviewer_scoped(tmp_path):
+    fake = FakeChatClient(["answered"])
+    app, install = _app_with_fake(tmp_path, fake)
+    with TestClient(app) as client:
+        install(client)
+        client.post(
+            "/assistant/message",
+            json={"question": "first question"},
+            headers={**REVIEWER, **ORIGIN},
+        )
+
+        mine = client.get("/assistant/conversation", headers=REVIEWER).json()
+        assert [message["role"] for message in mine["messages"]] == [
+            "user",
+            "assistant",
+        ]
+        assert mine["messages"][0]["content"] == "first question"
+        assert mine["messages"][1]["content"] == "answered"
+
+        other = client.get(
+            "/assistant/conversation", headers={"X-Reviewer": "someone-else"}
+        ).json()
+        assert other["messages"] == []
+
+
+def test_reset_starts_a_fresh_conversation(tmp_path):
+    fake = FakeChatClient(["answered"])
+    app, install = _app_with_fake(tmp_path, fake)
+    with TestClient(app) as client:
+        install(client)
+        client.post(
+            "/assistant/message",
+            json={"question": "first"},
+            headers={**REVIEWER, **ORIGIN},
+        )
+        assert (
+            client.post("/assistant/reset", headers={**REVIEWER, **ORIGIN}).status_code
+            == 200
+        )
+        assert (
+            client.get("/assistant/conversation", headers=REVIEWER).json()["messages"]
+            == []
+        )
+
+
+def test_history_is_trimmed_to_max_turns(tmp_path):
+    database = init_database(f"sqlite:///{tmp_path / 'trim.db'}")
+    create_schema(database.engine)
+    store = AssistantStore(database.session_factory)
+    resolved = settings(tmp_path, assistant_max_turns=4)
+    service = AssistantService(resolved, store, None, client_factory=FakeChatClient)
+
+    conversation_id = store.ensure_conversation("someone", title="t")
+    for index in range(10):
+        store.append(
+            reviewer="someone",
+            conversation_id=conversation_id,
+            role="user",
+            content=f"question {index}",
+        )
+
+    history = service.history("someone")
+    assert len(history) == 4
+    assert history[-1]["content"] == "question 9"
+    database.dispose()
+
+
+def test_append_rejects_a_foreign_conversation(tmp_path):
+    database = init_database(f"sqlite:///{tmp_path / 'scope.db'}")
+    create_schema(database.engine)
+    store = AssistantStore(database.session_factory)
+    mine = store.ensure_conversation("owner", title="t")
+    with pytest.raises(LookupError):
+        store.append(
+            reviewer="intruder", conversation_id=mine, role="user", content="hello"
+        )
+    database.dispose()
+
+
+# --------------------------------------------------------------------------
+# Rate limiting
+# --------------------------------------------------------------------------
+
+
+def test_rate_limiter_windows_per_reviewer():
+    now = [0.0]
+    limiter = RateLimiter(2, clock=lambda: now[0])
+
+    limiter.check("a")
+    limiter.check("a")
+    with pytest.raises(AssistantRateLimited):
+        limiter.check("a")
+
+    # A different reviewer has their own allowance.
+    limiter.check("b")
+
+    # The window rolls forward.
+    now[0] = 61.0
+    limiter.check("a")
+
+
+def test_rate_limited_request_reports_through_the_stream(tmp_path):
+    fake = FakeChatClient(["ok"])
+    app, install = _app_with_fake(tmp_path, fake, assistant_rate_limit_per_minute=1)
+    with TestClient(app) as client:
+        install(client)
+        headers = {**REVIEWER, **ORIGIN}
+        client.post("/assistant/message", json={"question": "one"}, headers=headers)
+        second = client.post(
+            "/assistant/message", json={"question": "two"}, headers=headers
+        )
+        names = [name for name, _ in _frames(second.text)]
+        assert names == ["error"]
+
+
+# --------------------------------------------------------------------------
+# Page context
+# --------------------------------------------------------------------------
+
+
+def test_draft_route_context_includes_status_and_critique(tmp_path):
+    database = init_database(f"sqlite:///{tmp_path / 'ctx.db'}")
+    repository = DraftRepository(database)
+    draft_id = seed(repository)
+
+    context = page_context(f"/drafts/{draft_id}", repository)
+    assert f"draft {draft_id}" in context
+    assert "Status: ready_for_review" in context
+    assert "The initial stem was vague." in context
+    assert "Bloom level: understand" in context
+    assert "Never published." in context
+    database.dispose()
+
+
+def test_home_route_context_summarizes_the_queue(tmp_path):
+    database = init_database(f"sqlite:///{tmp_path / 'queue.db'}")
+    repository = DraftRepository(database)
+    seed(repository)
+    context = page_context("/", repository)
+    assert "draft queue" in context.casefold()
+    assert "1 drafts" in context
+    database.dispose()
+
+
+def test_unknown_and_malformed_routes_yield_no_context(tmp_path):
+    database = init_database(f"sqlite:///{tmp_path / 'none.db'}")
+    repository = DraftRepository(database)
+    for route in ["/nope", "not-a-route", "", "/drafts/999999", "/drafts/abc"]:
+        assert page_context(route, repository) == ""
+    database.dispose()
+
+
+def test_draft_context_ignores_query_strings(tmp_path):
+    database = init_database(f"sqlite:///{tmp_path / 'qs.db'}")
+    repository = DraftRepository(database)
+    draft_id = seed(repository)
+    assert page_context(f"/drafts/{draft_id}?notice=saved", repository) != ""
+    database.dispose()
+
+
+# --------------------------------------------------------------------------
+# Prompt assembly
+# --------------------------------------------------------------------------
+
+
+def test_runtime_facts_report_live_flag_state(tmp_path):
+    resolved = settings(tmp_path, hint_generation_enabled=True)
+    facts = runtime_facts(resolved, None, provider="gemini", model="gemini-3.6-flash")
+    assert "Hint generation: on" in facts
+    assert "Advanced item types: off" in facts
+    assert "gemini-3.6-flash" in facts
+
+
+def test_system_prompt_contains_instruction_corpus_and_context(tmp_path):
+    resolved = settings(tmp_path)
+    prompt = build_system_prompt(
+        resolved,
+        None,
+        provider="gemini",
+        model="gemini-3.6-flash",
+        page_context="The reviewer is looking at draft 7.",
+    )
+    assert "Demo Assistant" in prompt
+    assert "REFERENCE MATERIAL" in prompt
+    assert "RUNTIME FACTS" in prompt
+    assert "WHAT THE USER IS LOOKING AT" in prompt
+    assert "draft 7" in prompt
+    # The model must be told it cannot act, or it will claim it did.
+    assert "no tools" in prompt
+
+
+def test_system_prompt_omits_context_section_when_empty(tmp_path):
+    prompt = build_system_prompt(settings(tmp_path), None, provider="gemini", model="m")
+    assert "WHAT THE USER IS LOOKING AT" not in prompt
+
+
+# --------------------------------------------------------------------------
+# Provider selection and transport
+# --------------------------------------------------------------------------
+
+
+def test_build_chat_client_follows_provider_order(tmp_path):
+    gemini = build_chat_client(settings(tmp_path, llm_provider_order="gemini"))
+    assert isinstance(gemini, GeminiChatClient)
+
+    ollama = build_chat_client(
+        settings(
+            tmp_path,
+            llm_provider_order="ollama",
+            ollama_base_url="http://localhost:11434",
+        )
+    )
+    assert isinstance(ollama, OllamaChatClient)
+
+
+def test_build_chat_client_skips_an_unready_provider(tmp_path):
+    resolved = settings(
+        tmp_path,
+        llm_provider_order="gemini,ollama",
+        gemini_api_key=None,
+        ollama_base_url="http://localhost:11434",
+    )
+    assert isinstance(build_chat_client(resolved), OllamaChatClient)
+
+
+def test_build_chat_client_fails_when_nothing_is_ready(tmp_path):
+    resolved = settings(tmp_path, llm_provider_order="gemini", gemini_api_key=None)
+    with pytest.raises(AssistantLLMError):
+        build_chat_client(resolved)
+
+
+@pytest.mark.anyio
+async def test_gemini_client_parses_sse_deltas(tmp_path):
+    body = (
+        'data: {"candidates":[{"content":{"parts":[{"text":"Hello"}]}}]}\n\n'
+        'data: {"candidates":[{"content":{"parts":[{"text":" world"}]}}]}\n\n'
+        "data: [DONE]\n\n"
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "streamGenerateContent" in str(request.url)
+        return httpx.Response(200, text=body)
+
+    client = GeminiChatClient(
+        settings(tmp_path), transport=httpx.MockTransport(handler)
+    )
+    pieces = [
+        piece async for piece in client.stream(system="s", history=[], question="q")
+    ]
+    assert pieces == ["Hello", " world"]
+    await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_gemini_client_raises_on_http_error(tmp_path):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, text="unavailable")
+
+    client = GeminiChatClient(
+        settings(tmp_path), transport=httpx.MockTransport(handler)
+    )
+    with pytest.raises(AssistantLLMError):
+        async for _ in client.stream(system="s", history=[], question="q"):
+            pass
+    await client.aclose()
+
+
+@pytest.mark.anyio
+async def test_ollama_client_parses_ndjson_deltas(tmp_path):
+    body = (
+        '{"message":{"role":"assistant","content":"Self"}}\n'
+        '{"message":{"role":"assistant","content":"-hosted"}}\n'
+        '{"done":true}\n'
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url).endswith("/api/chat")
+        return httpx.Response(200, text=body)
+
+    client = OllamaChatClient(
+        settings(tmp_path, ollama_base_url="http://localhost:11434"),
+        transport=httpx.MockTransport(handler),
+    )
+    pieces = [
+        piece async for piece in client.stream(system="s", history=[], question="q")
+    ]
+    assert pieces == ["Self", "-hosted"]
+    await client.aclose()
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"

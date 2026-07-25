@@ -220,3 +220,49 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .workflow-readiness ol { grid-template-columns: 1fr 1fr; }
   .site-header { align-items: flex-start; }
 }
+
+/* --- Demo assistant ------------------------------------------------------ */
+/* Scoped to .assistant-* so the panel can be removed with the feature. */
+
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.site-header-actions { display: flex; align-items: center; gap: 12px; }
+
+.assistant-launcher { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border: 1px solid #4f7185; border-radius: 999px; background: transparent; color: #d6effc; font-size: .85rem; font-weight: 650; }
+.assistant-launcher:hover { background: #0d2c3e; }
+.assistant-launcher[aria-expanded="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+.assistant-panel { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgb(18 32 51 / 12%); }
+
+.assistant-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); background: #071d2a; color: #fff; }
+.assistant-head h2 { margin: 0; font-size: 1rem; }
+.assistant-disclaimer { margin: 4px 0 0; max-width: 34ch; color: #9fc8df; font-size: .74rem; line-height: 1.35; }
+.assistant-head-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.assistant-ghost { padding: 5px 10px; border: 1px solid #4f7185; border-radius: 7px; background: transparent; color: #d6effc; font-size: .78rem; font-weight: 650; }
+.assistant-ghost:hover { background: #0d2c3e; }
+
+.assistant-log { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.assistant-empty { margin: 0; color: var(--muted); font-size: .88rem; }
+
+.assistant-turn { display: grid; gap: 3px; }
+.assistant-who { margin: 0; color: var(--muted); font-size: .72rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+/* pre-wrap because answers are inserted as plain text and keep their newlines. */
+.assistant-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .92rem; line-height: 1.5; }
+.assistant-turn-user .assistant-text { padding: 9px 12px; border-radius: 10px; background: #eff8fc; color: var(--brand-dark); }
+.assistant-turn-error .assistant-text { padding: 9px 12px; border-radius: 10px; background: var(--danger-bg); color: var(--danger); }
+.assistant-text.is-streaming::after { content: "\258C"; margin-left: 1px; color: var(--brand); animation: assistant-caret 1s step-end infinite; }
+
+@keyframes assistant-caret { 50% { opacity: 0; } }
+
+.assistant-form { display: flex; align-items: flex-end; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--canvas); }
+.assistant-form textarea { resize: none; font-size: .92rem; }
+.assistant-form button { flex-shrink: 0; padding: 10px 15px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-text.is-streaming::after { animation: none; }
+}
+
+@media (max-width: 780px) {
+  .assistant-panel { width: 100vw; border-left: 0; }
+  .assistant-disclaimer { max-width: none; }
+}
