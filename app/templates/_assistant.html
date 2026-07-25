@@ -1,0 +1,27 @@
+<button type="button" id="assistant-launcher" class="assistant-launcher" aria-expanded="false" aria-controls="assistant-panel">
+  <span aria-hidden="true">&#128172;</span>
+  <span>Ask</span>
+</button>
+
+<aside id="assistant-panel" class="assistant-panel" role="dialog" aria-modal="false" aria-labelledby="assistant-title" hidden>
+  <header class="assistant-head">
+    <div>
+      <h2 id="assistant-title">Demo Assistant</h2>
+      <p class="assistant-disclaimer">Answers are AI-generated and are not a source of record.</p>
+    </div>
+    <div class="assistant-head-actions">
+      <button type="button" id="assistant-reset" class="assistant-ghost" title="Start a new conversation">New</button>
+      <button type="button" id="assistant-close" class="assistant-ghost" aria-label="Close the assistant">&#10005;</button>
+    </div>
+  </header>
+
+  <div id="assistant-log" class="assistant-log" role="log" aria-live="polite" aria-atomic="false">
+    <p class="assistant-empty">Ask anything &mdash; about this app, the LibreTexts platform, or something else entirely.</p>
+  </div>
+
+  <form id="assistant-form" class="assistant-form">
+    <label class="visually-hidden" for="assistant-input">Your question</label>
+    <textarea id="assistant-input" name="question" rows="2" placeholder="Ask a question&hellip;" maxlength="4000" required></textarea>
+    <button type="submit" id="assistant-send">Send</button>
+  </form>
+</aside>

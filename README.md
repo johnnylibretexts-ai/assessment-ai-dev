@@ -90,6 +90,40 @@ bounded draft repair, and rollback procedures.
 ready. A direct cloud provider is ready only when its API key is non-empty. This lets the review
 shell stay observable without claiming generation is ready.
 
+## Demo assistant
+
+A support chatbot for people trying the service out. It is deliberately separate from everything
+above: it shares no code path with generation, review, or publishing, holds no tools, and cannot
+draft, edit, approve, publish, or configure anything. Off by default.
+
+```dotenv
+ASSESSMENT_AI_ASSISTANT_ENABLED=false
+ASSESSMENT_AI_ASSISTANT_MODEL=
+ASSESSMENT_AI_ASSISTANT_MAX_TURNS=24
+ASSESSMENT_AI_ASSISTANT_MAX_MESSAGE_CHARS=4000
+ASSESSMENT_AI_ASSISTANT_RATE_LIMIT_PER_MINUTE=12
+ASSESSMENT_AI_ASSISTANT_TIMEOUT_SECONDS=120
+```
+
+It answers from a curated corpus baked into the image (`app/assistant/corpus/`) plus runtime facts
+recomputed per request — the live flag state, the active provider and model, and the draft queue.
+There is no retrieval layer: the corpus is a few tens of kilobytes against a million-token context
+window, so chunking and embedding it would add infrastructure and hand the model less than it can
+already hold. The corpus is shown verbatim to anyone who can reach the app and is checked by test
+for credentials, hashes, and private addresses.
+
+The panel sends only the current route. The server rebuilds the record behind it — status, critique
+issues, hint-grounding failures, engine validation, publication state — so the assistant can explain
+why a draft is blocked even when the reason is not rendered on the page.
+
+Answers stream over SSE and are rendered as plain text, never HTML. Conversations are stored in the
+existing database, scoped to the proxy-asserted reviewer, and are never read by the generation
+pipeline. `ASSESSMENT_AI_ASSISTANT_MODEL` is optional; empty falls back to the model the active
+provider already uses. Provider selection follows `ASSESSMENT_AI_LLM_PROVIDER_ORDER`, so a
+self-hosted Ollama model remains a first-class option.
+
+With the flag off the routes do not exist, no schema is created, and no markup is emitted.
+
 ## Assessment Computation v0 spike
 
 Assessment Computation is a LibreTexts-owned, assessment-specific validation layer. It is not a

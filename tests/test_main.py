@@ -182,6 +182,7 @@ def test_health_and_empty_queue_work_without_cloud_key(tmp_path: Path) -> None:
             "hint_generation": "disabled",
             "webwork": "disabled",
             "imathas": "disabled",
+            "assistant": "disabled",
         }
         readiness = client.get("/readyz")
         assert readiness.status_code == 503
