@@ -13,7 +13,7 @@
   const refreshHintApproval = () => {
     if (!hintApprove) return;
     const allChecked =
-      hintChecks.length === 3 && hintChecks.every((input) => input.checked);
+      hintChecks.length > 0 && hintChecks.every((input) => input.checked);
     hintApprove.disabled = hintEditsDirty || !allChecked;
     hintApprove.title = hintEditsDirty
       ? "Save the current hint edits before approving this version."
@@ -34,6 +34,13 @@
 
   const firstInvalid = document.querySelector('[aria-invalid="true"]');
   if (firstInvalid instanceof HTMLElement) {
+    // Focusing an element inside a collapsed <details> silently does nothing,
+    // so reveal every closed ancestor before moving focus to it.
+    let disclosure = firstInvalid.closest("details");
+    while (disclosure) {
+      disclosure.open = true;
+      disclosure = disclosure.parentElement?.closest("details") ?? null;
+    }
     firstInvalid.focus();
   }
 })();

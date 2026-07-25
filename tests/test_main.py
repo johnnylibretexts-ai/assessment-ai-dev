@@ -678,6 +678,150 @@ def test_hint_validation_preserves_posted_edits_and_persisted_version(
         assert current.ladder.rungs[0].text == "Saved conceptual hint."
 
 
+def test_failed_hint_edit_keeps_the_approved_disclosure_open(tmp_path: Path) -> None:
+    """An approved ladder wraps its edit form in a collapsed <details>.
+
+    A rejected edit must reopen it, or the preserved values, inline errors, and
+    aria-invalid markers are rendered where the reviewer cannot see them.
+    """
+
+    configured = settings(tmp_path).model_copy(
+        update={
+            "hint_generation_enabled": True,
+            "hint_publication_canary_enabled": True,
+        }
+    )
+    app = create_app(configured)
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.save_hint_ladder(
+            draft_id,
+            HintLadderDraft(
+                concept_label="Energy conservation",
+                rungs=[
+                    HintRungDraft(
+                        rung=rung,
+                        text=f"Review {rung.value} evidence.",
+                        citation_paragraphs=[0],
+                    )
+                    for rung in HintRungType
+                ],
+            ),
+            editor="reviewer@example.org",
+        )
+        approval = client.post(
+            f"/drafts/{draft_id}/hints/review",
+            data={
+                "conceptual_confirmed": "true",
+                "strategic_confirmed": "true",
+                "specific_confirmed": "true",
+            },
+            headers={
+                "X-Reviewer": "reviewer@example.org",
+                "Origin": "http://testserver",
+            },
+            follow_redirects=False,
+        )
+        assert approval.status_code == 303
+
+        rejected = client.post(
+            f"/drafts/{draft_id}/hints/edit",
+            data={
+                "conceptual_text": "Unsaved conceptual wording.",
+                "conceptual_citations": "47",
+                "strategic_text": "Unsaved strategic wording.",
+                "strategic_citations": "0",
+                "specific_text": "Unsaved specific wording.",
+                "specific_citations": "0",
+                "reviewer_notes": "Keep these edits visible.",
+            },
+            headers={
+                "X-Reviewer": "reviewer@example.org",
+                "Origin": "http://testserver",
+            },
+            follow_redirects=False,
+        )
+
+        assert rejected.status_code == 422
+        assert 'aria-invalid="true"' in rejected.text
+        assert "Unsaved conceptual wording." in rejected.text
+        assert '<details class="edit-box" open>' in rejected.text
+
+
+def test_hint_approval_button_is_not_statically_disabled(tmp_path: Path) -> None:
+    """The approve button is gated by JavaScript.
+
+    Shipping `disabled` in the markup makes hint approval impossible whenever
+    the script fails to load. The server independently rejects an incomplete
+    confirmation set, so the button itself must start enabled.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.save_hint_ladder(
+            draft_id,
+            HintLadderDraft(
+                concept_label="Energy conservation",
+                rungs=[
+                    HintRungDraft(
+                        rung=rung,
+                        text=f"Review {rung.value} evidence.",
+                        citation_paragraphs=[0],
+                    )
+                    for rung in HintRungType
+                ],
+            ),
+            editor="reviewer@example.org",
+        )
+
+        detail = client.get(f"/drafts/{draft_id}")
+
+        assert "data-hint-approve>" in detail.text
+        assert "data-hint-approve disabled" not in detail.text
+
+
+def test_incomplete_hint_confirmation_is_rejected_without_javascript(
+    tmp_path: Path,
+) -> None:
+    """Removing the static `disabled` must not weaken the server gate."""
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository)
+        app.state.repository.save_hint_ladder(
+            draft_id,
+            HintLadderDraft(
+                concept_label="Energy conservation",
+                rungs=[
+                    HintRungDraft(
+                        rung=rung,
+                        text=f"Review {rung.value} evidence.",
+                        citation_paragraphs=[0],
+                    )
+                    for rung in HintRungType
+                ],
+            ),
+            editor="reviewer@example.org",
+        )
+
+        response = client.post(
+            f"/drafts/{draft_id}/hints/review",
+            data={"conceptual_confirmed": "true"},
+            headers={
+                "X-Reviewer": "reviewer@example.org",
+                "Origin": "http://testserver",
+            },
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 422
+        assert "confirm all three hint rungs" in response.text
+        ladder = app.state.repository.require_draft(draft_id).current_hint_ladder
+        assert ladder is not None
+        assert ladder.status != "approved"
+
+
 def test_saved_hint_and_question_approvals_render_as_summaries(tmp_path: Path) -> None:
     configured = settings(tmp_path).model_copy(
         update={

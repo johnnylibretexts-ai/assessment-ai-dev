@@ -59,6 +59,22 @@ def normalize_source_url(value: str) -> str:
     return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path, "", ""))
 
 
+def _require_absolute_url(value: Any, *, label: str) -> str:
+    """Reject anything that is not an absolute http(s) URL with a host.
+
+    normalize_source_url() canonicalizes but does not validate, so a relative
+    path or a non-web scheme would otherwise be accepted and silently fail to
+    match any source.
+    """
+
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label}: missing URL")
+    parsed = urlsplit(value.strip())
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"{label}: invalid URL")
+    return value
+
+
 def _catalog_paths() -> tuple[Path, ...]:
     return tuple(sorted(CATALOG_DIR.glob("*.json")))
 
@@ -88,11 +104,26 @@ def _load_seed(path: Path) -> dict[str, Any]:
         raise ValueError(
             f"{path.name}: missing framework field(s): {', '.join(missing)}"
         )
+    _require_absolute_url(
+        framework.get("source_url"), label=f"{path.name}: framework source URL"
+    )
     namespace = str(seed.get("stable_id_namespace", ""))
     try:
         UUID(namespace)
     except ValueError:
         raise ValueError(f"{path.name}: invalid stable ID namespace") from None
+    for chapter in chapters:
+        if not isinstance(chapter, dict) or not isinstance(chapter.get("topics"), list):
+            raise ValueError(f"{path.name}: invalid framework catalog")
+        _require_absolute_url(
+            chapter.get("canonical_url"), label=f"{path.name}: chapter URL"
+        )
+        for topic in chapter["topics"]:
+            if not isinstance(topic, dict):
+                raise ValueError(f"{path.name}: invalid framework catalog")
+            _require_absolute_url(
+                topic.get("canonical_url"), label=f"{path.name}: topic URL"
+            )
     return seed
 
 

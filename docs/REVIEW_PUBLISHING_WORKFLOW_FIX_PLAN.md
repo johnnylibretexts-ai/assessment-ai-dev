@@ -11,7 +11,10 @@ and published during live workflow verification; Draft 16 remains intentionally 
 
 - Assessment AI source: `ecddda4`; live image:
   `sha256:91fc9eb28e386a247cb30ec16a1c5e496326a77c57fe4a4739c10202a8ef01c1`
-- ADAPT source: `f38a93a6e`; live image:
+- ADAPT source: `43137d01a`; live image:
+  `sha256:06e5f600c2d944b10ad9d837912daa8330ea651fb69e4f50b83946a0f65e56b5`
+- Earlier ADAPT snapshot, retained as the rollback image (`adapt-app:pre-imathas-runtime-d324f2b`):
+  source `f38a93a6e`, image
   `sha256:d324f2bbe3b23f6e75ac182c8e2f3404ad7929ecde364ccfc322b0ab58e32532`
 - Pre-deploy Assessment AI SQLite and ADAPT MySQL backups are stored under
   `/opt/libretexts/backups/assessment-ai-review-workflow-20260724/`.

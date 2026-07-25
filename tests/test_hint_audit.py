@@ -121,3 +121,28 @@ def test_audit_reports_only_the_current_hint_version_without_mutating(
         assert len(audit_current_hints(DraftRepository(read_only))) == 3
     finally:
         read_only.dispose()
+
+
+def test_read_only_url_encodes_reserved_characters_in_the_path(
+    tmp_path: Path,
+) -> None:
+    """A reserved character in the filename must survive the round trip.
+
+    The input URL carries the path percent-encoded (the function strips an
+    existing query string at the first "?"), and the returned URI must re-encode
+    it. An unencoded "?" on the way out would start the query string early and
+    silently target a different database.
+    """
+
+    from urllib.parse import quote as _quote, unquote as _unquote
+
+    database = tmp_path / "assessment ai?100% current.db"
+    database.write_bytes(b"")
+
+    url = read_only_sqlite_url(f"sqlite:///{_quote(database.as_posix(), safe='/')}")
+
+    assert url.endswith("?mode=ro&uri=true")
+    assert "%3F" in url
+    assert "%25" in url
+    encoded_path = url.removeprefix("sqlite:///file:").split("?", 1)[0]
+    assert Path(_unquote(encoded_path)) == database.resolve()

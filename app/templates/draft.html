@@ -592,7 +592,9 @@
             <strong>{{ draft.hint_ladder.allowed_citations_text }}</strong>.
           </p>
           {% if draft.hint_ladder.status == 'approved' %}
-            <details class="edit-box">
+            {# Stay open when a rejected edit is being re-rendered, or the
+               preserved values and inline errors are hidden from the reviewer. #}
+            <details class="edit-box"{% if active_form == 'hint_edit' %} open{% endif %}>
               <summary>Edit approved hints</summary>
           {% endif %}
           <form method="post" action="/drafts/{{ draft.id }}/hints/edit"
@@ -650,7 +652,10 @@
                 <label class="check"><input type="checkbox" name="{{ rung.rung }}_confirmed" value="true" {% if active_form == 'hint_review' %}{% if form_values.get(rung.rung ~ '_confirmed') %}checked{% endif %}{% elif draft.hint_ladder.confirmations.get(rung.rung) %}checked{% endif %}><span>I verified the {{ rung.rung }} hint, its citation, and that it does not reveal the answer.</span></label>
               {% endfor %}
               <label>Hint review notes<textarea name="reviewer_notes" rows="2">{% if active_form == 'hint_review' %}{{ form_values.get('reviewer_notes', '') }}{% else %}{{ draft.hint_ladder.reviewer_notes }}{% endif %}</textarea></label>
-              <button type="submit" data-hint-approve disabled>Approve saved hint version</button>
+              {# Disabled state is owned by review-workflow.js so the control is
+                 never permanently dead when the script fails to load. The server
+                 independently rejects an incomplete confirmation set. #}
+              <button type="submit" data-hint-approve>Approve saved hint version</button>
               <p class="help">All three checks are required. Hint approval is separate from question approval.</p>
             </form>
           {% endif %}
