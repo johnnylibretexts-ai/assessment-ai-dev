@@ -465,6 +465,42 @@ def test_stored_sandbox_drafts_are_hidden_and_inaccessible(tmp_path: Path) -> No
         assert edit.status_code == 404
 
 
+def test_revision_label_presents_edit_count_as_a_one_based_version() -> None:
+    # edit_count is 0-based, so showing it raw made an unedited draft read as
+    # "revision 0". Presentation is 1-based v-numbers everywhere.
+    assert main_module.revision_label(0) == "v1"
+    assert main_module.revision_label(1) == "v2"
+    assert main_module.revision_label(2) == "v3"
+    # Never render a nonsensical revision for missing or malformed values.
+    assert main_module.revision_label(None) == "v1"
+    assert main_module.revision_label("not a number") == "v1"
+    assert main_module.revision_label(-1) == "v1"
+
+
+def test_queue_shows_a_one_based_revision_number(tmp_path: Path) -> None:
+    # The queue always renders a revision number; the detail page only does so
+    # once there is a publication or an approval form, so assert against the
+    # queue for the unedited case.
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        seed(app.state.repository, public_page())
+        queue = client.get("/")
+    assert queue.status_code == 200
+    assert "Current revision v1" in queue.text
+    assert "Current revision 0" not in queue.text
+
+
+def test_concurrency_token_stays_a_raw_edit_count() -> None:
+    # expected_edit_count is posted back for optimistic concurrency. Rendering
+    # it through revision_label would submit "v1" instead of 0 and silently
+    # break conflict detection, so pin the raw binding.
+    template = (
+        Path(main_module.__file__).resolve().parent / "templates" / "draft.html"
+    ).read_text()
+    assert 'value="{{ draft.edit_count }}"' in template
+    assert 'value="{{ revision_label(draft.edit_count) }}"' not in template
+
+
 def test_public_source_provenance_is_clickable_on_review_page(tmp_path: Path) -> None:
     app = create_app(settings(tmp_path))
     with TestClient(app) as client:
@@ -966,7 +1002,7 @@ def test_current_successful_publication_drives_queue_and_detail_state(
         assert queue.status_code == 200
         assert "Published to ADAPT" in queue.text
         assert "Approved — not yet published" not in queue.text
-        assert "Current revision 0" in queue.text
+        assert "Current revision v1" in queue.text
         assert "Published to ADAPT as question 125" in queue.text
 
         detail = client.get(f"/drafts/{draft_id}")
@@ -1012,12 +1048,12 @@ def test_earlier_publication_does_not_mark_a_new_revision_as_published(
         queue = client.get("/")
         assert queue.status_code == 200
         assert "Approved — not yet published" in queue.text
-        assert "Current revision 1" in queue.text
-        assert "Revision 0 remains published to ADAPT as question 125." in queue.text
+        assert "Current revision v2" in queue.text
+        assert "Revision v1 remains published to ADAPT as question 125." in queue.text
 
         detail = client.get(f"/drafts/{draft_id}")
         assert detail.status_code == 200
         assert "Approved — not yet published" in detail.text
-        assert "Current revision 1 is not yet published." in detail.text
-        assert "Revision 0 remains published to ADAPT as question 125." in detail.text
+        assert "Current revision v2 is not yet published." in detail.text
+        assert "Revision v1 remains published to ADAPT as question 125." in detail.text
         assert "Earlier revision" in detail.text
