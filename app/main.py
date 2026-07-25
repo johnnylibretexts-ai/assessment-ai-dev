@@ -999,7 +999,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 editor=_reviewer(request),
                 notes=reviewer_notes,
             )
-        except (ValidationError, ValueError) as exc:
+        # DraftNotFoundError subclasses LookupError, not ValueError, so it has
+        # to be named explicitly or a draft deleted mid-request 500s instead of
+        # re-rendering the form. Matches the sibling hint-review handler.
+        except (DraftNotFoundError, ValidationError, ValueError) as exc:
             return await render_draft_page(
                 request,
                 draft_id,

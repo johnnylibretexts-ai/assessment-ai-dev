@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import zipfile
 from dataclasses import replace
 from pathlib import Path
@@ -395,7 +396,7 @@ async def test_publication_reports_the_unapproved_revision_before_the_license(
 
         with pytest.raises(
             PublicationValidationError,
-            match="Approve the current question revision.",
+            match=re.escape("Approve the current question revision."),
         ):
             await PublicationService(config, repository, fake).publish(
                 draft_id,
