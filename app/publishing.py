@@ -274,7 +274,12 @@ class PublicationService:
         readiness = self._local_readiness(draft, license_resolved=True)
         if readiness.blockers:
             raise PublicationValidationError(readiness.blockers[0].message)
-        assert readiness.alignment is not None
+        if readiness.alignment is None:
+            # Not an assert: `python -O` strips those, which would turn this
+            # guard into an AttributeError on the publication path.
+            raise PublicationValidationError(
+                "This source does not yet have a curated framework topic."
+            )
         expected_alignment = readiness.alignment
         if topic_stable_id != expected_alignment.topic.stable_id:
             raise PublicationValidationError(

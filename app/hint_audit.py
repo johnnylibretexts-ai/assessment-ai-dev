@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 from .db import DraftRepository, inspect_hint_grounding
 
@@ -49,4 +49,8 @@ def read_only_sqlite_url(database_url: str) -> str:
     path = Path(raw_path).resolve()
     if not path.is_file():
         raise ValueError(f"Database not found: {path}")
-    return f"sqlite:///file:{path}?mode=ro&uri=true"
+    # Percent-encode before building the URI: a database filename containing
+    # a reserved character such as "?" or "%" would otherwise be truncated or
+    # misparsed, silently pointing at a different database.
+    encoded = quote(path.as_posix(), safe="/")
+    return f"sqlite:///file:{encoded}?mode=ro&uri=true"

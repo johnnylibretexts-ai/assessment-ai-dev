@@ -12,9 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _digests(directory: Path) -> dict[str, str]:
+    # Match the runtime loader's glob. Restricting this to *-v1.json would let
+    # any other catalog file load at runtime while never being compared across
+    # the two repositories.
     return {
         path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in sorted(directory.glob("*-v1.json"))
+        for path in sorted(directory.glob("*.json"))
     }
 
 
