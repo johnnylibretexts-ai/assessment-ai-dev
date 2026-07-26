@@ -21,7 +21,10 @@
 
   <form id="assistant-form" class="assistant-form">
     <label class="visually-hidden" for="assistant-input">Your question</label>
-    <textarea id="assistant-input" name="question" rows="2" placeholder="Ask a question&hellip;" maxlength="4000" required></textarea>
+    {# maxlength tracks assistant_max_message_chars; hardcoding it meant raising
+   the setting silently truncated in the browser before the server saw it. #}
+    <textarea id="assistant-input" name="question" rows="2" placeholder="Ask a question&hellip;"
+      maxlength="{{ request.app.state.assistant_max_message_chars }}" required></textarea>
     <button type="submit" id="assistant-send">Send</button>
   </form>
 </aside>

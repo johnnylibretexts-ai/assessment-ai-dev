@@ -20,6 +20,11 @@ from .prompt import build_system_prompt
 from .store import AssistantStore
 
 
+# A turn is a question and its answer: two rows. Kept explicit so the setting
+# named "turns" cannot silently drift back into meaning "messages".
+ROWS_PER_TURN = 2
+
+
 class AssistantRateLimited(RuntimeError):
     """Raised when one reviewer asks faster than the configured allowance."""
 
@@ -66,11 +71,14 @@ class AssistantService:
             settings.assistant_rate_limit_per_minute
         )
 
+    def _history_row_limit(self) -> int:
+        return self._settings.assistant_max_turns * ROWS_PER_TURN
+
     def history(self, reviewer: str) -> list[dict[str, str]]:
         return [
             {"role": message.role, "content": message.content}
             for message in self._store.messages(
-                reviewer, limit=self._settings.assistant_max_turns
+                reviewer, limit=self._history_row_limit()
             )
             if message.role in {"user", "assistant"}
         ]
@@ -93,7 +101,7 @@ class AssistantService:
         prior = [
             ChatTurn(role=message.role, content=message.content)
             for message in self._store.messages(
-                reviewer, limit=self._settings.assistant_max_turns
+                reviewer, limit=self._history_row_limit()
             )
             if message.role in {"user", "assistant"}
         ]

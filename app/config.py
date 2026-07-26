@@ -42,7 +42,10 @@ class Settings(BaseSettings):
     assistant_enabled: bool = False
     # Empty falls back to the active provider's configured generation model.
     assistant_model: str = ""
-    assistant_max_turns: int = Field(default=24, ge=2, le=200)
+    # One turn is a user question plus its answer, i.e. two stored rows. The
+    # name used to be passed straight through as a row limit, so "24" quietly
+    # meant twelve exchanges.
+    assistant_max_turns: int = Field(default=12, ge=1, le=100)
     assistant_max_message_chars: int = Field(default=4_000, ge=100, le=50_000)
     assistant_rate_limit_per_minute: int = Field(default=12, ge=1, le=600)
     assistant_timeout_seconds: float = Field(default=120.0, ge=5, le=600)

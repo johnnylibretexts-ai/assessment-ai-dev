@@ -105,11 +105,19 @@
     resetButton.addEventListener("click", async () => {
       if (busy) return;
       try {
-        await fetch("/assistant/reset", {
+        const response = await fetch("/assistant/reset", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });
+        // fetch only rejects on a network failure, so a 403 or 503 arrives here
+        // as a perfectly ordinary response. Clearing the log on one would show
+        // an empty panel while the server still held the conversation.
+        if (!response.ok) {
+          addTurn("error", "Could not start a new conversation. Try again.");
+          return;
+        }
       } catch (error) {
+        addTurn("error", "Could not reach the server to start a new conversation.");
         return;
       }
       log.textContent = "";
