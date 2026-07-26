@@ -1020,6 +1020,7 @@ class Database:
             "license_label": "VARCHAR(120)",
             "license_evidence_url": "VARCHAR(4096)",
         }
+
         # The dicts above are hard-coded, but these statements interpolate
         # their keys and values straight into SQL, so a future edit that pulled
         # a column name from anywhere else would become an injection point.

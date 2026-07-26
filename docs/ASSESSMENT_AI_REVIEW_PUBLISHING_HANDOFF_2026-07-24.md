@@ -34,8 +34,10 @@ reasoning stays legible. Where the two disagree, this section wins.
   split the command into independent lists, so a failing `ruff` did not stop the build as long as
   both pytest runs passed. Fixed in PR #5 (`2db76dd`) and proven in both directions — inject an
   unused import and the build fails; clean tree and it passes. Wait for `CLEAN`, not `UNSTABLE`.
-- **Still open and unchanged:** P0 manual browser QA, the durable browser regression, and the
-  accessibility review. Being listed here does not close them.
+- **All three remaining items are now closed.** The durable browser regression landed as PR #8; the
+  P0 manual matrix and the accessibility review were both executed on 2026-07-26 and are recorded
+  under "Manual browser QA results" below. One caveat is called out there rather than hidden: no
+  real screen reader was driven, only the structures one depends on.
 - **New since this document was written.** The Dockerfile `test` stage is now a real build gate
   (PR #3, `f50c414`); previously `runtime` did not depend on `test`, so a default `docker build`
   skipped ruff and pytest entirely, and a `&&` chain let one computation failure hide ~818 other
@@ -719,6 +721,61 @@ cd <workspace-root>/.worktrees/assessment-ai-math-rendering
 uv run python scripts/verify_framework_catalogs.py \
   --adapt-root <workspace-root>/.worktrees/adapt-review-publishing-workflow
 ```
+
+## Manual browser QA results — executed 2026-07-26
+
+The plan below was run end to end against a **disposable SQLite database and a `FakeAdapt`**, per its
+own instruction. No real draft was touched, no ADAPT request was made, and live production was never
+involved. **53 of 54 checks passed.**
+
+| | Scenario | Result |
+|---|---|---|
+| A | Failed hint edit preserves state | 9/9 |
+| B | Failed hint approval preserves confirmations | 4/4 — see note |
+| C | Successful approval persists | 6/6 |
+| D | Dirty edits cannot be approved | 3/4 — see divergence |
+| E | Exact framework mapping | 4/4 |
+| F | Current revision already published | 6/6 |
+| G | Earlier published, newer pending | 4/4 |
+| H | Accessibility and keyboard | 11/11 |
+| I | QTI and ADAPT evidence | 7/7 |
+
+**B behaves more strictly than this plan assumes.** The plan expects Approve to be clickable on an
+invalid saved ladder and to return 422. The UI does not render the control at all; it shows a repair
+notice. Forging the POST anyway returns **422 with no partial approval**, so both layers hold. The
+plan's step 2 is therefore unreachable through the UI by design, not by omission.
+
+**D is the one failure, and it is a real divergence.** `review-workflow.js` sets `hintEditsDirty` on
+any `input` event and never compares against the saved values, so the flag **latches**: retyping the
+original text does not re-enable approval, contrary to "returning the saved text restores the clean
+state". It errs safe — it over-blocks approval rather than under-blocking — so the browser regression
+in `tests/browser/` pins the *implemented* behaviour with a comment naming what to change if the
+planned behaviour should win. **This needs a decision: change the plan, or change the JS.**
+
+**Security guards verified end to end.** A forged `topic_stable_id` on publish returns 422 with zero
+ADAPT calls. A forged hint approval on an invalid ladder returns 422. Repeat publish leaves
+`create_calls` at 1 — no duplicate remote question. The QTI package opens as a valid archive
+containing `imsmanifest.xml` plus the item, and contains the saved revision's stem. The download is
+**403 without a reviewer identity and 200 with one**.
+
+**Accessibility (H).** axe-core 4.x, WCAG 2.0/2.1 A and AA, found **no serious or critical
+violations** on the queue and draft pages at 1280px and at 380px. Every visible control has an
+accessible name; there is no positive `tabindex`; validation errors are announced through
+`role="alert"`; the invalid field is linked by `aria-errormessage`; focus moves to it without
+trapping; status is carried by text as well as colour; math content is visible and not
+same-colour-on-same-colour. **Caveat: no real screen reader was driven** — the structures a screen
+reader depends on were verified, which is not the same as hearing the page.
+
+**One usability observation, not a defect.** `download_qti` applies `_require_same_origin` to a
+**GET**. CSRF guards normally protect state-changing requests, and here it means a reviewer who
+pastes the download URL into the address bar receives 403, because a typed navigation sends neither
+`Origin` nor `Referer`. Conservative rather than wrong, but worth knowing before someone reports it
+as an auth bug.
+
+**Re-running this.** Scenarios A, C, D, F and G are now automated in `tests/browser/` and run on
+every build. The remaining manual value is in B, E, H and I. The scripts used are throwaway, but the
+fixtures they rely on live in `tests/browser/harness.py`, including `disposable_instance()`, which
+serves a seeded fake-publishing instance on a real port.
 
 ## Manual browser evaluation plan
 
