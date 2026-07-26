@@ -1148,3 +1148,52 @@ def test_counting_drafts_does_not_load_them(tmp_path):
     assert page_context("/", repository) != ""
     assert calls == [], "neither path may fall back to loading every draft"
     database.dispose()
+
+
+def test_the_panel_can_actually_be_hidden():
+    """The hidden attribute must beat the panel's own display declaration.
+
+    The UA stylesheet's `[hidden] { display: none }` loses to any author
+    `display` rule. `.assistant-panel` sets `display: flex`, so without a more
+    specific override the attribute did nothing: the panel sat over every page
+    permanently and the close button looked broken. The codebase already had the
+    right pattern in `.generation-status[hidden]`.
+    """
+
+    css = (
+        Path(__file__).resolve().parents[1] / "app" / "static" / "styles.css"
+    ).read_text()
+
+    base = css.index(".assistant-panel { position: fixed")
+    override = css.index(".assistant-panel[hidden]")
+    rule = css[override : css.index("}", override)]
+
+    assert "display: none" in rule
+    # Specificity of .assistant-panel[hidden] (0,2,0) already wins, but keeping
+    # it after the base rule means it wins on source order too.
+    assert override > base, "the override must follow the rule it overrides"
+
+
+def test_every_toggled_assistant_element_has_a_hidden_override():
+    """Any assistant element the script toggles via `hidden` needs the override.
+
+    Generalised so a future panel, drawer, or tooltip cannot reintroduce the
+    same bug by declaring `display` without a matching `[hidden]` rule.
+    """
+
+    root = Path(__file__).resolve().parents[1] / "app"
+    css = (root / "static" / "styles.css").read_text()
+    script = (root / "static" / "assistant.js").read_text()
+
+    # Elements the script hides by attribute, mapped to their CSS class.
+    toggled = {"#assistant-panel": ".assistant-panel"}
+
+    for selector, css_class in toggled.items():
+        assert f'querySelector("{selector}")' in script
+        base_rule_start = css.index(f"{css_class} {{")
+        base_rule = css[base_rule_start : css.index("}", base_rule_start)]
+        if "display:" in base_rule:
+            assert f"{css_class}[hidden]" in css, (
+                f"{css_class} declares display, so it needs a "
+                f"{css_class}[hidden] override or `hidden` will not work"
+            )
