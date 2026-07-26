@@ -231,6 +231,12 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .assistant-launcher { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border: 1px solid #4f7185; border-radius: 999px; background: transparent; color: #d6effc; font-size: .85rem; font-weight: 650; }
 .assistant-launcher:hover { background: #0d2c3e; }
 .assistant-launcher[aria-expanded="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
+/* The open panel is fixed to the right edge and covers the header, so the
+   launcher underneath it is unreachable -- and a click aimed at it lands on
+   the panel's "New" button, silently wiping the conversation. Hide it while
+   the panel is open; the panel's own close button and Escape both dismiss it.
+   visibility rather than display so the header does not reflow. */
+body.assistant-open .assistant-launcher { visibility: hidden; }
 
 /* Sets its own colour rather than inheriting: this panel used to sit inside
    .site-header, whose `color: #fff` made assistant replies white on white.
