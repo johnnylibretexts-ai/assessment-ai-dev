@@ -758,8 +758,10 @@ planned behaviour should win. **This needs a decision: change the plan, or chang
 **Security guards verified end to end.** A forged `topic_stable_id` on publish returns 422 with zero
 ADAPT calls. A forged hint approval on an invalid ladder returns 422. Repeat publish leaves
 `create_calls` at 1 — no duplicate remote question. The QTI package opens as a valid archive
-containing `imsmanifest.xml` plus the item, and contains the saved revision's stem. The download is
-**403 without a reviewer identity and 200 with one**.
+containing `imsmanifest.xml` plus the item, and contains the saved revision's stem. The download
+returns **200 only when both guards are satisfied — an authorised reviewer identity *and* a
+same-origin request carrying `Origin`/`Referer`** — and 403 when either is missing. Identity alone is
+not sufficient; that distinction is easy to miss and is what the note below is about.
 
 **Accessibility (H).** axe-core 4.x, WCAG 2.0/2.1 A and AA, found **no serious or critical
 violations** on the queue and draft pages at 1280px and at 380px. Every visible control has an
