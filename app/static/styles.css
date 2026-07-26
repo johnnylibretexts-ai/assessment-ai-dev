@@ -236,6 +236,12 @@ button:disabled { cursor: not-allowed; opacity: .55; }
    .site-header, whose `color: #fff` made assistant replies white on white.
    It now lives at the end of <body>, and states its colours regardless. */
 .assistant-panel { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); display: flex; flex-direction: column; background: var(--surface); color: var(--ink); border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgb(18 32 51 / 12%); }
+/* MUST come after the rule above and be more specific than it. The UA
+   stylesheet's [hidden] { display: none } loses to any author `display`
+   declaration, so without this the hidden attribute does nothing and the
+   panel sits on top of every page permanently -- the close button appears
+   to do nothing. Same pattern as .generation-status[hidden] above. */
+.assistant-panel[hidden] { display: none; }
 
 .assistant-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); background: #071d2a; color: #fff; }
 .assistant-head h2 { margin: 0; font-size: 1rem; }
