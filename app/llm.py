@@ -495,6 +495,12 @@ class GeminiClient:
         self._model = settings.gemini_model.strip()
         self._url = f"{settings.gemini_base_url}/models/{self._model}:generateContent"
         self._max_attempts = settings.gemini_max_retries + 1
+        # Transport-level retries are budgeted separately from the
+        # structured-output attempts above. Both loops previously read
+        # _max_attempts, so a single complete() could issue
+        # _max_attempts x _max_attempts upstream requests -- the ceiling grew
+        # quadratically with a setting that reads as a linear retry count.
+        self._max_http_attempts = 2
         self._max_output_tokens = settings.gemini_max_output_tokens
         self._thinking_level = settings.gemini_thinking_level
         self._sleep = sleep
@@ -597,7 +603,7 @@ class GeminiClient:
         ) from None
 
     async def _post(self, payload: Mapping[str, Any]) -> httpx.Response:
-        for request_attempt in range(1, self._max_attempts + 1):
+        for request_attempt in range(1, self._max_http_attempts + 1):
             try:
                 response = await self._client.post(
                     self._url,
@@ -605,7 +611,7 @@ class GeminiClient:
                     json=payload,
                 )
             except httpx.RequestError:
-                if request_attempt >= self._max_attempts:
+                if request_attempt >= self._max_http_attempts:
                     raise LLMTransportError(
                         "Gemini network request failed after "
                         f"{request_attempt} attempt(s)"
@@ -616,7 +622,7 @@ class GeminiClient:
             retryable_status = response.status_code == 429 or (
                 500 <= response.status_code <= 599
             )
-            if retryable_status and request_attempt < self._max_attempts:
+            if retryable_status and request_attempt < self._max_http_attempts:
                 await self._sleep(min(0.5 * request_attempt, 2.0))
                 continue
             if response.is_error:
