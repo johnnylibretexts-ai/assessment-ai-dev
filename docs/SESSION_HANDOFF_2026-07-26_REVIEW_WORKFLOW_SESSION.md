@@ -22,7 +22,7 @@ produced. Three defects were fixed in sequence:
 
 The gate now requires **all five** to be zero:
 
-```
+```text
 gate exit codes: lint=0 fmt=0 sidecar=0 rest=0 browser=0
 ```
 
@@ -42,7 +42,7 @@ post-merge build to take ~8 minutes (Chromium download, cached afterwards).
 formatting violation in `app/db.py`: one missing blank line before a comment block. Proven against
 `main` with the full gate:
 
-```
+```text
 822 passed, 1 skipped        <- tests fine
 5 passed                     <- browser fine
 gate exit codes: lint=0 fmt=1 sidecar=0 rest=0 browser=0
