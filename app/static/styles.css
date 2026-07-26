@@ -252,7 +252,9 @@ body.assistant-open .assistant-launcher { visibility: hidden; }
 .assistant-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); background: #071d2a; color: #fff; }
 .assistant-head h2 { margin: 0; font-size: 1rem; }
 .assistant-disclaimer { margin: 4px 0 0; max-width: 34ch; color: #9fc8df; font-size: .74rem; line-height: 1.35; }
-.assistant-head-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.assistant-head-title { min-width: 0; }
+.assistant-title-row { display: flex; align-items: center; gap: 10px; }
+.assistant-close { flex-shrink: 0; align-self: flex-start; }
 .assistant-ghost { padding: 5px 10px; border: 1px solid #4f7185; border-radius: 7px; background: transparent; color: #d6effc; font-size: .78rem; font-weight: 650; }
 .assistant-ghost:hover { background: #0d2c3e; }
 
