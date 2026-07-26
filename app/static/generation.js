@@ -9,9 +9,17 @@
   const itemTypes = Array.from(
     document.querySelectorAll('input[name="item_types"]')
   );
+  const itemTypeOptions = document.querySelector("#item-type-options");
   const itemTypeHelp = document.querySelector("#item-type-help");
   const defaultItemTypeHelp = itemTypeHelp?.textContent || "";
   const maxSelectedTypes = 8;
+  // Auto mix discards item_types server-side (see jobs.py::_validated_item_types),
+  // so leaving the boxes clickable invites people to pick formats that are then
+  // silently ignored. Locking them is the UI telling the truth about the request
+  // it is going to send.
+  const autoModeHelp =
+    "Auto mix chooses the formats for you, working through the available " +
+    "interaction types in order. Switch to Choose types to pick your own.";
 
   if (!form || !submit || !status || !message || !sourceInput) return;
 
@@ -33,13 +41,20 @@
   const validateSelectedTypes = ({ raiseTotal = false } = {}) => {
     if (!generationMode || !itemCount || generationMode.value !== "selected") {
       itemCount?.setCustomValidity("");
+      // Only lock when we can actually read the mode. If the control is missing
+      // the safe fallback is a usable form, not an unusable one.
+      const locked = Boolean(generationMode) && Boolean(itemCount);
       itemTypes.forEach((checkbox) => {
-        checkbox.disabled = false;
+        checkbox.disabled = locked;
       });
-      if (itemTypeHelp) itemTypeHelp.textContent = defaultItemTypeHelp;
+      itemTypeOptions?.classList.toggle("is-locked", locked);
+      if (itemTypeHelp) {
+        itemTypeHelp.textContent = locked ? autoModeHelp : defaultItemTypeHelp;
+      }
       return;
     }
     const selected = selectedTypeCount();
+    itemTypeOptions?.classList.remove("is-locked");
     itemTypes.forEach((checkbox) => {
       checkbox.disabled = selected >= maxSelectedTypes && !checkbox.checked;
     });
