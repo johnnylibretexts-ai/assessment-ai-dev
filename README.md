@@ -90,6 +90,69 @@ bounded draft repair, and rollback procedures.
 ready. A direct cloud provider is ready only when its API key is non-empty. This lets the review
 shell stay observable without claiming generation is ready.
 
+## Demo assistant
+
+A support chatbot for people trying the service out. It is deliberately separate from everything
+above: it shares no code path with generation, review, or publishing, holds no tools, and cannot
+draft, edit, approve, publish, or configure anything. Off by default.
+
+```dotenv
+ASSESSMENT_AI_ASSISTANT_ENABLED=false
+ASSESSMENT_AI_ASSISTANT_MODEL=
+ASSESSMENT_AI_ASSISTANT_MAX_TURNS=12
+ASSESSMENT_AI_ASSISTANT_MAX_MESSAGE_CHARS=4000
+ASSESSMENT_AI_ASSISTANT_RATE_LIMIT_PER_MINUTE=12
+ASSESSMENT_AI_ASSISTANT_TIMEOUT_SECONDS=120
+ASSESSMENT_AI_ASSISTANT_THINKING_LEVEL=minimal
+ASSESSMENT_AI_ASSISTANT_MAX_OUTPUT_TOKENS=1024
+```
+
+### Cost
+
+The static prefix — instruction plus the whole corpus — is about 5,200 tokens and is byte-identical
+on every request, so the provider can serve it from its context cache. Everything request-specific
+(runtime facts, page context) rides on the question instead of being spliced into the system prompt,
+and only the raw question is persisted, so replayed history stays byte-stable and the cacheable
+prefix grows with the conversation rather than being invalidated by it. `static_system_prompt()` is
+covered by a test asserting no volatile content leaks into it; if that drifts, caching silently stops
+and every turn pays full price for the corpus.
+
+`ASSESSMENT_AI_ASSISTANT_THINKING_LEVEL` defaults to `minimal`. Thinking tokens bill as output, and
+the assistant answers from documents placed in front of it, so it needs no reasoning budget — left
+unset it inherited the model default, which was the largest single cost.
+`ASSESSMENT_AI_ASSISTANT_MAX_OUTPUT_TOKENS` is a ceiling on a runaway generation, not a target.
+
+Every answer's token usage is recorded on its row in `assistant_messages` — prompt, cached, thought,
+and output counts — so the running cost is a fact you can query rather than an estimate:
+
+```python
+AssistantStore(database.session_factory).usage_totals()
+```
+
+Queue tallies use an aggregate `count_drafts_by_status()`; `list_drafts()` eagerly loads five
+relationships per row, which is the wrong tool for printing a count and gets worse as the queue
+grows.
+
+It answers from a curated corpus baked into the image (`app/assistant/corpus/`) plus runtime facts
+recomputed per request — the live flag state, the active provider and model, and the draft queue.
+One turn is a question and its answer, so `MAX_TURNS=12` replays 24 stored messages. There is
+no retrieval layer: the corpus is a few tens of kilobytes against a million-token context
+window, so chunking and embedding it would add infrastructure and hand the model less than it can
+already hold. The corpus is shown verbatim to anyone who can reach the app and is checked by test
+for credentials, hashes, and private addresses.
+
+The panel sends only the current route. The server rebuilds the record behind it — status, critique
+issues, hint-grounding failures, engine validation, publication state — so the assistant can explain
+why a draft is blocked even when the reason is not rendered on the page.
+
+Answers stream over SSE and are rendered as plain text, never HTML. Conversations are stored in the
+existing database, scoped to the proxy-asserted reviewer, and are never read by the generation
+pipeline. `ASSESSMENT_AI_ASSISTANT_MODEL` is optional; empty falls back to the model the active
+provider already uses. Provider selection follows `ASSESSMENT_AI_LLM_PROVIDER_ORDER`, so a
+self-hosted Ollama model remains a first-class option.
+
+With the flag off the routes do not exist, no schema is created, and no markup is emitted.
+
 ## Assessment Computation v0 spike
 
 Assessment Computation is a LibreTexts-owned, assessment-specific validation layer. It is not a

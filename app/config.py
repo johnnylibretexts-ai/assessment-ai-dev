@@ -37,6 +37,26 @@ class Settings(BaseSettings):
     webwork_enabled: bool = False
     imathas_enabled: bool = False
 
+    # Demo assistant. A support chatbot for people trying the app out; it shares
+    # no code path with generation, review, or publishing and holds no tools.
+    assistant_enabled: bool = False
+    # Empty falls back to the active provider's configured generation model.
+    assistant_model: str = ""
+    # One turn is a user question plus its answer, i.e. two stored rows. The
+    # name used to be passed straight through as a row limit, so "24" quietly
+    # meant twelve exchanges.
+    assistant_max_turns: int = Field(default=12, ge=1, le=100)
+    assistant_max_message_chars: int = Field(default=4_000, ge=100, le=50_000)
+    assistant_rate_limit_per_minute: int = Field(default=12, ge=1, le=600)
+    assistant_timeout_seconds: float = Field(default=120.0, ge=5, le=600)
+    # Thinking tokens bill as output. The assistant answers from documents in
+    # front of it, so it does not need a reasoning budget; left unset it
+    # inherited the model default, which was the single largest silent cost.
+    assistant_thinking_level: Literal["minimal", "low", "medium", "high"] = "minimal"
+    # Answers are meant to be two or three short paragraphs. This is a ceiling
+    # on a runaway generation, not a target.
+    assistant_max_output_tokens: int = Field(default=1_024, ge=256, le=8_192)
+
     computation_mode: Literal["off", "assist", "enforce"] = "off"
     computation_family_allowlist: str = ""
     computation_socket_path: Path = Path("/run/assessment-computation/compute.sock")

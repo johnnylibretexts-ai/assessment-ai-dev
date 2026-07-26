@@ -1,0 +1,34 @@
+{# The panel lives at the end of <body>, NOT inside .site-header. It is
+   position:fixed, so nesting it in the header bought nothing and cost real
+   bugs: the header sets `color: #fff`, which the panel inherited, so assistant
+   replies rendered white on white. The launcher stays in the header; the
+   dialog stands on its own. #}
+<aside id="assistant-panel" class="assistant-panel" role="dialog" aria-modal="false" aria-labelledby="assistant-title" hidden>
+  <header class="assistant-head">
+    <div class="assistant-head-title">
+      <div class="assistant-title-row">
+        <h2 id="assistant-title">Demo Assistant</h2>
+        <button type="button" id="assistant-reset" class="assistant-ghost" title="Start a new conversation">New</button>
+      </div>
+      <p class="assistant-disclaimer">Answers are AI-generated and are not a source of record.</p>
+    </div>
+    {# "New" sits with the title, away from the right edge. It used to be beside
+       the close button, directly under where the launcher had been, so a click
+       aimed at the toggle discarded the transcript. Only the non-destructive
+       close control lives in the corner now. #}
+    <button type="button" id="assistant-close" class="assistant-ghost assistant-close" aria-label="Close the assistant">&#10005;</button>
+  </header>
+
+  <div id="assistant-log" class="assistant-log" role="log" aria-live="polite" aria-atomic="false">
+    <p class="assistant-empty">Ask anything &mdash; about this app, the LibreTexts platform, or something else entirely.</p>
+  </div>
+
+  <form id="assistant-form" class="assistant-form">
+    <label class="visually-hidden" for="assistant-input">Your question</label>
+    {# maxlength tracks assistant_max_message_chars; hardcoding it meant raising
+   the setting silently truncated in the browser before the server saw it. #}
+    <textarea id="assistant-input" name="question" rows="2" placeholder="Ask a question&hellip;"
+      maxlength="{{ request.app.state.assistant_max_message_chars }}" required></textarea>
+    <button type="submit" id="assistant-send">Send</button>
+  </form>
+</aside>

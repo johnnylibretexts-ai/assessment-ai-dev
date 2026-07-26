@@ -11,6 +11,9 @@
     <script src="/static/generation.js" defer></script>
     <script src="/static/publishing.js" defer></script>
     <script src="/static/review-workflow.js" defer></script>
+    {% if request is defined and request.app.state.assistant_enabled %}
+    <script src="/static/assistant.js" defer></script>
+    {% endif %}
   </head>
   <body>
     <header class="site-header">
@@ -18,11 +21,15 @@
         <p class="eyebrow">LibreTexts public libraries</p>
         <a class="brand" href="/">Assessment AI</a>
       </div>
-      <span class="badge">Human review required</span>
+      <div class="site-header-actions">
+        <span class="badge">Human review required</span>
+        {% if request is defined and request.app.state.assistant_enabled %}{% include "_assistant_launcher.html" %}{% endif %}
+      </div>
     </header>
     <div id="math-rendering-warning" class="notice math-warning" role="status" hidden>
       Math preview unavailable. The original TeX remains visible and editable.
     </div>
     <main>{% block content %}{% endblock %}</main>
+    {% if request is defined and request.app.state.assistant_enabled %}{% include "_assistant.html" %}{% endif %}
   </body>
 </html>
