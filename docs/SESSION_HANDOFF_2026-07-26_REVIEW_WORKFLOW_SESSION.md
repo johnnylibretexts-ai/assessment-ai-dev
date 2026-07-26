@@ -68,9 +68,16 @@ As of this writing:
 
 - **`main` = `902306c`** — has the gate fixes, browser regressions, revision-number changes, the
   `db.py` fix. **Does not have the chatbot.**
-- **production = `assessment-ai:assistant-c6d7546`**, deployed 08:01 — has the chatbot. **Does not
-  have PR #7's fixes** (`_max_http_attempts`, `_SQL_IDENTIFIER_RE`, `_SQL_TYPE_RE` are absent from the
-  running container, confirmed by grep) and does not have anything merged after `2db76dd`.
+- **production = `assessment-ai:assistant-70d308c`** (image `efcbb40b7255`, also tagged
+  `assessment-ai:local`), rebuilt 2026-07-26 15:30 UTC — has the chatbot. **Does not have PR #7's
+  fixes** (`_max_http_attempts`, `_SQL_IDENTIFIER_RE`, `_SQL_TYPE_RE` are absent from the running
+  container, re-confirmed by grep *after* that rebuild) and does not have anything merged after
+  `2db76dd`.
+
+  This tag has already moved once: it read `assistant-c6d7546` (08:01) when this doc was first
+  written. Both rebuilds came from `feat/demo-assistant` without merging `main`, so each one deepens
+  the divergence instead of closing it — and `feat/generation-mode-lock` is now stacked on top of the
+  unmerged branch. **Re-read the live tag before acting on it; do not trust the value printed here.**
 
 So `main` and production diverge **in both directions**.
 
@@ -135,6 +142,12 @@ entirely on startup. The compute bounds are unchanged; they now measure computat
 - **QTI download** applies `_require_same_origin` to a **GET**, so a pasted or bookmarked download
   URL returns 403. Minor, but it reads as an auth bug — it cost real time during QA.
 - **No PR CI for the gate** (section 2).
+- **Generation form — "Auto mix" and the item-type checkboxes — is not covered here.** It is covered
+  in `docs/SESSION_HANDOFF_2026-07-26_GENERATION_MODE_LOCK.md`, written by the demo-assistant session
+  for whoever picks up the generation form: whether ticking the item-type boxes does anything under
+  Auto mix, what the count validation already does, and its own deploy warning. As of this writing
+  that doc is **uncommitted**, in the `.worktrees/assessment-ai-generation-mode` worktree on branch
+  `feat/generation-mode-lock` — if you cannot find it in the repo, it has not been pushed yet.
 
 ---
 
