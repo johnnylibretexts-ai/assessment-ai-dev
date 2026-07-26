@@ -30,6 +30,7 @@ from sqlalchemy import (
     String,
     Text,
     delete,
+    func,
     inspect,
     select,
     text,
@@ -38,6 +39,8 @@ from sqlalchemy import (
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+
+from .llm import ChatUsage
 
 MAX_TITLE_CHARS = 120
 ACTIVE_CONVERSATION_INDEX = "uq_assistant_active_conversation"
@@ -93,6 +96,13 @@ class AssistantMessage(AssistantBase):
     model: Mapped[str] = mapped_column(String(120), default="", nullable=False)
     page_route: Mapped[str] = mapped_column(String(512), default="", nullable=False)
     error_code: Mapped[str] = mapped_column(String(80), default="", nullable=False)
+    # Token accounting, so the running cost of the feature is a fact you can
+    # query rather than an estimate. cached_tokens is the slice the provider
+    # served from its context cache; thought_tokens bills as output.
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cached_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    thought_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, nullable=False
     )
@@ -112,11 +122,27 @@ def _apply_sqlite_additive_migration(engine: Engine) -> None:
     the partial index added by hand. All three steps are idempotent.
     """
 
+    inspector = inspect(engine)
     columns = {
-        column["name"]
-        for column in inspect(engine).get_columns("assistant_conversations")
+        column["name"] for column in inspector.get_columns("assistant_conversations")
+    }
+    message_columns = {
+        column["name"] for column in inspector.get_columns("assistant_messages")
     }
     with engine.begin() as connection:
+        for name in (
+            "prompt_tokens",
+            "cached_tokens",
+            "thought_tokens",
+            "output_tokens",
+        ):
+            if name not in message_columns:
+                connection.execute(
+                    text(
+                        "ALTER TABLE assistant_messages "
+                        f"ADD COLUMN {name} INTEGER NOT NULL DEFAULT 0"
+                    )
+                )
         if "active" not in columns:
             connection.execute(
                 text(
@@ -262,6 +288,7 @@ class AssistantStore:
         model: str = "",
         page_route: str = "",
         error_code: str = "",
+        usage: "ChatUsage | None" = None,
     ) -> None:
         with self._sessions() as session:
             owner = session.scalar(
@@ -280,12 +307,39 @@ class AssistantStore:
                     model=model,
                     page_route=page_route[:512],
                     error_code=error_code[:80],
+                    prompt_tokens=usage.prompt if usage else 0,
+                    cached_tokens=usage.cached if usage else 0,
+                    thought_tokens=usage.thoughts if usage else 0,
+                    output_tokens=usage.output if usage else 0,
                 )
             )
             if not owner.title and role == "user":
                 owner.title = content[:MAX_TITLE_CHARS]
             owner.updated_at = _now()
             session.commit()
+
+    def usage_totals(self) -> dict[str, int]:
+        """Whole-feature token totals, for answering "what has this cost?"."""
+
+        with self._sessions() as session:
+            row = session.execute(
+                select(
+                    func.count(AssistantMessage.id),
+                    func.coalesce(func.sum(AssistantMessage.prompt_tokens), 0),
+                    func.coalesce(func.sum(AssistantMessage.cached_tokens), 0),
+                    func.coalesce(func.sum(AssistantMessage.thought_tokens), 0),
+                    func.coalesce(func.sum(AssistantMessage.output_tokens), 0),
+                ).where(AssistantMessage.role == "assistant")
+            ).one()
+        answers, prompt, cached, thoughts, output = row
+        return {
+            "answers": answers,
+            "prompt_tokens": prompt,
+            "cached_tokens": cached,
+            "thought_tokens": thoughts,
+            "output_tokens": output,
+            "billed_prompt_tokens": max(prompt - cached, 0),
+        }
 
     def purge_reviewer(self, reviewer: str) -> None:
         """Remove every conversation for one reviewer. Used by tests."""

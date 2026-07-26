@@ -58,22 +58,31 @@ def page_context(
     return ""
 
 
+def route_describes_queue(route: str) -> bool:
+    """True when the page context already prints the queue tally.
+
+    Lets the caller drop the duplicate line from the runtime facts instead of
+    paying for the same counts twice in one request.
+    """
+
+    normalized = (route or "").strip().split("?", 1)[0].split("#", 1)[0]
+    return normalized in {"/", ""}
+
+
 def _queue_context(repository: DraftRepository) -> str:
     try:
-        drafts = repository.list_drafts()
+        counts = repository.count_drafts_by_status()
     except Exception:  # a context block must never break the answer
         return ""
-    if not drafts:
+    total = sum(counts.values())
+    if not total:
         return "The reviewer is on the home page. The draft queue is currently empty."
-    counts: dict[str, int] = {}
-    for draft in drafts:
-        counts[draft.status.value] = counts.get(draft.status.value, 0) + 1
     breakdown = ", ".join(
         f"{count} {status}" for status, count in sorted(counts.items())
     )
     return (
         "The reviewer is on the home page, which lists the draft queue and the "
-        f"generation form. Queue: {len(drafts)} drafts ({breakdown})."
+        f"generation form. Queue: {total} drafts ({breakdown})."
     )
 
 

@@ -31,6 +31,29 @@ class AssistantLLMError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class ChatUsage:
+    """Token accounting for one answer, so cost is observable rather than guessed.
+
+    ``cached`` is the slice of the prompt the provider served from its context
+    cache. ``thoughts`` bills as output, which is why it is tracked separately:
+    an assistant that quietly starts reasoning is an assistant that quietly
+    gets expensive.
+    """
+
+    prompt: int = 0
+    cached: int = 0
+    thoughts: int = 0
+    output: int = 0
+    total: int = 0
+
+    @property
+    def billed_prompt(self) -> int:
+        """Prompt tokens charged at full rate, i.e. everything not cached."""
+
+        return max(self.prompt - self.cached, 0)
+
+
+@dataclass(frozen=True)
 class ChatTurn:
     """One prior exchange, replayed to give the model conversation memory."""
 
@@ -41,6 +64,8 @@ class ChatTurn:
 class ChatClient(Protocol):
     provider_name: str
     model: str
+    # Populated once a stream completes; None until then.
+    last_usage: ChatUsage | None
 
     def stream(
         self,
@@ -76,6 +101,9 @@ class GeminiChatClient:
         self.model = (settings.assistant_model or settings.gemini_model).strip()
         if not self.model:
             raise AssistantLLMError("a Gemini model must be configured")
+        self.last_usage: ChatUsage | None = None
+        self._thinking_level = settings.assistant_thinking_level
+        self._max_output_tokens = settings.assistant_max_output_tokens
         base = settings.gemini_base_url.rstrip("/")
         self._url = (
             f"{base}/models/{quote(self.model, safe='')}:streamGenerateContent?alt=sse"
@@ -105,8 +133,13 @@ class GeminiChatClient:
         payload = {
             "systemInstruction": {"parts": [{"text": system}]},
             "contents": contents,
-            "generationConfig": {"temperature": 0.4},
+            "generationConfig": {
+                "temperature": 0.4,
+                "maxOutputTokens": self._max_output_tokens,
+                "thinkingConfig": {"thinkingLevel": self._thinking_level},
+            },
         }
+        self.last_usage = None
 
         try:
             async with self._client.stream(
@@ -126,6 +159,10 @@ class GeminiChatClient:
                         continue
                     for piece in _gemini_text_parts(chunk):
                         yield piece
+                    # Usage arrives on the trailing chunks; keep the last one.
+                    usage = _gemini_usage(chunk)
+                    if usage is not None:
+                        self.last_usage = usage
         except httpx.RequestError as exc:
             raise AssistantLLMError("Gemini network request failed") from exc
 
@@ -150,6 +187,30 @@ def _gemini_text_parts(chunk: str) -> list[str]:
     return texts
 
 
+def _gemini_usage(chunk: str) -> ChatUsage | None:
+    try:
+        body = json.loads(chunk)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(body, dict):
+        return None
+    meta = body.get("usageMetadata")
+    if not isinstance(meta, dict):
+        return None
+
+    def count(key: str) -> int:
+        value = meta.get(key)
+        return value if isinstance(value, int) and value >= 0 else 0
+
+    return ChatUsage(
+        prompt=count("promptTokenCount"),
+        cached=count("cachedContentTokenCount"),
+        thoughts=count("thoughtsTokenCount"),
+        output=count("candidatesTokenCount"),
+        total=count("totalTokenCount"),
+    )
+
+
 class OllamaChatClient:
     """Streams plain text from an Ollama ``/api/chat`` endpoint (NDJSON)."""
 
@@ -164,6 +225,8 @@ class OllamaChatClient:
         self.model = (settings.assistant_model or settings.ollama_model).strip()
         if not self.model:
             raise AssistantLLMError("an Ollama model must be configured")
+        self.last_usage: ChatUsage | None = None
+        self._max_output_tokens = settings.assistant_max_output_tokens
         key = _secret(settings.ollama_api_key)
         if settings.ollama_is_cloud and not key:
             raise AssistantLLMError(
@@ -196,8 +259,12 @@ class OllamaChatClient:
             "model": self.model,
             "messages": messages,
             "stream": True,
-            "options": {"temperature": 0.4},
+            "options": {
+                "temperature": 0.4,
+                "num_predict": self._max_output_tokens,
+            },
         }
+        self.last_usage = None
 
         try:
             async with self._client.stream(
@@ -212,6 +279,9 @@ class OllamaChatClient:
                     text = _ollama_text(line)
                     if text:
                         yield text
+                    usage = _ollama_usage(line)
+                    if usage is not None:
+                        self.last_usage = usage
         except httpx.RequestError as exc:
             raise AssistantLLMError("Ollama network request failed") from exc
 
@@ -230,6 +300,23 @@ def _ollama_text(line: str) -> str:
     if isinstance(message, dict) and isinstance(message.get("content"), str):
         return message["content"]
     return ""
+
+
+def _ollama_usage(line: str) -> ChatUsage | None:
+    stripped = line.strip()
+    if not stripped:
+        return None
+    try:
+        body = json.loads(stripped)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(body, dict) or not body.get("done"):
+        return None
+    prompt = body.get("prompt_eval_count")
+    output = body.get("eval_count")
+    prompt = prompt if isinstance(prompt, int) else 0
+    output = output if isinstance(output, int) else 0
+    return ChatUsage(prompt=prompt, output=output, total=prompt + output)
 
 
 def build_chat_client(settings: Settings) -> ChatClient:
