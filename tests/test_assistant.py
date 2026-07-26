@@ -669,3 +669,61 @@ async def test_ollama_client_parses_ndjson_deltas(tmp_path):
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
+
+
+# --------------------------------------------------------------------------
+# Panel placement and colour
+#
+# These exist because the panel originally rendered *inside* .site-header,
+# which sets `color: #fff`. Assistant replies inherited it and came out white
+# on a white panel -- invisible unless you selected the text. Markup-presence
+# tests all passed while the feature was unreadable.
+# --------------------------------------------------------------------------
+
+
+def test_panel_is_not_nested_inside_the_dark_site_header(tmp_path):
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        html = client.get("/").text
+
+    start = html.index('<header class="site-header">')
+    header_block = html[start : html.index("</header>", start)]
+
+    assert "assistant-launcher" in header_block, "the launcher belongs in the header"
+    assert 'id="assistant-panel"' not in header_block, (
+        "the panel must not sit inside .site-header -- it inherits color:#fff there"
+    )
+    assert 'id="assistant-panel"' in html
+
+
+def test_panel_and_reply_text_declare_their_own_colour():
+    """Neither may rely on inheriting a readable colour from an ancestor."""
+
+    css = (
+        Path(__file__).resolve().parents[1] / "app" / "static" / "styles.css"
+    ).read_text()
+
+    for selector in (".assistant-panel {", ".assistant-text {"):
+        start = css.index(selector)
+        rule = css[start : css.index("}", start)]
+        assert "color:" in rule, f"{selector} must state an explicit color"
+
+
+def test_a_failed_queue_lookup_omits_the_line_rather_than_claiming_empty(tmp_path):
+    """A broken lookup and an empty queue are different facts.
+
+    These lines are handed to the model as ground truth, so collapsing the two
+    made the assistant say "the queue is empty" with confidence when it simply
+    could not read the queue.
+    """
+
+    class BrokenRepository:
+        def list_drafts(self, *args, **kwargs):
+            raise RuntimeError("database is unreachable")
+
+    facts = runtime_facts(
+        settings(tmp_path), BrokenRepository(), provider="gemini", model="m"
+    )
+    assert "Draft queue" not in facts
+    # The rest of the facts must survive the failure.
+    assert "Hint generation:" in facts
