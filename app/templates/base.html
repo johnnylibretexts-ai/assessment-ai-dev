@@ -23,12 +23,13 @@
       </div>
       <div class="site-header-actions">
         <span class="badge">Human review required</span>
-        {% if request is defined and request.app.state.assistant_enabled %}{% include "_assistant.html" %}{% endif %}
+        {% if request is defined and request.app.state.assistant_enabled %}{% include "_assistant_launcher.html" %}{% endif %}
       </div>
     </header>
     <div id="math-rendering-warning" class="notice math-warning" role="status" hidden>
       Math preview unavailable. The original TeX remains visible and editable.
     </div>
     <main>{% block content %}{% endblock %}</main>
+    {% if request is defined and request.app.state.assistant_enabled %}{% include "_assistant.html" %}{% endif %}
   </body>
 </html>

@@ -232,7 +232,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .assistant-launcher:hover { background: #0d2c3e; }
 .assistant-launcher[aria-expanded="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
 
-.assistant-panel { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgb(18 32 51 / 12%); }
+/* Sets its own colour rather than inheriting: this panel used to sit inside
+   .site-header, whose `color: #fff` made assistant replies white on white.
+   It now lives at the end of <body>, and states its colours regardless. */
+.assistant-panel { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); display: flex; flex-direction: column; background: var(--surface); color: var(--ink); border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgb(18 32 51 / 12%); }
 
 .assistant-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); background: #071d2a; color: #fff; }
 .assistant-head h2 { margin: 0; font-size: 1rem; }
@@ -247,7 +250,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .assistant-turn { display: grid; gap: 3px; }
 .assistant-who { margin: 0; color: var(--muted); font-size: .72rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
 /* pre-wrap because answers are inserted as plain text and keep their newlines. */
-.assistant-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .92rem; line-height: 1.5; }
+.assistant-text { margin: 0; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; font-size: .92rem; line-height: 1.5; }
 .assistant-turn-user .assistant-text { padding: 9px 12px; border-radius: 10px; background: #eff8fc; color: var(--brand-dark); }
 .assistant-turn-error .assistant-text { padding: 9px 12px; border-radius: 10px; background: var(--danger-bg); color: var(--danger); }
 .assistant-text.is-streaming::after { content: "\258C"; margin-left: 1px; color: var(--brand); animation: assistant-caret 1s step-end infinite; }

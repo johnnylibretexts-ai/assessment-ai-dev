@@ -1,8 +1,8 @@
-<button type="button" id="assistant-launcher" class="assistant-launcher" aria-expanded="false" aria-controls="assistant-panel">
-  <span aria-hidden="true">&#128172;</span>
-  <span>Ask</span>
-</button>
-
+{# The panel lives at the end of <body>, NOT inside .site-header. It is
+   position:fixed, so nesting it in the header bought nothing and cost real
+   bugs: the header sets `color: #fff`, which the panel inherited, so assistant
+   replies rendered white on white. The launcher stays in the header; the
+   dialog stands on its own. #}
 <aside id="assistant-panel" class="assistant-panel" role="dialog" aria-modal="false" aria-labelledby="assistant-title" hidden>
   <header class="assistant-head">
     <div>

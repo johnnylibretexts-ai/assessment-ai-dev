@@ -82,18 +82,24 @@ def runtime_facts(
     if repository is not None:
         try:
             drafts = repository.list_drafts()
-        except Exception:  # facts are best-effort; never fail the answer
-            drafts = []
-        if drafts:
-            counts: dict[str, int] = {}
-            for draft in drafts:
-                counts[draft.status.value] = counts.get(draft.status.value, 0) + 1
-            breakdown = ", ".join(
-                f"{count} {status}" for status, count in sorted(counts.items())
-            )
-            lines.append(f"- Draft queue: {len(drafts)} total ({breakdown})")
+        except Exception:
+            # Say nothing rather than "empty". These lines are handed to the
+            # model as fact, and a failed lookup is a different fact from an
+            # empty queue -- collapsing the two makes the assistant assert
+            # something false with full confidence. Best-effort means the line
+            # may be absent, not that it may be wrong.
+            pass
         else:
-            lines.append("- Draft queue: empty")
+            if drafts:
+                counts: dict[str, int] = {}
+                for draft in drafts:
+                    counts[draft.status.value] = counts.get(draft.status.value, 0) + 1
+                breakdown = ", ".join(
+                    f"{count} {status}" for status, count in sorted(counts.items())
+                )
+                lines.append(f"- Draft queue: {len(drafts)} total ({breakdown})")
+            else:
+                lines.append("- Draft queue: empty")
 
     return "\n".join(lines)
 
