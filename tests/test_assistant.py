@@ -437,8 +437,10 @@ def test_history_is_trimmed_to_max_turns(tmp_path):
             content=f"question {index}",
         )
 
+    # 4 turns is 8 messages. This assertion used to read `== 4`, which encoded
+    # the bug: the setting was passed straight through as a row limit.
     history = service.history("someone")
-    assert len(history) == 4
+    assert len(history) == 8
     assert history[-1]["content"] == "question 9"
     database.dispose()
 
@@ -727,3 +729,172 @@ def test_a_failed_queue_lookup_omits_the_line_rather_than_claiming_empty(tmp_pat
     assert "Draft queue" not in facts
     # The rest of the facts must survive the failure.
     assert "Hint generation:" in facts
+
+
+# --------------------------------------------------------------------------
+# Concurrency: one active conversation per reviewer
+# --------------------------------------------------------------------------
+
+
+def test_only_one_active_conversation_survives_a_concurrent_first_turn(tmp_path):
+    """The check-then-insert race must be settled by the database, not by luck.
+
+    Two first-turn requests that both observe "no conversation yet" used to both
+    insert, silently splitting one tester's transcript across two rows.
+    """
+
+    database = init_database(f"sqlite:///{tmp_path / 'race.db'}")
+    create_schema(database.engine)
+    store = AssistantStore(database.session_factory)
+
+    from sqlalchemy.exc import IntegrityError
+
+    from app.assistant.store import AssistantConversation
+
+    # Simulate the loser of the race: a competing row is already committed by
+    # the time our insert reaches the database.
+    with database.session_factory() as rival:
+        rival.add(AssistantConversation(reviewer="racer", active=True, title="rival"))
+        rival.commit()
+        winner_id = rival.query(AssistantConversation).one().id
+
+    adopted = store.ensure_conversation("racer", title="mine")
+    assert adopted == winner_id, "the loser must adopt the winner's conversation"
+
+    # And the index genuinely forbids a second active row.
+    with pytest.raises(IntegrityError):
+        with database.session_factory() as session:
+            session.add(
+                AssistantConversation(reviewer="racer", active=True, title="second")
+            )
+            session.commit()
+    database.dispose()
+
+
+def test_reset_retires_the_old_conversation_and_keeps_it(tmp_path):
+    database = init_database(f"sqlite:///{tmp_path / 'reset.db'}")
+    create_schema(database.engine)
+    store = AssistantStore(database.session_factory)
+
+    from app.assistant.store import AssistantConversation
+
+    first = store.ensure_conversation("someone", title="first")
+    store.append(
+        reviewer="someone", conversation_id=first, role="user", content="hello"
+    )
+    second = store.start_conversation("someone")
+
+    assert second != first
+    assert store.active_conversation_id("someone") == second
+    assert store.messages("someone") == [], "the new conversation starts empty"
+
+    # The retired conversation is kept as a record, not deleted.
+    with database.session_factory() as session:
+        rows = (
+            session.query(AssistantConversation)
+            .order_by(AssistantConversation.id)
+            .all()
+        )
+        assert [row.active for row in rows] == [False, True]
+    database.dispose()
+
+
+def test_migration_adds_active_to_a_pre_existing_table(tmp_path):
+    """A database written by the first release must upgrade in place."""
+
+    from sqlalchemy import inspect as sa_inspect, text as sa_text
+
+    database = init_database(f"sqlite:///{tmp_path / 'old.db'}")
+    with database.engine.begin() as connection:
+        connection.execute(
+            sa_text(
+                "CREATE TABLE assistant_conversations ("
+                " id INTEGER PRIMARY KEY, reviewer VARCHAR(255) NOT NULL,"
+                " title VARCHAR(120) NOT NULL DEFAULT '',"
+                " created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)"
+            )
+        )
+        # Two rows that would violate the new index unless the migration
+        # retires the older one first.
+        for name in ("a", "b"):
+            connection.execute(
+                sa_text(
+                    "INSERT INTO assistant_conversations "
+                    "(reviewer, title, created_at, updated_at) "
+                    f"VALUES ('dup', '{name}', '2026-01-01', '2026-01-01')"
+                )
+            )
+
+    create_schema(database.engine)
+
+    columns = {
+        column["name"]
+        for column in sa_inspect(database.engine).get_columns("assistant_conversations")
+    }
+    assert "active" in columns
+
+    store = AssistantStore(database.session_factory)
+    assert store.active_conversation_id("dup") is not None
+    with database.engine.connect() as connection:
+        active = connection.execute(
+            sa_text(
+                "SELECT COUNT(*) FROM assistant_conversations "
+                "WHERE reviewer='dup' AND active=1"
+            )
+        ).scalar()
+    assert active == 1, "duplicates must be retired down to one active row"
+
+    # Idempotent: running it again changes nothing and does not error.
+    create_schema(database.engine)
+    database.dispose()
+
+
+# --------------------------------------------------------------------------
+# Turn semantics, template limit, and the reset guard
+# --------------------------------------------------------------------------
+
+
+def test_max_turns_counts_exchanges_not_rows(tmp_path):
+    """ "Turns" must mean question-and-answer pairs, not stored messages."""
+
+    database = init_database(f"sqlite:///{tmp_path / 'turns.db'}")
+    create_schema(database.engine)
+    store = AssistantStore(database.session_factory)
+    resolved = settings(tmp_path, assistant_max_turns=3)
+    service = AssistantService(resolved, store, None, client_factory=FakeChatClient)
+
+    conversation_id = store.ensure_conversation("someone", title="t")
+    for index in range(10):
+        store.append(
+            reviewer="someone",
+            conversation_id=conversation_id,
+            role="user" if index % 2 == 0 else "assistant",
+            content=f"message {index}",
+        )
+
+    history = service.history("someone")
+    assert len(history) == 6, "3 turns is 6 messages"
+    assert history[-1]["content"] == "message 9"
+    database.dispose()
+
+
+def test_textarea_limit_follows_the_configured_maximum(tmp_path):
+    app = create_app(settings(tmp_path, assistant_max_message_chars=1234))
+    with TestClient(app) as client:
+        assert 'maxlength="1234"' in client.get("/").text
+
+
+def test_reset_button_checks_the_response_before_clearing():
+    """A refused reset must not blank the panel the server still holds."""
+
+    script = (
+        Path(__file__).resolve().parents[1] / "app" / "static" / "assistant.js"
+    ).read_text()
+    reset_block = script[
+        script.index("resetButton.addEventListener") : script.index(
+            "const consumeFrames"
+        )
+    ]
+    assert "response.ok" in reset_block, (
+        "fetch resolves on 403/503, so the reset handler must inspect the status"
+    )

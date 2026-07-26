@@ -215,6 +215,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Set outside the lifespan so templates can read it on any request, including
     # in tests that render without a started lifespan.
     app.state.assistant_enabled = resolved_settings.assistant_enabled
+    app.state.assistant_max_message_chars = (
+        resolved_settings.assistant_max_message_chars
+    )
     if resolved_settings.assistant_enabled:
         app.include_router(build_assistant_router(resolved_settings))
     app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

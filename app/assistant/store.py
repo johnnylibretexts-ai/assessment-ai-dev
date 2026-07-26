@@ -8,6 +8,12 @@ without touching the record-of-truth schema.
 
 Conversations are scoped to the proxy-asserted reviewer and are never read by
 the generation pipeline.
+
+At most one conversation per reviewer is ``active``, and that is enforced by a
+partial unique index rather than by careful application code. Two concurrent
+first-turn requests used to be able to read "no conversation yet" and both
+insert, silently splitting one tester's history in half. The database now
+refuses the second insert and the loser adopts the winner's conversation.
 """
 
 from __future__ import annotations
@@ -16,18 +22,25 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     delete,
+    inspect,
     select,
+    text,
+    update,
 )
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 MAX_TITLE_CHARS = 120
+ACTIVE_CONVERSATION_INDEX = "uq_assistant_active_conversation"
 
 
 class AssistantBase(DeclarativeBase):
@@ -40,9 +53,21 @@ def _now() -> datetime:
 
 class AssistantConversation(AssistantBase):
     __tablename__ = "assistant_conversations"
+    __table_args__ = (
+        # Partial: only ONE active row per reviewer, but any number of retired
+        # ones, so "New" keeps prior conversations as a record.
+        Index(
+            ACTIVE_CONVERSATION_INDEX,
+            "reviewer",
+            unique=True,
+            sqlite_where=text("active = 1"),
+            postgresql_where=text("active"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reviewer: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     title: Mapped[str] = mapped_column(
         String(MAX_TITLE_CHARS), default="", nullable=False
     )
@@ -75,6 +100,47 @@ class AssistantMessage(AssistantBase):
 
 def create_schema(engine: Engine) -> None:
     AssistantBase.metadata.create_all(engine)
+    if engine.dialect.name == "sqlite":
+        _apply_sqlite_additive_migration(engine)
+
+
+def _apply_sqlite_additive_migration(engine: Engine) -> None:
+    """Bring a table created before ``active`` existed up to the current shape.
+
+    ``create_all`` skips tables that already exist, indexes included, so a
+    database written by the first release of this feature needs the column and
+    the partial index added by hand. All three steps are idempotent.
+    """
+
+    columns = {
+        column["name"]
+        for column in inspect(engine).get_columns("assistant_conversations")
+    }
+    with engine.begin() as connection:
+        if "active" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE assistant_conversations "
+                    "ADD COLUMN active BOOLEAN NOT NULL DEFAULT 1"
+                )
+            )
+        # Any duplicates predating the index must be retired first, or creating
+        # a unique index over them fails and the migration cannot complete.
+        connection.execute(
+            text(
+                "UPDATE assistant_conversations SET active = 0 "
+                "WHERE active = 1 AND id NOT IN ("
+                "  SELECT MAX(id) FROM assistant_conversations "
+                "  WHERE active = 1 GROUP BY reviewer"
+                ")"
+            )
+        )
+        connection.execute(
+            text(
+                f"CREATE UNIQUE INDEX IF NOT EXISTS {ACTIVE_CONVERSATION_INDEX} "
+                "ON assistant_conversations (reviewer) WHERE active = 1"
+            )
+        )
 
 
 class AssistantStore:
@@ -83,34 +149,80 @@ class AssistantStore:
     def __init__(self, sessions: sessionmaker[Session]) -> None:
         self._sessions = sessions
 
+    @staticmethod
+    def _active_query(reviewer: str):
+        return (
+            select(AssistantConversation.id)
+            .where(
+                AssistantConversation.reviewer == reviewer,
+                AssistantConversation.active.is_(True),
+            )
+            .order_by(AssistantConversation.id.desc())
+            .limit(1)
+        )
+
     def active_conversation_id(self, reviewer: str) -> int | None:
         with self._sessions() as session:
-            return session.scalar(
-                select(AssistantConversation.id)
-                .where(AssistantConversation.reviewer == reviewer)
-                .order_by(AssistantConversation.id.desc())
-                .limit(1)
-            )
+            return session.scalar(self._active_query(reviewer))
 
     def ensure_conversation(self, reviewer: str, *, title: str) -> int:
-        existing = self.active_conversation_id(reviewer)
-        if existing is not None:
-            return existing
+        """Return this reviewer's active conversation, creating one if needed.
+
+        The check and the insert share a session, and the partial unique index
+        settles the race the check cannot: if a concurrent request inserted
+        first, our insert is rejected and we adopt theirs rather than starting a
+        second conversation and splitting the transcript.
+        """
+
         with self._sessions() as session:
+            existing = session.scalar(self._active_query(reviewer))
+            if existing is not None:
+                return existing
+
             conversation = AssistantConversation(
-                reviewer=reviewer, title=title[:MAX_TITLE_CHARS]
+                reviewer=reviewer, active=True, title=title[:MAX_TITLE_CHARS]
             )
             session.add(conversation)
-            session.commit()
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                winner = session.scalar(self._active_query(reviewer))
+                if winner is None:
+                    raise
+                return winner
             return conversation.id
 
     def start_conversation(self, reviewer: str) -> int:
-        """Begin a fresh conversation, leaving prior ones intact as a record."""
+        """Retire the active conversation and open a fresh one, atomically.
+
+        Both statements land in one transaction, so there is never a moment
+        where the reviewer has zero or two active conversations.
+        """
 
         with self._sessions() as session:
-            conversation = AssistantConversation(reviewer=reviewer, title="")
+            session.execute(
+                update(AssistantConversation)
+                .where(
+                    AssistantConversation.reviewer == reviewer,
+                    AssistantConversation.active.is_(True),
+                )
+                .values(active=False)
+            )
+            conversation = AssistantConversation(
+                reviewer=reviewer, active=True, title=""
+            )
             session.add(conversation)
-            session.commit()
+            try:
+                session.commit()
+            except IntegrityError:
+                # A concurrent reset already opened a fresh conversation. That
+                # is the outcome this caller wanted, so adopt it.
+                session.rollback()
+                winner = session.scalar(self._active_query(reviewer))
+                if winner is None:
+                    raise
+                return winner
             return conversation.id
 
     def messages(

@@ -99,7 +99,7 @@ draft, edit, approve, publish, or configure anything. Off by default.
 ```dotenv
 ASSESSMENT_AI_ASSISTANT_ENABLED=false
 ASSESSMENT_AI_ASSISTANT_MODEL=
-ASSESSMENT_AI_ASSISTANT_MAX_TURNS=24
+ASSESSMENT_AI_ASSISTANT_MAX_TURNS=12
 ASSESSMENT_AI_ASSISTANT_MAX_MESSAGE_CHARS=4000
 ASSESSMENT_AI_ASSISTANT_RATE_LIMIT_PER_MINUTE=12
 ASSESSMENT_AI_ASSISTANT_TIMEOUT_SECONDS=120
@@ -107,7 +107,8 @@ ASSESSMENT_AI_ASSISTANT_TIMEOUT_SECONDS=120
 
 It answers from a curated corpus baked into the image (`app/assistant/corpus/`) plus runtime facts
 recomputed per request — the live flag state, the active provider and model, and the draft queue.
-There is no retrieval layer: the corpus is a few tens of kilobytes against a million-token context
+One turn is a question and its answer, so `MAX_TURNS=12` replays 24 stored messages. There is
+no retrieval layer: the corpus is a few tens of kilobytes against a million-token context
 window, so chunking and embedding it would add infrastructure and hand the model less than it can
 already hold. The corpus is shown verbatim to anyone who can reach the app and is checked by test
 for credentials, hashes, and private addresses.
