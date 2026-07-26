@@ -37,6 +37,14 @@ button { border: 0; border-radius: 8px; padding: 11px 18px; background: var(--br
 button:hover { background: var(--brand-dark); }
 .button-link { display: inline-block; border-radius: 8px; padding: 10px 16px; background: var(--brand); color: #fff; font-weight: 750; text-decoration: none; }
 .button-link:hover { background: var(--brand-dark); }
+/* MUST come after the rule above and be more specific than it. The UA
+   stylesheet's [hidden] { display: none } loses to any author `display`
+   declaration, so without this the hidden attribute does nothing. That let
+   "Review generated item" (job.html, rendered `hidden` and only revealed by
+   jobs.js on status === "succeeded") sit clickable for the whole run, linking
+   to a draft that was still being written. Same pattern as
+   .generation-status[hidden] and .assistant-panel[hidden]. */
+.button-link[hidden] { display: none; }
 button:disabled { background: var(--brand-dark); cursor: wait; opacity: .92; }
 button.secondary { background: #566575; }
 .generate-form button[type="submit"] { min-width: 153px; }
