@@ -34,8 +34,13 @@ reasoning stays legible. Where the two disagree, this section wins.
   split the command into independent lists, so a failing `ruff` did not stop the build as long as
   both pytest runs passed. Fixed in PR #5 (`2db76dd`) and proven in both directions — inject an
   unused import and the build fails; clean tree and it passes. Wait for `CLEAN`, not `UNSTABLE`.
-- **Still open and unchanged:** P0 manual browser QA, the durable browser regression, and the
-  accessibility review. Being listed here does not close them.
+- **All three remaining items have been executed; one product decision is still open.** The durable
+  browser regression landed as PR #8, and the P0 manual matrix and the accessibility review were both
+  run on 2026-07-26 — results under "Manual browser QA results" below. Execution is complete, but
+  **scenario D remains pending disposition**: the plan and `review-workflow.js` disagree about the
+  dirty flag, tracked as issue #11. Two caveats are stated rather than hidden: no real screen reader
+  was driven, only the structures one depends on; and the browser scenarios run in the Docker build
+  gate, which pull-request CI does not currently execute.
 - **New since this document was written.** The Dockerfile `test` stage is now a real build gate
   (PR #3, `f50c414`); previously `runtime` did not depend on `test`, so a default `docker build`
   skipped ruff and pytest entirely, and a `&&` chain let one computation failure hide ~818 other
@@ -719,6 +724,71 @@ cd /Users/johnnyrobot/code/libretexts-dev/.worktrees/assessment-ai-math-renderin
 uv run python scripts/verify_framework_catalogs.py \
   --adapt-root /Users/johnnyrobot/code/libretexts-dev/.worktrees/adapt-review-publishing-workflow
 ```
+
+## Manual browser QA results — executed 2026-07-26
+
+The plan below was run end to end against a **disposable SQLite database and a `FakeAdapt`**, per its
+own instruction. No real draft was touched, no ADAPT request was made, and live production was never
+involved. **53 of 54 checks passed.**
+
+| | Scenario | Result |
+|---|---|---|
+| A | Failed hint edit preserves state | 9/9 |
+| B | Failed hint approval preserves confirmations | 4/4 — see note |
+| C | Successful approval persists | 6/6 |
+| D | Dirty edits cannot be approved | 3/4 — see divergence |
+| E | Exact framework mapping | 4/4 |
+| F | Current revision already published | 6/6 |
+| G | Earlier published, newer pending | 4/4 |
+| H | Accessibility and keyboard | 11/11 |
+| I | QTI and ADAPT evidence | 7/7 |
+
+**B behaves more strictly than this plan assumes.** The plan expects Approve to be clickable on an
+invalid saved ladder and to return 422. The UI does not render the control at all; it shows a repair
+notice. Forging the POST anyway returns **422 with no partial approval**, so both layers hold. The
+plan's step 2 is therefore unreachable through the UI by design, not by omission.
+
+**D is the one failure, and it is a real divergence.** `review-workflow.js` sets `hintEditsDirty` on
+any `input` event and never compares against the saved values, so the flag **latches**: retyping the
+original text does not re-enable approval, contrary to "returning the saved text restores the clean
+state". It errs safe — it over-blocks approval rather than under-blocking — so the browser regression
+in `tests/browser/` pins the *implemented* behaviour with a comment naming what to change if the
+planned behaviour should win. **This needs a decision: change the plan, or change the JS — tracked as issue #11.**
+
+**Security guards verified end to end.** A forged `topic_stable_id` on publish returns 422 with zero
+ADAPT calls. A forged hint approval on an invalid ladder returns 422. Repeat publish leaves
+`create_calls` at 1 — no duplicate remote question. The QTI package opens as a valid archive
+containing `imsmanifest.xml` plus the item, and contains the saved revision's stem. The download
+returns **200 only when both guards are satisfied — an authorised reviewer identity *and* a
+same-origin request carrying `Origin`/`Referer`** — and 403 when either is missing. Identity alone is
+not sufficient; that distinction is easy to miss and is what the note below is about.
+
+**Accessibility (H).** axe-core 4.x, WCAG 2.0/2.1 A and AA, found **no serious or critical
+violations** on the queue and draft pages at 1280px and at 380px. Every visible control has an
+accessible name; there is no positive `tabindex`; validation errors are announced through
+`role="alert"`; the invalid field is linked by `aria-errormessage`; focus moves to it without
+trapping; status is carried by text as well as colour; math content is visible and not
+same-colour-on-same-colour. **Caveat: no real screen reader was driven** — the structures a screen
+reader depends on were verified, which is not the same as hearing the page.
+
+**One usability defect worth fixing, minor.** `download_qti` applies `_require_same_origin` to a
+**GET**. CSRF guards exist to protect state-changing requests; applying one to a download means a
+reviewer who pastes or bookmarks the URL receives 403, because a typed navigation sends neither
+`Origin` nor `Referer`. The link works when clicked from within the app, so it is not broken in
+normal use — but "paste the download link to a colleague" fails in a way that reads as an auth bug.
+It also cost time during this QA run: the first two attempts looked like an authentication failure
+until the guards were isolated. Either drop the same-origin check on this read-only route or state
+in the UI that the link must be clicked, not copied.
+
+**Re-running this.** Scenarios A, C, D, F and G are now automated in `tests/browser/`. They run in
+the Docker `test` stage, which means they execute on an actual `docker build` — the deploy path —
+and **not** on a pull request: there is no CI workflow running the gate, and GitHub's `CLEAN` status
+reflects only the AI reviewers. So a violation can reach `main` and stay invisible until someone
+next builds, which is exactly how the `app/db.py` formatting break in `169d19c` survived merge.
+Adding PR CI that runs the gate would close that window. The remaining manual value is in B, E, H
+and I. The scripts used are throwaway, but the
+fixtures they rely on live in `tests/browser/harness.py`, including `disposable_instance()`, which
+serves a seeded fake-publishing instance on a real port.
 
 ## Manual browser evaluation plan
 
