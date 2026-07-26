@@ -108,9 +108,16 @@ def free_port() -> int:
         return int(probe.getsockname()[1])
 
 
-def build_settings(db_path: Path, port: int, qti_dir: Path) -> Settings:
+def build_settings(
+    db_path: Path, port: int, qti_dir: Path, **overrides: Any
+) -> Settings:
     # allowed_origin must match the port the browser actually loads, or every
     # form POST is refused by the same-origin check.
+    #
+    # ``overrides`` lets a regression opt into a flag the default fixture leaves
+    # off -- the generation-options fieldset, for instance, only renders when
+    # advanced_items_enabled is true. Defaults stay unchanged for every caller
+    # that passes nothing.
     return Settings(
         _env_file=None,
         database_url=f"sqlite:///{db_path}",
@@ -120,6 +127,7 @@ def build_settings(db_path: Path, port: int, qti_dir: Path) -> Settings:
         adapt_folder_id=42,
         qti_storage_dir=qti_dir,
         ollama_api_key=None,
+        **overrides,
     )
 
 
@@ -320,7 +328,9 @@ class LiveServer:
 
 
 @contextmanager
-def disposable_instance(tmp_path: Path, port: int | None = None) -> Iterator[dict]:
+def disposable_instance(
+    tmp_path: Path, port: int | None = None, **setting_overrides: Any
+) -> Iterator[dict]:
     """Start a seeded, fake-publishing Assessment AI and yield its handles."""
 
     # The port is baked into allowed_origin, so losing a port race means
@@ -333,7 +343,10 @@ def disposable_instance(tmp_path: Path, port: int | None = None) -> Iterator[dic
     for attempt in range(1, attempts + 1):
         chosen = port or free_port()
         settings = build_settings(
-            tmp_path / "browser-regression.db", chosen, tmp_path / "qti"
+            tmp_path / "browser-regression.db",
+            chosen,
+            tmp_path / "qti",
+            **setting_overrides,
         )
         app = create_app(settings)
         server = LiveServer(app, chosen)
