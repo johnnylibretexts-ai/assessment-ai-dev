@@ -34,10 +34,13 @@ reasoning stays legible. Where the two disagree, this section wins.
   split the command into independent lists, so a failing `ruff` did not stop the build as long as
   both pytest runs passed. Fixed in PR #5 (`2db76dd`) and proven in both directions — inject an
   unused import and the build fails; clean tree and it passes. Wait for `CLEAN`, not `UNSTABLE`.
-- **All three remaining items are now closed.** The durable browser regression landed as PR #8; the
-  P0 manual matrix and the accessibility review were both executed on 2026-07-26 and are recorded
-  under "Manual browser QA results" below. One caveat is called out there rather than hidden: no
-  real screen reader was driven, only the structures one depends on.
+- **All three remaining items have been executed; one product decision is still open.** The durable
+  browser regression landed as PR #8, and the P0 manual matrix and the accessibility review were both
+  run on 2026-07-26 — results under "Manual browser QA results" below. Execution is complete, but
+  **scenario D remains pending disposition**: the plan and `review-workflow.js` disagree about the
+  dirty flag, tracked as issue #11. Two caveats are stated rather than hidden: no real screen reader
+  was driven, only the structures one depends on; and the browser scenarios run in the Docker build
+  gate, which pull-request CI does not currently execute.
 - **New since this document was written.** The Dockerfile `test` stage is now a real build gate
   (PR #3, `f50c414`); previously `runtime` did not depend on `test`, so a default `docker build`
   skipped ruff and pytest entirely, and a `&&` chain let one computation failure hide ~818 other
@@ -750,7 +753,7 @@ any `input` event and never compares against the saved values, so the flag **lat
 original text does not re-enable approval, contrary to "returning the saved text restores the clean
 state". It errs safe — it over-blocks approval rather than under-blocking — so the browser regression
 in `tests/browser/` pins the *implemented* behaviour with a comment naming what to change if the
-planned behaviour should win. **This needs a decision: change the plan, or change the JS.**
+planned behaviour should win. **This needs a decision: change the plan, or change the JS — tracked as issue #11.**
 
 **Security guards verified end to end.** A forged `topic_stable_id` on publish returns 422 with zero
 ADAPT calls. A forged hint approval on an invalid ladder returns 422. Repeat publish leaves
@@ -766,14 +769,22 @@ trapping; status is carried by text as well as colour; math content is visible a
 same-colour-on-same-colour. **Caveat: no real screen reader was driven** — the structures a screen
 reader depends on were verified, which is not the same as hearing the page.
 
-**One usability observation, not a defect.** `download_qti` applies `_require_same_origin` to a
-**GET**. CSRF guards normally protect state-changing requests, and here it means a reviewer who
-pastes the download URL into the address bar receives 403, because a typed navigation sends neither
-`Origin` nor `Referer`. Conservative rather than wrong, but worth knowing before someone reports it
-as an auth bug.
+**One usability defect worth fixing, minor.** `download_qti` applies `_require_same_origin` to a
+**GET**. CSRF guards exist to protect state-changing requests; applying one to a download means a
+reviewer who pastes or bookmarks the URL receives 403, because a typed navigation sends neither
+`Origin` nor `Referer`. The link works when clicked from within the app, so it is not broken in
+normal use — but "paste the download link to a colleague" fails in a way that reads as an auth bug.
+It also cost time during this QA run: the first two attempts looked like an authentication failure
+until the guards were isolated. Either drop the same-origin check on this read-only route or state
+in the UI that the link must be clicked, not copied.
 
-**Re-running this.** Scenarios A, C, D, F and G are now automated in `tests/browser/` and run on
-every build. The remaining manual value is in B, E, H and I. The scripts used are throwaway, but the
+**Re-running this.** Scenarios A, C, D, F and G are now automated in `tests/browser/`. They run in
+the Docker `test` stage, which means they execute on an actual `docker build` — the deploy path —
+and **not** on a pull request: there is no CI workflow running the gate, and GitHub's `CLEAN` status
+reflects only the AI reviewers. So a violation can reach `main` and stay invisible until someone
+next builds, which is exactly how the `app/db.py` formatting break in `169d19c` survived merge.
+Adding PR CI that runs the gate would close that window. The remaining manual value is in B, E, H
+and I. The scripts used are throwaway, but the
 fixtures they rely on live in `tests/browser/harness.py`, including `disposable_instance()`, which
 serves a seeded fake-publishing instance on a real port.
 
