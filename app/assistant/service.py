@@ -14,9 +14,15 @@ from collections.abc import AsyncIterator, Callable
 
 from ..config import Settings
 from ..db import DraftRepository
-from .context import page_context
-from .llm import AssistantLLMError, ChatClient, ChatTurn, build_chat_client
-from .prompt import build_system_prompt
+from .context import page_context, route_describes_queue
+from .llm import (
+    AssistantLLMError,
+    ChatClient,
+    ChatTurn,
+    ChatUsage,
+    build_chat_client,
+)
+from .prompt import build_turn_context, compose_question, static_system_prompt
 from .store import AssistantStore
 
 
@@ -120,18 +126,25 @@ class AssistantService:
         )
 
         client: ChatClient | None = None
+        usage: ChatUsage | None = None
         answered = ""
         try:
             client = self._client_factory()
-            system = build_system_prompt(
+            # The static prefix never varies, so the provider can serve it from
+            # its context cache; everything request-specific rides on the
+            # question instead of being spliced into the system prompt.
+            turn_context = build_turn_context(
                 self._settings,
                 self._repository,
                 provider=client.provider_name,
                 model=client.model,
                 page_context=context,
+                queue_described_elsewhere=route_describes_queue(route),
             )
             async for piece in client.stream(
-                system=system, history=prior, question=question
+                system=static_system_prompt(),
+                history=prior,
+                question=compose_question(turn_context, question),
             ):
                 if not piece:
                     continue
@@ -161,6 +174,9 @@ class AssistantService:
             return
         finally:
             if client is not None:
+                # Read before closing: the client owns the record of what the
+                # answer actually cost.
+                usage = client.last_usage
                 await client.aclose()
 
         if not answered.strip():
@@ -182,5 +198,6 @@ class AssistantService:
             content=answered,
             model=client.model if client is not None else "",
             page_route=route,
+            usage=usage,
         )
         yield "done", ""

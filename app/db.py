@@ -30,6 +30,7 @@ from sqlalchemy import (
     create_engine,
     delete,
     event,
+    func,
     inspect,
     select,
     text,
@@ -1614,6 +1615,31 @@ class DraftRepository:
         if draft is None:
             raise DraftNotFoundError(f"draft {draft_id} was not found")
         return draft
+
+    def count_drafts_by_status(
+        self,
+        *,
+        current_sources_only: bool = True,
+    ) -> dict[str, int]:
+        """Tally drafts per review status without loading any of them.
+
+        ``list_drafts`` eagerly loads five relationships per row, which is far
+        too much work to print a count and grows with the queue. Callers that
+        only need a tally use this.
+        """
+
+        query = (
+            select(Draft.status, func.count(Draft.id))
+            .join(Draft.source)
+            .group_by(Draft.status)
+        )
+        if current_sources_only:
+            query = query.where(SourceSnapshot.is_current.is_(True))
+        with self._sessions() as session:
+            return {
+                (status.value if hasattr(status, "value") else str(status)): count
+                for status, count in session.execute(query).all()
+            }
 
     def list_drafts(
         self,

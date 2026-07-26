@@ -23,11 +23,17 @@ from app.assistant.context import page_context
 from app.assistant.llm import (
     AssistantLLMError,
     ChatTurn,
+    ChatUsage,
     GeminiChatClient,
     OllamaChatClient,
     build_chat_client,
 )
-from app.assistant.prompt import build_system_prompt, runtime_facts
+from app.assistant.prompt import (
+    build_turn_context,
+    compose_question,
+    runtime_facts,
+    static_system_prompt,
+)
 from app.assistant.service import AssistantRateLimited, AssistantService, RateLimiter
 from app.assistant.store import AssistantStore, create_schema
 from app.config import Settings
@@ -135,10 +141,15 @@ class FakeChatClient:
         self.closed = False
         self.system = ""
         self.history: list[ChatTurn] = []
+        self.question = ""
+        self.last_usage: ChatUsage | None = ChatUsage(
+            prompt=5_200, cached=5_000, thoughts=0, output=40, total=5_240
+        )
 
     async def stream(self, *, system, history, question) -> AsyncIterator[str]:
         self.system = system
         self.history = list(history)
+        self.question = question
         for index, piece in enumerate(self.pieces):
             if self.fail and index == 1:
                 raise AssistantLLMError("provider exploded")
@@ -551,27 +562,44 @@ def test_runtime_facts_report_live_flag_state(tmp_path):
     assert "gemini-3.6-flash" in facts
 
 
-def test_system_prompt_contains_instruction_corpus_and_context(tmp_path):
+def test_static_prefix_is_byte_identical_across_requests(tmp_path):
+    """Prefix caching depends on this. If it drifts, caching silently stops."""
+
+    first = static_system_prompt()
+    second = static_system_prompt()
+    assert first == second
+    assert "Demo Assistant" in first
+    assert "REFERENCE MATERIAL" in first
+    # The model must be told it cannot act, or it will claim it did.
+    assert "no tools" in first
+    # Nothing deployment- or request-specific may leak into the cached prefix.
+    for volatile in ("RUNTIME FACTS", "Draft queue", "WHAT THE USER IS LOOKING AT"):
+        assert volatile not in first, f"{volatile} would break prefix caching"
+
+
+def test_volatile_content_rides_on_the_question_not_the_prefix(tmp_path):
     resolved = settings(tmp_path)
-    prompt = build_system_prompt(
+    turn = build_turn_context(
         resolved,
         None,
         provider="gemini",
         model="gemini-3.6-flash",
         page_context="The reviewer is looking at draft 7.",
     )
-    assert "Demo Assistant" in prompt
-    assert "REFERENCE MATERIAL" in prompt
-    assert "RUNTIME FACTS" in prompt
-    assert "WHAT THE USER IS LOOKING AT" in prompt
-    assert "draft 7" in prompt
-    # The model must be told it cannot act, or it will claim it did.
-    assert "no tools" in prompt
+    assert "RUNTIME FACTS" in turn
+    assert "WHAT THE USER IS LOOKING AT" in turn
+    assert "draft 7" in turn
+
+    composed = compose_question(turn, "why is it blocked?")
+    assert composed.endswith("why is it blocked?")
+    assert "=== QUESTION ===" in composed
+    # With no context the question is sent bare, so short exchanges stay cheap.
+    assert compose_question("", "hello") == "hello"
 
 
-def test_system_prompt_omits_context_section_when_empty(tmp_path):
-    prompt = build_system_prompt(settings(tmp_path), None, provider="gemini", model="m")
-    assert "WHAT THE USER IS LOOKING AT" not in prompt
+def test_turn_context_omits_the_page_section_when_there_is_none(tmp_path):
+    turn = build_turn_context(settings(tmp_path), None, provider="g", model="m")
+    assert "WHAT THE USER IS LOOKING AT" not in turn
 
 
 # --------------------------------------------------------------------------
@@ -898,3 +926,225 @@ def test_reset_button_checks_the_response_before_clearing():
     assert "response.ok" in reset_block, (
         "fetch resolves on 403/503, so the reset handler must inspect the status"
     )
+
+
+# --------------------------------------------------------------------------
+# Cost control
+#
+# Three things drive the bill: thinking tokens (billed as output), runaway
+# answers, and resending the same prefix uncached on every turn. The first two
+# were unbounded until these tests existed.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_gemini_request_caps_thinking_and_output(tmp_path):
+    """Left unset these inherit the model default, which is the expensive path."""
+
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            text='data: {"candidates":[{"content":{"parts":[{"text":"hi"}]}}]}\n\n',
+        )
+
+    client = GeminiChatClient(
+        settings(tmp_path, assistant_max_output_tokens=512),
+        transport=httpx.MockTransport(handler),
+    )
+    async for _ in client.stream(system="s", history=[], question="q"):
+        pass
+    await client.aclose()
+
+    config = seen["generationConfig"]
+    assert config["maxOutputTokens"] == 512
+    assert config["thinkingConfig"] == {"thinkingLevel": "minimal"}
+
+
+@pytest.mark.anyio
+async def test_gemini_usage_is_captured_including_cache_hits(tmp_path):
+    body = (
+        'data: {"candidates":[{"content":{"parts":[{"text":"hi"}]}}]}\n\n'
+        'data: {"usageMetadata":{"promptTokenCount":5300,'
+        '"cachedContentTokenCount":5215,"thoughtsTokenCount":0,'
+        '"candidatesTokenCount":42,"totalTokenCount":5342}}\n\n'
+    )
+
+    client = GeminiChatClient(
+        settings(tmp_path),
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, text=body)),
+    )
+    async for _ in client.stream(system="s", history=[], question="q"):
+        pass
+    usage = client.last_usage
+    await client.aclose()
+
+    assert usage is not None
+    assert usage.prompt == 5300
+    assert usage.cached == 5215
+    assert usage.output == 42
+    # What actually gets charged at full prompt rate.
+    assert usage.billed_prompt == 85
+
+
+@pytest.mark.anyio
+async def test_ollama_request_caps_output(tmp_path):
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            text='{"message":{"content":"hi"}}\n'
+            '{"done":true,"prompt_eval_count":100,"eval_count":7}\n',
+        )
+
+    client = OllamaChatClient(
+        settings(
+            tmp_path,
+            ollama_base_url="http://localhost:11434",
+            assistant_max_output_tokens=333,
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    async for _ in client.stream(system="s", history=[], question="q"):
+        pass
+    usage = client.last_usage
+    await client.aclose()
+
+    assert seen["options"]["num_predict"] == 333
+    assert usage is not None and usage.prompt == 100 and usage.output == 7
+
+
+def test_usage_is_persisted_with_the_answer(tmp_path):
+    fake = FakeChatClient(["answered"])
+    app, install = _app_with_fake(tmp_path, fake)
+    with TestClient(app) as client:
+        install(client)
+        client.post(
+            "/assistant/message",
+            json={"question": "what does bloom mean?"},
+            headers={**REVIEWER, **ORIGIN},
+        )
+        store = client.app.state.assistant_service._store
+        totals = store.usage_totals()
+
+    assert totals["answers"] == 1
+    assert totals["prompt_tokens"] == 5_200
+    assert totals["cached_tokens"] == 5_000
+    # The number that actually costs money.
+    assert totals["billed_prompt_tokens"] == 200
+
+
+def test_the_cached_prefix_does_not_change_between_turns(tmp_path):
+    """Two questions must send a byte-identical system prompt.
+
+    If the prefix drifts, the provider cannot serve it from cache and every
+    turn pays full price for the whole corpus.
+    """
+
+    fake = FakeChatClient(["ok"])
+    app, install = _app_with_fake(tmp_path, fake)
+    with TestClient(app) as client:
+        install(client)
+        headers = {**REVIEWER, **ORIGIN}
+        client.post(
+            "/assistant/message",
+            json={"question": "first", "route": "/"},
+            headers=headers,
+        )
+        first_prefix = fake.system
+        client.post(
+            "/assistant/message",
+            json={"question": "second", "route": "/drafts/1"},
+            headers=headers,
+        )
+        second_prefix = fake.system
+
+    assert first_prefix == second_prefix, "the cached prefix must not vary by route"
+    assert "REFERENCE MATERIAL" in first_prefix
+    # Volatile content must be on the question instead.
+    assert "RUNTIME FACTS" in fake.question
+
+
+def test_replayed_history_stays_bare_so_the_prefix_keeps_growing(tmp_path):
+    """Stored turns must not carry the volatile block they were sent with.
+
+    Otherwise turn N's replay differs from what was sent, the prefix diverges,
+    and caching collapses back to the system prompt alone.
+    """
+
+    fake = FakeChatClient(["ok"])
+    app, install = _app_with_fake(tmp_path, fake)
+    with TestClient(app) as client:
+        install(client)
+        headers = {**REVIEWER, **ORIGIN}
+        client.post(
+            "/assistant/message",
+            json={"question": "first", "route": "/drafts/1"},
+            headers=headers,
+        )
+        client.post("/assistant/message", json={"question": "second"}, headers=headers)
+
+    replayed = [turn.content for turn in fake.history]
+    assert "first" in replayed
+    for content in replayed:
+        assert "RUNTIME FACTS" not in content
+        assert "=== QUESTION ===" not in content
+
+
+def test_queue_counts_are_not_paid_for_twice_on_the_home_page(tmp_path):
+    """The home page context already prints the tally; facts must not repeat it."""
+
+    database = init_database(f"sqlite:///{tmp_path / 'dupe.db'}")
+    repository = DraftRepository(database)
+    seed(repository)
+    resolved = settings(tmp_path)
+
+    home = build_turn_context(
+        resolved,
+        repository,
+        provider="g",
+        model="m",
+        page_context=page_context("/", repository),
+        queue_described_elsewhere=True,
+    )
+    assert home.count("Draft queue") + home.count("Queue:") == 1
+
+    # On a draft page the queue is not in the context, so the facts carry it.
+    draft = build_turn_context(
+        resolved,
+        repository,
+        provider="g",
+        model="m",
+        page_context="",
+        queue_described_elsewhere=False,
+    )
+    assert "Draft queue" in draft
+    database.dispose()
+
+
+def test_counting_drafts_does_not_load_them(tmp_path):
+    """A tally must not drag five eager relationships per row along with it."""
+
+    database = init_database(f"sqlite:///{tmp_path / 'count.db'}")
+    repository = DraftRepository(database)
+    seed(repository)
+
+    assert repository.count_drafts_by_status() == {"ready_for_review": 1}
+
+    calls: list[str] = []
+    original = repository.list_drafts
+    repository.list_drafts = lambda *a, **k: (  # type: ignore[method-assign]
+        calls.append("list_drafts"),
+        original(*a, **k),
+    )[1]
+
+    from app.assistant.prompt import queue_summary
+
+    assert "1 ready_for_review" in queue_summary(repository)
+    assert page_context("/", repository) != ""
+    assert calls == [], "neither path may fall back to loading every draft"
+    database.dispose()

@@ -103,7 +103,35 @@ ASSESSMENT_AI_ASSISTANT_MAX_TURNS=12
 ASSESSMENT_AI_ASSISTANT_MAX_MESSAGE_CHARS=4000
 ASSESSMENT_AI_ASSISTANT_RATE_LIMIT_PER_MINUTE=12
 ASSESSMENT_AI_ASSISTANT_TIMEOUT_SECONDS=120
+ASSESSMENT_AI_ASSISTANT_THINKING_LEVEL=minimal
+ASSESSMENT_AI_ASSISTANT_MAX_OUTPUT_TOKENS=1024
 ```
+
+### Cost
+
+The static prefix — instruction plus the whole corpus — is about 5,200 tokens and is byte-identical
+on every request, so the provider can serve it from its context cache. Everything request-specific
+(runtime facts, page context) rides on the question instead of being spliced into the system prompt,
+and only the raw question is persisted, so replayed history stays byte-stable and the cacheable
+prefix grows with the conversation rather than being invalidated by it. `static_system_prompt()` is
+covered by a test asserting no volatile content leaks into it; if that drifts, caching silently stops
+and every turn pays full price for the corpus.
+
+`ASSESSMENT_AI_ASSISTANT_THINKING_LEVEL` defaults to `minimal`. Thinking tokens bill as output, and
+the assistant answers from documents placed in front of it, so it needs no reasoning budget — left
+unset it inherited the model default, which was the largest single cost.
+`ASSESSMENT_AI_ASSISTANT_MAX_OUTPUT_TOKENS` is a ceiling on a runaway generation, not a target.
+
+Every answer's token usage is recorded on its row in `assistant_messages` — prompt, cached, thought,
+and output counts — so the running cost is a fact you can query rather than an estimate:
+
+```python
+AssistantStore(database.session_factory).usage_totals()
+```
+
+Queue tallies use an aggregate `count_drafts_by_status()`; `list_drafts()` eagerly loads five
+relationships per row, which is the wrong tool for printing a count and gets worse as the queue
+grows.
 
 It answers from a curated corpus baked into the image (`app/assistant/corpus/`) plus runtime facts
 recomputed per request — the live flag state, the active provider and model, and the draft queue.
