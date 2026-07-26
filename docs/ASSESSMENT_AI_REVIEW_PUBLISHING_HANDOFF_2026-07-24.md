@@ -19,10 +19,21 @@ reasoning stays legible. Where the two disagree, this section wins.
   against the `6bc57fe` base before the retarget, and the branch was verified a strict superset of
   `main` (nothing on `main` was missing from it). **P1 "Decide the integration strategy" is closed** —
   steps 1 to 3 were executed and step 4 never triggered, as there was no rebase.
-- **Greptile is disabled; CodeRabbit is the sole reviewer of record.** Every "CodeRabbit and
-  Greptile" requirement below should be read as CodeRabbit-only, including the acceptance
-  expectations in "Read this first" and the review-base guidance. Two independent AI reviewers are
-  no longer available, so that redundancy is not part of the current bar.
+- **Both AI reviewers stay on.** Greptile was briefly slated for removal on 2026-07-25 and that
+  decision was reversed the same day: the two-reviewer requirement below stands as written. Only
+  Greptile's *CLI* is unusable (its entitlement is scoped per GitHub org, and the org this
+  repository resolves to is on a trial); its PR bot works and is required. CodeRabbit is not a
+  substitute for it — on 2026-07-25 Greptile reported a P1 that CodeRabbit never saw (see the
+  merge-timing rule below), and earlier the same day it caught an ADAPT accessibility regression
+  CodeRabbit missed entirely. The two find different classes of defect; treat neither as
+  sufficient alone.
+- **Do not merge a PR before its reviews have actually posted.** PRs #3 and #4 were merged while
+  `mergeStateStatus` was `UNSTABLE`, and CodeRabbit answered both with "Review failed — the pull
+  request is closed", so neither was ever reviewed by it. Greptile did review #3 and found a P1 in
+  the new Dockerfile build gate: because `RUN` uses `/bin/sh -c` (no `-e`), mixing `&&` with `;`
+  split the command into independent lists, so a failing `ruff` did not stop the build as long as
+  both pytest runs passed. Fixed in PR #5 (`2db76dd`) and proven in both directions — inject an
+  unused import and the build fails; clean tree and it passes. Wait for `CLEAN`, not `UNSTABLE`.
 - **Still open and unchanged:** P0 manual browser QA, the durable browser regression, and the
   accessibility review. Being listed here does not close them.
 - **New since this document was written.** The Dockerfile `test` stage is now a real build gate
