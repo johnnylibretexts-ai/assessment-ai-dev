@@ -1160,9 +1160,19 @@ def test_the_panel_can_actually_be_hidden():
     right pattern in `.generation-status[hidden]`.
     """
 
-    css = (
-        Path(__file__).resolve().parents[1] / "app" / "static" / "styles.css"
-    ).read_text()
+    # Comments are stripped before searching. This test locates rules by their
+    # position in the file, and the stylesheet's comments cross-reference these
+    # selectors by name; without this, a comment mentioning the override is
+    # found ahead of the real rule and the source-order assertion below fails
+    # against a stylesheet that is perfectly correct.
+    css = re.sub(
+        r"/\*.*?\*/",
+        "",
+        (
+            Path(__file__).resolve().parents[1] / "app" / "static" / "styles.css"
+        ).read_text(),
+        flags=re.DOTALL,
+    )
 
     base = css.index(".assistant-panel { position: fixed")
     override = css.index(".assistant-panel[hidden]")
