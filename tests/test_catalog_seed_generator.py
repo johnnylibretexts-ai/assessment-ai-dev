@@ -284,11 +284,12 @@ def test_generated_seed_survives_catalog_topic_construction(tmp_path, monkeypatc
     path = tmp_path / "generated-v1.json"
     path.write_text(gen.render(_build()))
 
+    # Only these three are lru_cached; _catalog_paths is a plain function and
+    # has no cache_clear.
     for cached in (
         catalog.framework_seeds,
         catalog.curated_frameworks,
         catalog.curated_topics,
-        catalog._catalog_paths,
     ):
         cached.cache_clear()
     monkeypatch.setattr(catalog, "_catalog_paths", lambda: (path,))
@@ -469,6 +470,22 @@ def test_one_request_per_page_no_refetching():
     assert len(set(http_get.calls)) == 3
 
 
+def _stub_fetch_outline(monkeypatch):
+    """Make the CLI use canned pages without touching the network.
+
+    The original must be captured first: assigning a lambda that calls
+    ``gen.fetch_outline`` rebinds the very name the lambda then looks up, so it
+    calls itself until the stack runs out.
+    """
+
+    real = gen.fetch_outline
+    monkeypatch.setattr(
+        gen,
+        "fetch_outline",
+        lambda url, **kwargs: real(BOOK, http_get=_fake_http(_two_chapter_book())),
+    )
+
+
 # --------------------------------------------------------------------------
 # The overwrite guard.
 # --------------------------------------------------------------------------
@@ -519,13 +536,7 @@ def test_cli_refuses_to_overwrite_a_conflicting_seed(tmp_path, capsys, monkeypat
     destination.write_text(json.dumps(foreign))
     original = destination.read_text()
 
-    monkeypatch.setattr(
-        gen,
-        "fetch_outline",
-        lambda url, **kw: gen.fetch_outline(
-            BOOK, http_get=_fake_http(_two_chapter_book())
-        ),
-    )
+    _stub_fetch_outline(monkeypatch)
     code = gen.main(
         [BOOK, "--author", "A", "--license", "ccby", "--out", str(destination)]
     )
@@ -543,13 +554,7 @@ def test_cli_force_overwrites(tmp_path, monkeypatch):
     )
     destination.write_text(json.dumps(foreign))
 
-    monkeypatch.setattr(
-        gen,
-        "fetch_outline",
-        lambda url, **kw: gen.fetch_outline(
-            BOOK, http_get=_fake_http(_two_chapter_book())
-        ),
-    )
+    _stub_fetch_outline(monkeypatch)
     code = gen.main(
         [
             BOOK,
@@ -569,13 +574,7 @@ def test_cli_force_overwrites(tmp_path, monkeypatch):
 
 def test_cli_writes_a_new_seed_and_reports_counts(tmp_path, capsys, monkeypatch):
     destination = tmp_path / "new-v1.json"
-    monkeypatch.setattr(
-        gen,
-        "fetch_outline",
-        lambda url, **kw: gen.fetch_outline(
-            BOOK, http_get=_fake_http(_two_chapter_book())
-        ),
-    )
+    _stub_fetch_outline(monkeypatch)
     code = gen.main(
         [
             BOOK,
