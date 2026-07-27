@@ -1150,6 +1150,26 @@ def test_counting_drafts_does_not_load_them(tmp_path):
     database.dispose()
 
 
+def _stylesheet_without_comments():
+    """The stylesheet with `/* ... */` removed.
+
+    These tests locate rules by searching the raw text, and the stylesheet's
+    comments cross-reference the very selectors being searched for — they
+    document this `[hidden]` trap by name. Left in, a comment mentioning a
+    selector is found ahead of the real rule, so a perfectly correct
+    stylesheet fails. Search the declarations only.
+    """
+
+    return re.sub(
+        r"/\*.*?\*/",
+        "",
+        (
+            Path(__file__).resolve().parents[1] / "app" / "static" / "styles.css"
+        ).read_text(),
+        flags=re.DOTALL,
+    )
+
+
 def test_the_panel_can_actually_be_hidden():
     """The hidden attribute must beat the panel's own display declaration.
 
@@ -1160,19 +1180,7 @@ def test_the_panel_can_actually_be_hidden():
     right pattern in `.generation-status[hidden]`.
     """
 
-    # Comments are stripped before searching. This test locates rules by their
-    # position in the file, and the stylesheet's comments cross-reference these
-    # selectors by name; without this, a comment mentioning the override is
-    # found ahead of the real rule and the source-order assertion below fails
-    # against a stylesheet that is perfectly correct.
-    css = re.sub(
-        r"/\*.*?\*/",
-        "",
-        (
-            Path(__file__).resolve().parents[1] / "app" / "static" / "styles.css"
-        ).read_text(),
-        flags=re.DOTALL,
-    )
+    css = _stylesheet_without_comments()
 
     base = css.index(".assistant-panel { position: fixed")
     override = css.index(".assistant-panel[hidden]")
@@ -1192,7 +1200,7 @@ def test_every_toggled_assistant_element_has_a_hidden_override():
     """
 
     root = Path(__file__).resolve().parents[1] / "app"
-    css = (root / "static" / "styles.css").read_text()
+    css = _stylesheet_without_comments()
     script = (root / "static" / "assistant.js").read_text()
 
     # Elements the script hides by attribute, mapped to their CSS class.
