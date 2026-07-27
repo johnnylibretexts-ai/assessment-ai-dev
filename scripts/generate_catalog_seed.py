@@ -76,7 +76,6 @@ class Page:
 
     title: str
     canonical_url: str
-    has_children: bool
 
 
 @dataclass
@@ -192,13 +191,7 @@ def parse_subpages(payload: str, *, context: str) -> list[Page]:
             # A malformed row is skipped rather than fatal: one bad page should
             # not cost the other 250.
             continue
-        pages.append(
-            Page(
-                title=title,
-                canonical_url=url,
-                has_children=str(entry.get("@subpages", "")).lower() == "true",
-            )
-        )
+        pages.append(Page(title=title, canonical_url=url))
     return pages
 
 
@@ -263,7 +256,7 @@ def parse_listing_html(payload: str, page_url: str, *, context: str) -> list[Pag
         if not title:
             continue
         seen.add(url)
-        pages.append(Page(title=title, canonical_url=url, has_children=True))
+        pages.append(Page(title=title, canonical_url=url))
 
     # An empty result is normal: a leaf page has no listing. Callers decide
     # whether that is a problem -- an empty *book* is caught by fetch_outline.
@@ -339,9 +332,14 @@ def build_seed(
     seen_urls: set[str] = set()
     chapters: list[dict[str, Any]] = []
 
-    for chapter_order, (chapter, topics) in enumerate(outline.chapters, start=1):
+    # `order` is numbered from what is actually kept, not from the input
+    # position. Enumerating the inputs leaves gaps wherever a duplicate topic
+    # or an empty chapter is dropped, and ADAPT renders these numbers as the
+    # framework's level ordering -- a seed that jumps 3, 5, 6 looks like pages
+    # went missing.
+    for chapter, topics in outline.chapters:
         topic_entries: list[dict[str, Any]] = []
-        for topic_order, topic in enumerate(topics, start=1):
+        for topic in topics:
             normalized = normalize_source_url(topic.canonical_url)
             if normalized in seen_urls:
                 # catalog.py rejects the whole catalog on a duplicate topic URL,
@@ -350,7 +348,7 @@ def build_seed(
             seen_urls.add(normalized)
             topic_entries.append(
                 {
-                    "order": topic_order,
+                    "order": len(topic_entries) + 1,
                     "title": topic.title,
                     # Store the normalized form so a seed does not change shape
                     # just because the API's encoding of a page did.
@@ -363,7 +361,7 @@ def build_seed(
         chapter_url = normalize_source_url(chapter.canonical_url)
         chapters.append(
             {
-                "order": chapter_order,
+                "order": len(chapters) + 1,
                 "title": chapter.title,
                 "canonical_url": chapter_url,
                 "stable_id": stable_id_for(namespace, chapter_url),
@@ -472,7 +470,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         destination = Path(args.out)
         if destination.exists():
             try:
-                existing = json.loads(destination.read_text())
+                existing = json.loads(destination.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 existing = None
             if isinstance(existing, dict):
@@ -488,7 +486,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     for url in conflicts[:5]:
                         print(f"  {url}", file=sys.stderr)
                     return 2
-        destination.write_text(render(seed))
+        destination.write_text(render(seed), encoding="utf-8")
         print(
             f"wrote {destination}: {len(seed['chapters'])} chapters, "
             f"{_count_topics(seed)} publishable topics",
