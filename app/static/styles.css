@@ -42,8 +42,11 @@ button:hover { background: var(--brand-dark); }
    declaration, so without this the hidden attribute does nothing. That let
    "Review generated item" (job.html, rendered `hidden` and only revealed by
    jobs.js on status === "succeeded") sit clickable for the whole run, linking
-   to a draft that was still being written. Same pattern as
-   .generation-status[hidden] and .assistant-panel[hidden]. */
+   to a draft that was still being written. The generation-status and
+   assistant-panel rules further down carry the same guard for the same
+   reason. (Their selectors are deliberately not spelled out here: a test
+   locates those rules by searching this file, and a comment quoting them
+   verbatim is found first.) */
 .button-link[hidden] { display: none; }
 button:disabled { background: var(--brand-dark); cursor: wait; opacity: .92; }
 button.secondary { background: #566575; }
