@@ -569,7 +569,14 @@ def test_cli_force_overwrites(tmp_path, monkeypatch):
     )
 
     assert code == 0
-    assert json.loads(destination.read_text()) == _build()
+    # Compare against a build with the SAME metadata the CLI was given, not the
+    # helper's defaults -- otherwise this asserts on author and license, not on
+    # whether --force actually replaced the file.
+    written = json.loads(destination.read_text())
+    assert written == _build(author="A", license_code="ccby", license_version=None)
+    assert written["chapters"][0]["topics"][0]["stable_id"] != (
+        "00000000-0000-5000-8000-000000000000"
+    ), "--force must replace the foreign id"
 
 
 def test_cli_writes_a_new_seed_and_reports_counts(tmp_path, capsys, monkeypatch):
