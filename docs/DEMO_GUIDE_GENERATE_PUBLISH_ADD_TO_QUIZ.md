@@ -1,6 +1,7 @@
 # AI question → ADAPT quiz
 
-Sign in as `demo@libretexts.dev` on both sites. Password is ***REMOVED***
+Sign in as `demo@libretexts.dev` on both sites. Ask the owner for the password — it is in
+`handoff-july-6.md`, never in this repo.
 
 ## Generate
 
