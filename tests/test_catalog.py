@@ -104,6 +104,11 @@ def test_concepts_in_biology_can_be_published() -> None:
     assert alignment.topic.title == "5.1: Overview of Photosynthesis"
     assert alignment_by_topic_id(alignment.topic.stable_id) == alignment
 
+    license_mapping = source_license(CONCEPTS_IN_BIOLOGY_URL)
+    assert license_mapping is not None
+    assert license_mapping.code == "ccby"
+    assert license_mapping.version == "4.0"
+
 
 def test_generated_catalogs_match_on_url_not_on_encoding() -> None:
     """Both spellings of a page are the same page.
@@ -112,6 +117,11 @@ def test_generated_catalogs_match_on_url_not_on_encoding() -> None:
     parentheses. Publishing must succeed either way.
     """
 
+    canonical = alignment_for_source(CHEMISTRY_2E_URL)
+    assert canonical is not None
+
     literal = CHEMISTRY_2E_URL.replace("%28", "(").replace("%29", ")")
-    assert alignment_for_source(literal) == alignment_for_source(CHEMISTRY_2E_URL)
-    assert alignment_for_source(CHEMISTRY_2E_URL + "/") is not None
+    assert alignment_for_source(literal) == canonical
+    # `is not None` would pass on a *different* topic, which is the failure
+    # this is guarding against.
+    assert alignment_for_source(CHEMISTRY_2E_URL + "/") == canonical
