@@ -1,0 +1,1571 @@
+{
+  "schema_version": 1,
+  "framework": {
+    "title": "Chemistry 2e (OpenStax)",
+    "author": "OpenStax",
+    "descriptor_type": "Learning Objective",
+    "description": "Curated chapter and page-topic alignment for the LibreTexts Chemistry 2e (OpenStax) book.",
+    "license": "ccby",
+    "license_version": "4.0",
+    "source_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29"
+  },
+  "stable_id_namespace": "e8e42f80-58ac-5509-93ea-b7494275c395",
+  "chapters": [
+    {
+      "order": 1,
+      "title": "1: Essential Ideas",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/01%3A_Essential_Ideas",
+      "stable_id": "7ddb9305-dd54-5240-9c56-90e68303d98d",
+      "topics": [
+        {
+          "order": 1,
+          "title": "1.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/01%3A_Essential_Ideas/1.00%3A_Introduction",
+          "stable_id": "0f5125cc-732a-5ba8-9457-a4d2e01bb532"
+        },
+        {
+          "order": 2,
+          "title": "1.1: Chemistry in Context",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/01%3A_Essential_Ideas/1.01%3A_Chemistry_in_Context",
+          "stable_id": "ea69b25a-9b56-5310-bdfa-992831382d44"
+        },
+        {
+          "order": 3,
+          "title": "1.2: Phases and Classification of Matter",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/01%3A_Essential_Ideas/1.02%3A_Phases_and_Classification_of_Matter",
+          "stable_id": "bc5f9b89-ddb3-5a14-b713-2271459df11c"
+        },
+        {
+          "order": 4,
+          "title": "1.3: Physical and Chemical Properties",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/01%3A_Essential_Ideas/1.03%3A_Physical_and_Chemical_Properties",
+          "stable_id": "c9b89887-d9d6-57d9-a527-46d28b40d3f4"
+        },
+        {
+          "order": 5,
+          "title": "1.4: Measurements",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/01%3A_Essential_Ideas/1.04%3A_Measurements",
+          "stable_id": "a51937ea-0158-5f21-80bc-cb27201b9968"
+        },
+        {
+          "order": 6,
+          "title": "1.5: Measurement Uncertainty, Accuracy, and Precision",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/01%3A_Essential_Ideas/1.05%3A_Measurement_Uncertainty_Accuracy_and_Precision",
+          "stable_id": "0a512acd-0507-5c87-99df-b4ded4cbe45c"
+        },
+        {
+          "order": 7,
+          "title": "1.6: Mathematical Treatment of Measurement Results",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/01%3A_Essential_Ideas/1.06%3A_Mathematical_Treatment_of_Measurement_Results",
+          "stable_id": "1adcea8a-860d-5f7c-9b9a-3a71c2861264"
+        },
+        {
+          "order": 8,
+          "title": "1.7: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/01%3A_Essential_Ideas/1.07%3A_Key_Terms",
+          "stable_id": "6f48f385-9665-5b0f-8fbd-8d5b63425558"
+        },
+        {
+          "order": 9,
+          "title": "1.8: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/01%3A_Essential_Ideas/1.08%3A_Key_Equations",
+          "stable_id": "d4c63c87-395e-5c69-96ae-8970a4b0a59d"
+        },
+        {
+          "order": 10,
+          "title": "1.9: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/01%3A_Essential_Ideas/1.09%3A_Summary",
+          "stable_id": "d890cb5a-ae48-52c7-a928-8e9353dbaa96"
+        },
+        {
+          "order": 11,
+          "title": "1.10: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/01%3A_Essential_Ideas/1.10%3A_Exercises",
+          "stable_id": "3aa8e5b7-d427-5bce-ad02-8d4b6f651aaf"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "title": "2: Atoms, Molecules, and Ions",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions",
+      "stable_id": "32a51dee-dea9-5d62-a031-8c7d007bf1fc",
+      "topics": [
+        {
+          "order": 1,
+          "title": "2.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions/2.00%3A_Introduction",
+          "stable_id": "d3cebc95-9511-55cf-87dd-3f426c640e31"
+        },
+        {
+          "order": 2,
+          "title": "2.1: Early Ideas in Atomic Theory",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions/2.01%3A_Early_Ideas_in_Atomic_Theory",
+          "stable_id": "bd864049-7140-58d7-8c22-df0254edb378"
+        },
+        {
+          "order": 3,
+          "title": "2.2: Evolution of Atomic Theory",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions/2.02%3A_Evolution_of_Atomic_Theory",
+          "stable_id": "4f17499e-f5f5-5fe5-af88-517dcb9b8397"
+        },
+        {
+          "order": 4,
+          "title": "2.3: Atomic Structure and Symbolism",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions/2.03%3A_Atomic_Structure_and_Symbolism",
+          "stable_id": "9a756eff-f748-5ad2-a6c6-3086f7f8dfb8"
+        },
+        {
+          "order": 5,
+          "title": "2.4: Chemical Formulas",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions/2.04%3A_Chemical_Formulas",
+          "stable_id": "80bb468f-93af-5b6e-9df3-9ef8cda361f0"
+        },
+        {
+          "order": 6,
+          "title": "2.5: The Periodic Table",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions/2.05%3A_The_Periodic_Table",
+          "stable_id": "79718e81-8e13-597b-87ea-c610878e9ebf"
+        },
+        {
+          "order": 7,
+          "title": "2.6: Molecular and Ionic Compounds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions/2.06%3A_Molecular_and_Ionic_Compounds",
+          "stable_id": "7d170d54-fd6c-53f6-b16e-931743e232e6"
+        },
+        {
+          "order": 8,
+          "title": "2.7: Chemical Nomenclature",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions/2.07%3A_Chemical_Nomenclature",
+          "stable_id": "35933388-9601-5cc0-a146-07b2e42510fb"
+        },
+        {
+          "order": 9,
+          "title": "2.8: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions/2.08%3A_Key_Terms",
+          "stable_id": "1bb5977e-0d5b-51cb-801b-b42ee5eb8cec"
+        },
+        {
+          "order": 10,
+          "title": "2.9: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions/2.09%3A_Key_Equations",
+          "stable_id": "e845a98d-0d75-59c1-97b5-5491cfe3e456"
+        },
+        {
+          "order": 11,
+          "title": "2.10: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions/2.10%3A_Summary",
+          "stable_id": "c0a38ac5-f63f-5d28-b44b-74a9b691c8a1"
+        },
+        {
+          "order": 12,
+          "title": "2.11: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/02%3A_Atoms_Molecules_and_Ions/2.11%3A_Exercises",
+          "stable_id": "2c00b30c-f27b-598e-bc9e-aa7a3f02fcb3"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "title": "3: Composition of Substances and Solutions",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/03%3A_Composition_of_Substances_and_Solutions",
+      "stable_id": "d743e436-d2a4-5dca-ac9b-e9d6a92bfe0e",
+      "topics": [
+        {
+          "order": 1,
+          "title": "3.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/03%3A_Composition_of_Substances_and_Solutions/3.00%3A_Introduction",
+          "stable_id": "aaa4501b-26c7-5a1a-91cd-a76c53bef9c3"
+        },
+        {
+          "order": 2,
+          "title": "3.1: Formula Mass and the Mole Concept",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/03%3A_Composition_of_Substances_and_Solutions/3.01%3A_Formula_Mass_and_the_Mole_Concept",
+          "stable_id": "6d363af3-4010-5207-92ed-171dae325b56"
+        },
+        {
+          "order": 3,
+          "title": "3.2: Determining Empirical and Molecular Formulas",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/03%3A_Composition_of_Substances_and_Solutions/3.02%3A_Determining_Empirical_and_Molecular_Formulas",
+          "stable_id": "f3d83a5f-2867-5d8c-8029-3441b87a1c84"
+        },
+        {
+          "order": 4,
+          "title": "3.3: Molarity",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/03%3A_Composition_of_Substances_and_Solutions/3.03%3A_Molarity",
+          "stable_id": "878e7b64-148b-543b-b4c2-440674c970f4"
+        },
+        {
+          "order": 5,
+          "title": "3.4: Other Units for Solution Concentrations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/03%3A_Composition_of_Substances_and_Solutions/3.04%3A_Other_Units_for_Solution_Concentrations",
+          "stable_id": "f22e1801-68bc-5198-9118-7cc9acb87f33"
+        },
+        {
+          "order": 6,
+          "title": "3.5: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/03%3A_Composition_of_Substances_and_Solutions/3.05%3A_Key_Terms",
+          "stable_id": "3c3ab740-211c-560b-9b14-61ebcb930ed7"
+        },
+        {
+          "order": 7,
+          "title": "3.6: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/03%3A_Composition_of_Substances_and_Solutions/3.06%3A_Key_Equations",
+          "stable_id": "4096e6c1-8948-5425-be2a-100dc9bcc30b"
+        },
+        {
+          "order": 8,
+          "title": "3.7: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/03%3A_Composition_of_Substances_and_Solutions/3.07%3A_Summary",
+          "stable_id": "8f96ef41-b34d-59ef-8bb3-9ce91ee41871"
+        },
+        {
+          "order": 9,
+          "title": "3.8: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/03%3A_Composition_of_Substances_and_Solutions/3.08%3A_Exercises",
+          "stable_id": "5ee89c48-92af-5479-9532-ad3efa9627f3"
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "title": "4: Stoichiometry of Chemical Reactions",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/04%3A_Stoichiometry_of_Chemical_Reactions",
+      "stable_id": "83c52a4c-46c3-51a3-b8c3-a269d2ffe8e8",
+      "topics": [
+        {
+          "order": 1,
+          "title": "4.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/04%3A_Stoichiometry_of_Chemical_Reactions/4.00%3A_Introduction",
+          "stable_id": "a6221569-7353-5a34-b5d1-0771aaa6dd95"
+        },
+        {
+          "order": 2,
+          "title": "4.1: Writing and Balancing Chemical Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/04%3A_Stoichiometry_of_Chemical_Reactions/4.01%3A_Writing_and_Balancing_Chemical_Equations",
+          "stable_id": "bbaebf63-6ac3-5fae-8133-5a5f7c4ec533"
+        },
+        {
+          "order": 3,
+          "title": "4.2: Classifying Chemical Reactions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/04%3A_Stoichiometry_of_Chemical_Reactions/4.02%3A_Classifying_Chemical_Reactions",
+          "stable_id": "d86b8e61-b92a-571f-9fee-0116ee4d0f34"
+        },
+        {
+          "order": 4,
+          "title": "4.3: Reaction Stoichiometry",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/04%3A_Stoichiometry_of_Chemical_Reactions/4.03%3A_Reaction_Stoichiometry",
+          "stable_id": "55e908a5-1acf-56d9-bb0c-17d22cf4ae67"
+        },
+        {
+          "order": 5,
+          "title": "4.4: Reaction Yields",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/04%3A_Stoichiometry_of_Chemical_Reactions/4.04%3A_Reaction_Yields",
+          "stable_id": "b817b3dd-5597-5a54-951e-1499c367921a"
+        },
+        {
+          "order": 6,
+          "title": "4.5: Quantitative Chemical Analysis",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/04%3A_Stoichiometry_of_Chemical_Reactions/4.05%3A_Quantitative_Chemical_Analysis",
+          "stable_id": "331b5dd1-48ae-53fd-9577-83097f8c539c"
+        },
+        {
+          "order": 7,
+          "title": "4.6: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/04%3A_Stoichiometry_of_Chemical_Reactions/4.06%3A_Key_Terms",
+          "stable_id": "e06d3200-f1e9-52ad-a2c0-95e4c31604ab"
+        },
+        {
+          "order": 8,
+          "title": "4.7: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/04%3A_Stoichiometry_of_Chemical_Reactions/4.07%3A_Key_Equations",
+          "stable_id": "d6a912b9-81af-5447-9aeb-886fa11a6ca1"
+        },
+        {
+          "order": 9,
+          "title": "4.8: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/04%3A_Stoichiometry_of_Chemical_Reactions/4.08%3A_Summary",
+          "stable_id": "c4eed60b-49a8-52b3-9c92-ae76688a8c82"
+        },
+        {
+          "order": 10,
+          "title": "4.9: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/04%3A_Stoichiometry_of_Chemical_Reactions/4.09%3A_Exercises",
+          "stable_id": "96827e4f-ec2a-5925-8b0f-6ce62f21784b"
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "title": "5: Thermochemistry",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/05%3A_Thermochemistry",
+      "stable_id": "c43d24b1-8bd9-5c44-a67c-8c3cd120c8b8",
+      "topics": [
+        {
+          "order": 1,
+          "title": "5.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/05%3A_Thermochemistry/5.00%3A_Introduction",
+          "stable_id": "e13143e7-40df-5f18-9617-5af7a6dd6ea2"
+        },
+        {
+          "order": 2,
+          "title": "5.1: Energy Basics",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/05%3A_Thermochemistry/5.01%3A_Energy_Basics",
+          "stable_id": "1ba42816-6154-5df7-b30b-ca425fc3b982"
+        },
+        {
+          "order": 3,
+          "title": "5.2: Calorimetry",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/05%3A_Thermochemistry/5.02%3A_Calorimetry",
+          "stable_id": "3674480e-acdc-50d1-9f55-08c86c42a8aa"
+        },
+        {
+          "order": 4,
+          "title": "5.3: Enthalpy",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/05%3A_Thermochemistry/5.03%3A_Enthalpy",
+          "stable_id": "3c59694e-d91a-59c0-91be-a62e7be1d795"
+        },
+        {
+          "order": 5,
+          "title": "5.4: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/05%3A_Thermochemistry/5.04%3A_Key_Terms",
+          "stable_id": "8bf8bf0d-54fa-5c7b-b8ed-3f7f796ef094"
+        },
+        {
+          "order": 6,
+          "title": "5.5: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/05%3A_Thermochemistry/5.05%3A_Key_Equations",
+          "stable_id": "fef51c66-fd79-5fb0-8ecb-9cc582d42c22"
+        },
+        {
+          "order": 7,
+          "title": "5.6: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/05%3A_Thermochemistry/5.06%3A_Summary",
+          "stable_id": "26407649-b576-519b-9c98-3a20326b0445"
+        },
+        {
+          "order": 8,
+          "title": "5.7: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/05%3A_Thermochemistry/5.07%3A_Exercises",
+          "stable_id": "58d926ff-c2f5-5ed3-9589-0d35ba54131c"
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "title": "6: Electronic Structure and Periodic Properties",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/06%3A_Electronic_Structure_and_Periodic_Properties",
+      "stable_id": "fad6c4fb-5434-5b65-9c94-bd0ae595d559",
+      "topics": [
+        {
+          "order": 1,
+          "title": "6.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/06%3A_Electronic_Structure_and_Periodic_Properties/6.00%3A_Introduction",
+          "stable_id": "3ea273a6-1087-59ef-884a-4aa62a526276"
+        },
+        {
+          "order": 2,
+          "title": "6.1: Electromagnetic Energy",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/06%3A_Electronic_Structure_and_Periodic_Properties/6.01%3A_Electromagnetic_Energy",
+          "stable_id": "6e762056-9620-5a3d-86bb-f314bbc662d0"
+        },
+        {
+          "order": 3,
+          "title": "6.2: The Bohr Model",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/06%3A_Electronic_Structure_and_Periodic_Properties/6.02%3A_The_Bohr_Model",
+          "stable_id": "f653b4e2-f7ea-567d-adb3-b2de0eba6779"
+        },
+        {
+          "order": 4,
+          "title": "6.3: Development of Quantum Theory",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/06%3A_Electronic_Structure_and_Periodic_Properties/6.03%3A_Development_of_Quantum_Theory",
+          "stable_id": "456068b5-6a55-5986-8f06-fe45971f428c"
+        },
+        {
+          "order": 5,
+          "title": "6.4: Electronic Structure of Atoms (Electron Configurations)",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/06%3A_Electronic_Structure_and_Periodic_Properties/6.04%3A_Electronic_Structure_of_Atoms_%28Electron_Configurations%29",
+          "stable_id": "44ab4ba1-f8fa-5acf-b3b4-f3fd4aec0cd1"
+        },
+        {
+          "order": 6,
+          "title": "6.5: Periodic Variations in Element Properties",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/06%3A_Electronic_Structure_and_Periodic_Properties/6.05%3A_Periodic_Variations_in_Element_Properties",
+          "stable_id": "a1f91c29-5e0f-5401-8f4f-670ef5afb769"
+        },
+        {
+          "order": 7,
+          "title": "6.6: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/06%3A_Electronic_Structure_and_Periodic_Properties/6.06%3A_Key_Terms",
+          "stable_id": "40ca8b52-c786-52c7-958f-99a7937a6072"
+        },
+        {
+          "order": 8,
+          "title": "6.7: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/06%3A_Electronic_Structure_and_Periodic_Properties/6.07%3A_Key_Equations",
+          "stable_id": "0798f5ad-97c3-5662-a240-f2f7d4496fab"
+        },
+        {
+          "order": 9,
+          "title": "6.8: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/06%3A_Electronic_Structure_and_Periodic_Properties/6.08%3A_Summary",
+          "stable_id": "8976b211-eb6c-55df-9a8b-014331333353"
+        },
+        {
+          "order": 10,
+          "title": "6.9: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/06%3A_Electronic_Structure_and_Periodic_Properties/6.09%3A_Exercises",
+          "stable_id": "145a4d2a-25ba-5995-a8d3-18ea9a41ecda"
+        }
+      ]
+    },
+    {
+      "order": 7,
+      "title": "7: Chemical Bonding and Molecular Geometry",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/07%3A_Chemical_Bonding_and_Molecular_Geometry",
+      "stable_id": "c9bd13fc-d648-52b0-b012-bce760cfd952",
+      "topics": [
+        {
+          "order": 1,
+          "title": "7.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/07%3A_Chemical_Bonding_and_Molecular_Geometry/7.00%3A_Introduction",
+          "stable_id": "65e1f0bc-be44-5233-8c4f-9293f69f7e83"
+        },
+        {
+          "order": 2,
+          "title": "7.1: Ionic Bonding",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/07%3A_Chemical_Bonding_and_Molecular_Geometry/7.01%3A_Ionic_Bonding",
+          "stable_id": "a8890458-b9af-5c85-8faf-940e678984c5"
+        },
+        {
+          "order": 3,
+          "title": "7.2: Covalent Bonding",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/07%3A_Chemical_Bonding_and_Molecular_Geometry/7.02%3A_Covalent_Bonding",
+          "stable_id": "a431ba74-7b8a-52f2-9598-400e6919c996"
+        },
+        {
+          "order": 4,
+          "title": "7.3: Lewis Symbols and Structures",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/07%3A_Chemical_Bonding_and_Molecular_Geometry/7.03%3A_Lewis_Symbols_and_Structures",
+          "stable_id": "e09ac81c-0b61-5452-aee6-8387586f3067"
+        },
+        {
+          "order": 5,
+          "title": "7.4: Formal Charges and Resonance",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/07%3A_Chemical_Bonding_and_Molecular_Geometry/7.04%3A_Formal_Charges_and_Resonance",
+          "stable_id": "5d8c265b-bde5-5e5a-af32-9698c3b965c2"
+        },
+        {
+          "order": 6,
+          "title": "7.5: Strengths of Ionic and Covalent Bonds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/07%3A_Chemical_Bonding_and_Molecular_Geometry/7.05%3A_Strengths_of_Ionic_and_Covalent_Bonds",
+          "stable_id": "422ec533-78ec-59f7-bf17-6020f61c5d14"
+        },
+        {
+          "order": 7,
+          "title": "7.6: Molecular Structure and Polarity",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/07%3A_Chemical_Bonding_and_Molecular_Geometry/7.06%3A_Molecular_Structure_and_Polarity",
+          "stable_id": "72eec14f-5d7d-57b2-909c-0daddfe9f6be"
+        },
+        {
+          "order": 8,
+          "title": "7.7: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/07%3A_Chemical_Bonding_and_Molecular_Geometry/7.07%3A_Key_Terms",
+          "stable_id": "b576417a-e240-5d55-847f-56dadf163cc6"
+        },
+        {
+          "order": 9,
+          "title": "7.8: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/07%3A_Chemical_Bonding_and_Molecular_Geometry/7.08%3A_Key_Equations",
+          "stable_id": "3f8443de-45cb-57e0-8e35-7dc50b46cdfe"
+        },
+        {
+          "order": 10,
+          "title": "7.9: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/07%3A_Chemical_Bonding_and_Molecular_Geometry/7.09%3A_Summary",
+          "stable_id": "4cdbcea7-a3a2-5be4-aa49-d5d9991bea51"
+        },
+        {
+          "order": 11,
+          "title": "7.10: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/07%3A_Chemical_Bonding_and_Molecular_Geometry/7.10%3A_Exercises",
+          "stable_id": "55645fff-c5f7-524a-b10c-6085e175e076"
+        }
+      ]
+    },
+    {
+      "order": 8,
+      "title": "8: Advanced Theories of Covalent Bonding",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/08%3A_Advanced_Theories_of_Covalent_Bonding",
+      "stable_id": "07bbf0a6-dc51-5deb-899f-4541f03ab3a6",
+      "topics": [
+        {
+          "order": 1,
+          "title": "8.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/08%3A_Advanced_Theories_of_Covalent_Bonding/8.00%3A_Introduction",
+          "stable_id": "4a2909aa-c8ae-5177-b3c5-4acfcbb52119"
+        },
+        {
+          "order": 2,
+          "title": "8.1: Valence Bond Theory",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/08%3A_Advanced_Theories_of_Covalent_Bonding/8.01%3A_Valence_Bond_Theory",
+          "stable_id": "97225e8b-41d4-540a-8f66-c597a085ff16"
+        },
+        {
+          "order": 3,
+          "title": "8.2: Hybrid Atomic Orbitals",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/08%3A_Advanced_Theories_of_Covalent_Bonding/8.02%3A_Hybrid_Atomic_Orbitals",
+          "stable_id": "db76f928-4fff-5668-9ad6-01c11810c09b"
+        },
+        {
+          "order": 4,
+          "title": "8.3: Multiple Bonds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/08%3A_Advanced_Theories_of_Covalent_Bonding/8.03%3A_Multiple_Bonds",
+          "stable_id": "84601578-0f27-5469-95a8-c84c8bf2cd6c"
+        },
+        {
+          "order": 5,
+          "title": "8.4: Molecular Orbital Theory",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/08%3A_Advanced_Theories_of_Covalent_Bonding/8.04%3A_Molecular_Orbital_Theory",
+          "stable_id": "fa2d9352-8d12-52de-85ea-c6a746671679"
+        },
+        {
+          "order": 6,
+          "title": "8.5: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/08%3A_Advanced_Theories_of_Covalent_Bonding/8.05%3A_Key_Terms",
+          "stable_id": "7d5030a7-ecbe-5190-bcdc-2d1780b12423"
+        },
+        {
+          "order": 7,
+          "title": "8.6: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/08%3A_Advanced_Theories_of_Covalent_Bonding/8.06%3A_Key_Equations",
+          "stable_id": "38707fad-07fc-5e6a-ae02-3a5f55e05589"
+        },
+        {
+          "order": 8,
+          "title": "8.7: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/08%3A_Advanced_Theories_of_Covalent_Bonding/8.07%3A_Summary",
+          "stable_id": "5a93abae-64c8-5429-b97d-851034c36195"
+        },
+        {
+          "order": 9,
+          "title": "8.8: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/08%3A_Advanced_Theories_of_Covalent_Bonding/8.08%3A_Exercises",
+          "stable_id": "c7b33234-5792-5619-9ff8-6496d4ae4244"
+        }
+      ]
+    },
+    {
+      "order": 9,
+      "title": "9: Gases",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/09%3A_Gases",
+      "stable_id": "8ec0f8d3-793c-5ef0-9c53-de7f0bc459ce",
+      "topics": [
+        {
+          "order": 1,
+          "title": "9.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/09%3A_Gases/9.00%3A_Introduction",
+          "stable_id": "da2c73ce-1aa7-56bb-bf9f-d62c70786292"
+        },
+        {
+          "order": 2,
+          "title": "9.1: Gas Pressure",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/09%3A_Gases/9.01%3A_Gas_Pressure",
+          "stable_id": "b8aa5318-8450-57d2-acd0-84cdfa19ffa9"
+        },
+        {
+          "order": 3,
+          "title": "9.2: Relating Pressure, Volume, Amount, and Temperature - The Ideal Gas Law",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/09%3A_Gases/9.02%3A_Relating_Pressure_Volume_Amount_and_Temperature_-_The_Ideal_Gas_Law",
+          "stable_id": "162441a4-e848-5887-b8db-df2b44642874"
+        },
+        {
+          "order": 4,
+          "title": "9.3: Stoichiometry of Gaseous Substances, Mixtures, and Reactions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/09%3A_Gases/9.03%3A_Stoichiometry_of_Gaseous_Substances_Mixtures_and_Reactions",
+          "stable_id": "19ef636d-34e4-5eec-aebb-09e0c91482c1"
+        },
+        {
+          "order": 5,
+          "title": "9.4: Effusion and Diffusion of Gases",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/09%3A_Gases/9.04%3A_Effusion_and_Diffusion_of_Gases",
+          "stable_id": "e8775d2b-33cf-5712-abca-c3cc22f5e676"
+        },
+        {
+          "order": 6,
+          "title": "9.5: The Kinetic-Molecular Theory",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/09%3A_Gases/9.05%3A_The_Kinetic-Molecular_Theory",
+          "stable_id": "8bdfe99c-ca6f-5c46-9d5f-f6e1e7c865a9"
+        },
+        {
+          "order": 7,
+          "title": "9.6: Non-Ideal Gas Behavior",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/09%3A_Gases/9.06%3A_Non-Ideal_Gas_Behavior",
+          "stable_id": "32d201c6-5f2f-5c22-8928-ca6037a7c274"
+        },
+        {
+          "order": 8,
+          "title": "9.7: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/09%3A_Gases/9.07%3A_Key_Terms",
+          "stable_id": "7b17c4c6-783c-5b81-a9fd-acc80c6c40bd"
+        },
+        {
+          "order": 9,
+          "title": "9.8: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/09%3A_Gases/9.08%3A_Key_Equations",
+          "stable_id": "b4e882c9-77b8-5538-9024-80c529867d5f"
+        },
+        {
+          "order": 10,
+          "title": "9.9: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/09%3A_Gases/9.09%3A_Summary",
+          "stable_id": "ed2792aa-3d5f-508c-9b8e-6e45fecb89db"
+        },
+        {
+          "order": 11,
+          "title": "9.10: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/09%3A_Gases/9.10%3A_Exercises",
+          "stable_id": "fdc0c43b-b64d-57fa-b10a-dd8158fe0fc9"
+        }
+      ]
+    },
+    {
+      "order": 10,
+      "title": "10: Liquids and Solids",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/10%3A_Liquids_and_Solids",
+      "stable_id": "e831f78e-451f-53cf-baef-f7875b08557e",
+      "topics": [
+        {
+          "order": 1,
+          "title": "10.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/10%3A_Liquids_and_Solids/10.00%3A_Introduction",
+          "stable_id": "243fc7dc-d98c-5248-bd83-b20ead8f1ead"
+        },
+        {
+          "order": 2,
+          "title": "10.1: Intermolecular Forces",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/10%3A_Liquids_and_Solids/10.01%3A_Intermolecular_Forces",
+          "stable_id": "c9bbd03d-2e2f-5992-a504-6e3e7554f1ba"
+        },
+        {
+          "order": 3,
+          "title": "10.2: Properties of Liquids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/10%3A_Liquids_and_Solids/10.02%3A_Properties_of_Liquids",
+          "stable_id": "20862e80-992f-5a9f-a0e8-2698932b9c79"
+        },
+        {
+          "order": 4,
+          "title": "10.3: Phase Transitions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/10%3A_Liquids_and_Solids/10.03%3A_Phase_Transitions",
+          "stable_id": "0613adc8-bc74-5009-ad97-fdd76c28782b"
+        },
+        {
+          "order": 5,
+          "title": "10.4: Phase Diagrams",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/10%3A_Liquids_and_Solids/10.04%3A_Phase_Diagrams",
+          "stable_id": "4ef45efb-6aeb-5a03-80c4-345555525ab6"
+        },
+        {
+          "order": 6,
+          "title": "10.5: The Solid State of Matter",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/10%3A_Liquids_and_Solids/10.05%3A_The_Solid_State_of_Matter",
+          "stable_id": "3e722fbc-d79f-58c5-ac97-e661a29e81e9"
+        },
+        {
+          "order": 7,
+          "title": "10.6: Lattice Structures in Crystalline Solids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/10%3A_Liquids_and_Solids/10.06%3A_Lattice_Structures_in_Crystalline_Solids",
+          "stable_id": "144b7786-bc4b-50a9-8951-1f93dad08f88"
+        },
+        {
+          "order": 8,
+          "title": "10.7: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/10%3A_Liquids_and_Solids/10.07%3A_Key_Terms",
+          "stable_id": "ac894dd7-93bb-5406-99a4-22275760e1a3"
+        },
+        {
+          "order": 9,
+          "title": "10.8: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/10%3A_Liquids_and_Solids/10.08%3A_Key_Equations",
+          "stable_id": "722db29a-f36d-5955-b6dc-9b904e1fc7f6"
+        },
+        {
+          "order": 10,
+          "title": "10.9: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/10%3A_Liquids_and_Solids/10.09%3A_Summary",
+          "stable_id": "6ac4a017-66a2-5560-bce4-eefe53441ee3"
+        },
+        {
+          "order": 11,
+          "title": "10.10: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/10%3A_Liquids_and_Solids/10.10%3A_Exercises",
+          "stable_id": "ae53556d-5881-57ff-ab60-e12091be60a1"
+        }
+      ]
+    },
+    {
+      "order": 11,
+      "title": "11: Solutions and Colloids",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/11%3A_Solutions_and_Colloids",
+      "stable_id": "b7a3c5d1-25b4-52f6-8a56-00742102976b",
+      "topics": [
+        {
+          "order": 1,
+          "title": "11.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/11%3A_Solutions_and_Colloids/11.00%3A_Introduction",
+          "stable_id": "7ddec3b7-7f2c-5947-b746-0fa487d45542"
+        },
+        {
+          "order": 2,
+          "title": "11.1: The Dissolution Process",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/11%3A_Solutions_and_Colloids/11.01%3A_The_Dissolution_Process",
+          "stable_id": "94087dbb-cbe2-52cd-bf09-9ab3ffb13d61"
+        },
+        {
+          "order": 3,
+          "title": "11.2: Electrolytes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/11%3A_Solutions_and_Colloids/11.02%3A_Electrolytes",
+          "stable_id": "69b4a8ee-50a8-58c7-a81a-3c40cbfbe38d"
+        },
+        {
+          "order": 4,
+          "title": "11.3: Solubility",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/11%3A_Solutions_and_Colloids/11.03%3A_Solubility",
+          "stable_id": "09897be8-a215-5d19-8042-bb8051165f17"
+        },
+        {
+          "order": 5,
+          "title": "11.4: Colligative Properties",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/11%3A_Solutions_and_Colloids/11.04%3A_Colligative_Properties",
+          "stable_id": "04136939-cdd8-542d-9074-b67c1fed8194"
+        },
+        {
+          "order": 6,
+          "title": "11.5: Colloids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/11%3A_Solutions_and_Colloids/11.05%3A_Colloids",
+          "stable_id": "b71d233e-d147-55ec-8f6e-df3a1a0cc3e5"
+        },
+        {
+          "order": 7,
+          "title": "11.6: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/11%3A_Solutions_and_Colloids/11.06%3A_Key_Terms",
+          "stable_id": "ce324a01-6819-5bff-b138-0b24bad75175"
+        },
+        {
+          "order": 8,
+          "title": "11.7: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/11%3A_Solutions_and_Colloids/11.07%3A_Key_Equations",
+          "stable_id": "11d38c0f-6e29-5342-8662-677290f6859d"
+        },
+        {
+          "order": 9,
+          "title": "11.8: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/11%3A_Solutions_and_Colloids/11.08%3A_Summary",
+          "stable_id": "2b8b1fdf-5556-5d07-a9f6-987573841d45"
+        },
+        {
+          "order": 10,
+          "title": "11.9: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/11%3A_Solutions_and_Colloids/11.09%3A_Exercises",
+          "stable_id": "f3c7c1ea-e4a6-549b-9664-f84423033357"
+        }
+      ]
+    },
+    {
+      "order": 12,
+      "title": "12: Kinetics",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics",
+      "stable_id": "66721693-1ce1-5b24-b8a4-06083f7bcbc9",
+      "topics": [
+        {
+          "order": 1,
+          "title": "12.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics/12.00%3A_Introduction",
+          "stable_id": "d77321e8-8fac-5add-bcd4-23f9bd7e0da8"
+        },
+        {
+          "order": 2,
+          "title": "12.1: Chemical Reaction Rates",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics/12.01%3A_Chemical_Reaction_Rates",
+          "stable_id": "2ec2bff1-152d-55ae-879d-0ba7f24e7ed3"
+        },
+        {
+          "order": 3,
+          "title": "12.2: Factors Affecting Reaction Rates",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics/12.02%3A_Factors_Affecting_Reaction_Rates",
+          "stable_id": "7de4476c-5fe7-54b8-a28b-ed791676248b"
+        },
+        {
+          "order": 4,
+          "title": "12.3: Rate Laws",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics/12.03%3A_Rate_Laws",
+          "stable_id": "e6a801ae-cb3a-531d-8bc2-dec208a11511"
+        },
+        {
+          "order": 5,
+          "title": "12.4: Integrated Rate Laws",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics/12.04%3A_Integrated_Rate_Laws",
+          "stable_id": "4dfb132e-2b2a-560e-be12-fdbffd9f861f"
+        },
+        {
+          "order": 6,
+          "title": "12.5: Collision Theory",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics/12.05%3A_Collision_Theory",
+          "stable_id": "0269b4ae-e1b9-5c5b-9aac-27336efad2be"
+        },
+        {
+          "order": 7,
+          "title": "12.6: Reaction Mechanisms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics/12.06%3A_Reaction_Mechanisms",
+          "stable_id": "b37fbb64-f6a0-50e3-824e-03fd585c2148"
+        },
+        {
+          "order": 8,
+          "title": "12.7: Catalysis",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics/12.07%3A_Catalysis",
+          "stable_id": "2cffb1f1-1b58-573c-bfc2-b393db38a6c0"
+        },
+        {
+          "order": 9,
+          "title": "12.8: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics/12.08%3A_Key_Terms",
+          "stable_id": "b96e8730-b49a-50f9-bf6b-2dcc70c4c25d"
+        },
+        {
+          "order": 10,
+          "title": "12.9: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics/12.09%3A_Key_Equations",
+          "stable_id": "5e61a2b5-ae85-5bae-9102-e8e4698b4196"
+        },
+        {
+          "order": 11,
+          "title": "12.10: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics/12.10%3A_Summary",
+          "stable_id": "c5d742af-6713-567b-b720-6dad218cd3b5"
+        },
+        {
+          "order": 12,
+          "title": "12.11: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/12%3A_Kinetics/12.11%3A_Exercises",
+          "stable_id": "96f15e8d-ab21-5387-b370-5ae50f8a1118"
+        }
+      ]
+    },
+    {
+      "order": 13,
+      "title": "13: Fundamental Equilibrium Concepts",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/13%3A_Fundamental_Equilibrium_Concepts",
+      "stable_id": "a29a794a-596b-5378-bcc8-f015e163a1cf",
+      "topics": [
+        {
+          "order": 1,
+          "title": "13.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/13%3A_Fundamental_Equilibrium_Concepts/13.00%3A_Introduction",
+          "stable_id": "0b771ee8-ecae-50dc-8dac-50ae911fdb86"
+        },
+        {
+          "order": 2,
+          "title": "13.1: Chemical Equilibria",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/13%3A_Fundamental_Equilibrium_Concepts/13.01%3A_Chemical_Equilibria",
+          "stable_id": "c61d595f-ccd8-52a9-a182-1f44517b4520"
+        },
+        {
+          "order": 3,
+          "title": "13.2: Equilibrium Constants",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/13%3A_Fundamental_Equilibrium_Concepts/13.02%3A_Equilibrium_Constants",
+          "stable_id": "258b9f5d-e77b-5570-aeaf-13f8ee19263e"
+        },
+        {
+          "order": 4,
+          "title": "13.3: Shifting Equilibria - Le Chatelier’s Principle",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/13%3A_Fundamental_Equilibrium_Concepts/13.03%3A_Shifting_Equilibria_-_Le_Chateliers_Principle",
+          "stable_id": "f472ca98-ee55-593c-bf7f-3e17f209dd7d"
+        },
+        {
+          "order": 5,
+          "title": "13.4: Equilibrium Calculations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/13%3A_Fundamental_Equilibrium_Concepts/13.04%3A_Equilibrium_Calculations",
+          "stable_id": "18877073-a9f2-5883-9de4-c1b25d90201f"
+        },
+        {
+          "order": 6,
+          "title": "13.5: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/13%3A_Fundamental_Equilibrium_Concepts/13.05%3A_Key_Terms",
+          "stable_id": "2f019baa-15ff-5f89-bf8d-438f71d422ba"
+        },
+        {
+          "order": 7,
+          "title": "13.6: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/13%3A_Fundamental_Equilibrium_Concepts/13.06%3A_Key_Equations",
+          "stable_id": "87e628f9-c949-59cf-b243-674742cf050d"
+        },
+        {
+          "order": 8,
+          "title": "13.7: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/13%3A_Fundamental_Equilibrium_Concepts/13.07%3A_Summary",
+          "stable_id": "dbcccf29-80e8-5da3-826a-c989ff958115"
+        },
+        {
+          "order": 9,
+          "title": "13.8: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/13%3A_Fundamental_Equilibrium_Concepts/13.08%3A_Exercises",
+          "stable_id": "5494331f-c88e-51db-84e3-3c6cb11e1607"
+        }
+      ]
+    },
+    {
+      "order": 14,
+      "title": "14: Acid-Base Equilibria",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria",
+      "stable_id": "36b37e7c-5617-5409-b5fc-991ebe30e8cf",
+      "topics": [
+        {
+          "order": 1,
+          "title": "14.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria/14.00%3A_Introduction",
+          "stable_id": "82f48913-1cd6-5e38-bfb1-7795dcf43bac"
+        },
+        {
+          "order": 2,
+          "title": "14.1: Brønsted-Lowry Acids and Bases",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria/14.01%3A_Brnsted-Lowry_Acids_and_Bases",
+          "stable_id": "43496e64-f29d-5831-b1f0-adc382a6441a"
+        },
+        {
+          "order": 3,
+          "title": "14.2: pH and pOH",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria/14.02%3A_pH_and_pOH",
+          "stable_id": "d3387fae-4610-56a2-96e9-4fc9302b81f6"
+        },
+        {
+          "order": 4,
+          "title": "14.3: Relative Strengths of Acids and Bases",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria/14.03%3A_Relative_Strengths_of_Acids_and_Bases",
+          "stable_id": "d27e0fe6-013a-5c1d-b157-fa1ea2192f4b"
+        },
+        {
+          "order": 5,
+          "title": "14.4: Hydrolysis of Salt Solutions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria/14.04%3A_Hydrolysis_of_Salt_Solutions",
+          "stable_id": "aef43826-fc66-5111-ba3d-7cfcc10855f1"
+        },
+        {
+          "order": 6,
+          "title": "14.5: Polyprotic Acids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria/14.05%3A_Polyprotic_Acids",
+          "stable_id": "e874c80f-047e-5c90-9083-238ac51b3579"
+        },
+        {
+          "order": 7,
+          "title": "14.6: Buffers",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria/14.06%3A_Buffers",
+          "stable_id": "81d82917-9464-59f9-afd6-44e418d0cdd3"
+        },
+        {
+          "order": 8,
+          "title": "14.7: Acid-Base Titrations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria/14.07%3A_Acid-Base_Titrations",
+          "stable_id": "40ec239f-49e6-5547-8388-890e8eed50fb"
+        },
+        {
+          "order": 9,
+          "title": "14.8: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria/14.08%3A_Key_Terms",
+          "stable_id": "a48ac60f-38ee-5a69-a662-3634a61c1eb7"
+        },
+        {
+          "order": 10,
+          "title": "14.9: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria/14.09%3A_Key_Equations",
+          "stable_id": "0be5be6b-63dd-516e-999f-63786ffc0352"
+        },
+        {
+          "order": 11,
+          "title": "14.10: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria/14.10%3A_Summary",
+          "stable_id": "7eafb41a-140e-59ae-a71a-83b515ce9430"
+        },
+        {
+          "order": 12,
+          "title": "14.11: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/14%3A_Acid-Base_Equilibria/14.11%3A_Exercises",
+          "stable_id": "a2fce5a6-8804-55c3-8be5-9a9341643e7e"
+        }
+      ]
+    },
+    {
+      "order": 15,
+      "title": "15: Equilibria of Other Reaction Classes",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/15%3A_Equilibria_of_Other_Reaction_Classes",
+      "stable_id": "58c01dbb-43b2-5765-b8f4-7466866b05da",
+      "topics": [
+        {
+          "order": 1,
+          "title": "15.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/15%3A_Equilibria_of_Other_Reaction_Classes/15.00%3A_Introduction",
+          "stable_id": "4b465b51-7851-504c-b735-c74766bf8fc0"
+        },
+        {
+          "order": 2,
+          "title": "15.1: Precipitation and Dissolution",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/15%3A_Equilibria_of_Other_Reaction_Classes/15.01%3A_Precipitation_and_Dissolution",
+          "stable_id": "e8a7f439-babe-5d91-92d6-8001344349a4"
+        },
+        {
+          "order": 3,
+          "title": "15.2: Lewis Acids and Bases",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/15%3A_Equilibria_of_Other_Reaction_Classes/15.02%3A_Lewis_Acids_and_Bases",
+          "stable_id": "b6166804-c0c3-57db-9b56-a77d029ff7b9"
+        },
+        {
+          "order": 4,
+          "title": "15.3: Coupled Equilibria",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/15%3A_Equilibria_of_Other_Reaction_Classes/15.03%3A_Coupled_Equilibria",
+          "stable_id": "4a8b9280-8ae8-5824-92ad-6f217ac300e0"
+        },
+        {
+          "order": 5,
+          "title": "15.4: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/15%3A_Equilibria_of_Other_Reaction_Classes/15.04%3A_Key_Terms",
+          "stable_id": "91207eb8-3f7c-527e-a41d-7c12dd4bd2a2"
+        },
+        {
+          "order": 6,
+          "title": "15.5: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/15%3A_Equilibria_of_Other_Reaction_Classes/15.05%3A_Key_Equations",
+          "stable_id": "b8c373ba-59ad-5f28-8f8f-95298b9a3638"
+        },
+        {
+          "order": 7,
+          "title": "15.6: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/15%3A_Equilibria_of_Other_Reaction_Classes/15.06%3A_Summary",
+          "stable_id": "af9c0783-9252-54bd-931a-15ef499e5185"
+        },
+        {
+          "order": 8,
+          "title": "15.7: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/15%3A_Equilibria_of_Other_Reaction_Classes/15.07%3A_Exercises",
+          "stable_id": "1c4e5f49-7692-50dc-b8b1-5a35b3bd549a"
+        }
+      ]
+    },
+    {
+      "order": 16,
+      "title": "16: Thermodynamics",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/16%3A_Thermodynamics",
+      "stable_id": "1d32fed4-bcf7-543c-bd18-0ef09ab3480e",
+      "topics": [
+        {
+          "order": 1,
+          "title": "16.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/16%3A_Thermodynamics/16.00%3A_Introduction",
+          "stable_id": "835a948f-0be6-5558-9dca-6cbc4a35286f"
+        },
+        {
+          "order": 2,
+          "title": "16.1: Spontaneity",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/16%3A_Thermodynamics/16.01%3A_Spontaneity",
+          "stable_id": "c1148945-2251-5f3d-b3e5-fba8935fb978"
+        },
+        {
+          "order": 3,
+          "title": "16.2: Entropy",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/16%3A_Thermodynamics/16.02%3A_Entropy",
+          "stable_id": "4d5580e7-4bca-55c2-8128-7f2f476c4ee6"
+        },
+        {
+          "order": 4,
+          "title": "16.3: The Second and Third Laws of Thermodynamics",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/16%3A_Thermodynamics/16.03%3A_The_Second_and_Third_Laws_of_Thermodynamics",
+          "stable_id": "0a9f1533-5e7a-5f3a-b558-5a57ff5d9db1"
+        },
+        {
+          "order": 5,
+          "title": "16.4: Free Energy",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/16%3A_Thermodynamics/16.04%3A_Free_Energy",
+          "stable_id": "5c5afdab-9f97-5864-8b93-3a1e7fe6d368"
+        },
+        {
+          "order": 6,
+          "title": "16.5: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/16%3A_Thermodynamics/16.05%3A_Key_Terms",
+          "stable_id": "c717f42f-7368-5637-adec-bde15b49c8e2"
+        },
+        {
+          "order": 7,
+          "title": "16.6: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/16%3A_Thermodynamics/16.06%3A_Key_Equations",
+          "stable_id": "f3e12417-8034-5a27-a1a2-098158ee1118"
+        },
+        {
+          "order": 8,
+          "title": "16.7: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/16%3A_Thermodynamics/16.07%3A_Summary",
+          "stable_id": "9805eb3a-2248-5553-b67d-4d214d0ea235"
+        },
+        {
+          "order": 9,
+          "title": "16.8: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/16%3A_Thermodynamics/16.08%3A_Exercises",
+          "stable_id": "14148e78-c699-5626-94d9-49eb73183daa"
+        }
+      ]
+    },
+    {
+      "order": 17,
+      "title": "17: Electrochemistry",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry",
+      "stable_id": "d21f0c3f-f403-5d4c-931a-5e138267890a",
+      "topics": [
+        {
+          "order": 1,
+          "title": "17.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry/17.00%3A_Introduction",
+          "stable_id": "de1d8274-e299-5833-86b0-d990c400685c"
+        },
+        {
+          "order": 2,
+          "title": "17.1: Review of Redox Chemistry",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry/17.01%3A_Review_of_Redox_Chemistry",
+          "stable_id": "2318284f-614d-500f-b59b-72733b7baf7a"
+        },
+        {
+          "order": 3,
+          "title": "17.2: Galvanic Cells",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry/17.02%3A_Galvanic_Cells",
+          "stable_id": "37ca6133-7ebf-511a-8bee-0a6c1dc1a9e9"
+        },
+        {
+          "order": 4,
+          "title": "17.3: Electrode and Cell Potentials",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry/17.03%3A_Electrode_and_Cell_Potentials",
+          "stable_id": "95788175-cf99-54ee-b6cb-d973ba8077f9"
+        },
+        {
+          "order": 5,
+          "title": "17.4: Potential, Free Energy, and Equilibrium",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry/17.04%3A_Potential_Free_Energy_and_Equilibrium",
+          "stable_id": "3422c39c-19fb-5fb5-b9ac-38aa8d9d33fd"
+        },
+        {
+          "order": 6,
+          "title": "17.5: Batteries and Fuel Cells",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry/17.05%3A_Batteries_and_Fuel_Cells",
+          "stable_id": "1e9cb1a8-8a6f-54ba-af52-120749f3b898"
+        },
+        {
+          "order": 7,
+          "title": "17.6: Corrosion",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry/17.06%3A_Corrosion",
+          "stable_id": "c36b24f0-a3d4-57dd-a638-cef1f48bfdbc"
+        },
+        {
+          "order": 8,
+          "title": "17.7: Electrolysis",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry/17.07%3A_Electrolysis",
+          "stable_id": "e01e1397-6328-594c-8e17-8ad04644e64d"
+        },
+        {
+          "order": 9,
+          "title": "17.8: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry/17.08%3A_Key_Terms",
+          "stable_id": "f74d81e9-f55a-54ae-91af-523a7925b577"
+        },
+        {
+          "order": 10,
+          "title": "17.9: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry/17.09%3A_Key_Equations",
+          "stable_id": "9664e9cb-a74f-5430-a686-2d40abe55716"
+        },
+        {
+          "order": 11,
+          "title": "17.10: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry/17.10%3A_Summary",
+          "stable_id": "8097d60c-7ded-55b0-b3b5-9b117f12abea"
+        },
+        {
+          "order": 12,
+          "title": "17.11: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/17%3A_Electrochemistry/17.11%3A_Exercises",
+          "stable_id": "3c3c9820-524a-595f-94b5-bc6bc2d90926"
+        }
+      ]
+    },
+    {
+      "order": 18,
+      "title": "18: Representative Metals, Metalloids, and Nonmetals",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals",
+      "stable_id": "a5e9d68b-6074-50ac-ab22-90f6e3e134a5",
+      "topics": [
+        {
+          "order": 1,
+          "title": "18.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.00%3A_Introduction",
+          "stable_id": "1e0dc676-a0cf-5fbd-9aba-d973fbad805a"
+        },
+        {
+          "order": 2,
+          "title": "18.1: Periodicity",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.01%3A_Periodicity",
+          "stable_id": "8cdd576a-e4af-5995-a70b-1cfd924649cd"
+        },
+        {
+          "order": 3,
+          "title": "18.2: Occurrence and Preparation of the Representative Metals",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.02%3A_Occurrence_and_Preparation_of_the_Representative_Metals",
+          "stable_id": "3146780f-3f19-5243-8cd3-b89e74404721"
+        },
+        {
+          "order": 4,
+          "title": "18.3: Structure and General Properties of the Metalloids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.03%3A_Structure_and_General_Properties_of_the_Metalloids",
+          "stable_id": "c9b5d1b2-2488-5d8d-8fc2-bf1b34eac515"
+        },
+        {
+          "order": 5,
+          "title": "18.4: Structure and General Properties of the Nonmetals",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.04%3A_Structure_and_General_Properties_of_the_Nonmetals",
+          "stable_id": "6ab85fb3-0b97-5dbe-92bd-93f31dfdfe0b"
+        },
+        {
+          "order": 6,
+          "title": "18.5: Occurrence, Preparation, and Compounds of Hydrogen",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.05%3A_Occurrence_Preparation_and_Compounds_of_Hydrogen",
+          "stable_id": "c3f77e0a-dcd9-596e-8457-24987e3416ca"
+        },
+        {
+          "order": 7,
+          "title": "18.6: Occurrence, Preparation, and Properties of Carbonates",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.06%3A_Occurrence_Preparation_and_Properties_of_Carbonates",
+          "stable_id": "90eaa8dd-feb9-507a-94b8-72065bda0e33"
+        },
+        {
+          "order": 8,
+          "title": "18.7: Occurrence, Preparation, and Properties of Nitrogen",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.07%3A_Occurrence_Preparation_and_Properties_of_Nitrogen",
+          "stable_id": "30297788-4274-5cb8-80c3-1b534e81c316"
+        },
+        {
+          "order": 9,
+          "title": "18.8: Occurrence, Preparation, and Properties of Phosphorus",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.08%3A_Occurrence_Preparation_and_Properties_of_Phosphorus",
+          "stable_id": "f351589d-f963-5704-9dcc-d5dd4fdbdc43"
+        },
+        {
+          "order": 10,
+          "title": "18.9: Occurrence, Preparation, and Compounds of Oxygen",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.09%3A_Occurrence_Preparation_and_Compounds_of_Oxygen",
+          "stable_id": "423acd1d-d387-549e-bc70-092feded633f"
+        },
+        {
+          "order": 11,
+          "title": "18.10: Occurrence, Preparation, and Properties of Sulfur",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.10%3A_Occurrence_Preparation_and_Properties_of_Sulfur",
+          "stable_id": "d9d1418c-8aa5-5346-a1f7-21e7ff2f3fdf"
+        },
+        {
+          "order": 12,
+          "title": "18.11: Occurrence, Preparation, and Properties of Halogens",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.11%3A_Occurrence_Preparation_and_Properties_of_Halogens",
+          "stable_id": "f0db2747-9874-5377-b645-d9f282c52523"
+        },
+        {
+          "order": 13,
+          "title": "18.12: Occurrence, Preparation, and Properties of the Noble Gases",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.12%3A_Occurrence_Preparation_and_Properties_of_the_Noble_Gases",
+          "stable_id": "6a1c0089-d21f-5888-8fe8-75fa2301c3d3"
+        },
+        {
+          "order": 14,
+          "title": "18.13: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.13%3A_Key_Terms",
+          "stable_id": "1210a9ea-4370-50e6-9b54-5b6d6cfa87b4"
+        },
+        {
+          "order": 15,
+          "title": "18.14: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.14%3A_Summary",
+          "stable_id": "8cd50fa1-2dea-50f5-b02e-7ef550c2c19b"
+        },
+        {
+          "order": 16,
+          "title": "18.15: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/18%3A_Representative_Metals_Metalloids_and_Nonmetals/18.15%3A_Exercises",
+          "stable_id": "00e4f088-0539-574b-8b65-498963a26688"
+        }
+      ]
+    },
+    {
+      "order": 19,
+      "title": "19: Transition Metals and Coordination Chemistry",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/19%3A_Transition_Metals_and_Coordination_Chemistry",
+      "stable_id": "9e859279-85f8-538c-b290-7159dd62f98d",
+      "topics": [
+        {
+          "order": 1,
+          "title": "19.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/19%3A_Transition_Metals_and_Coordination_Chemistry/19.00%3A_Introduction",
+          "stable_id": "79c07cb6-9080-5681-a961-1d14e4cb7c9e"
+        },
+        {
+          "order": 2,
+          "title": "19.1: Occurrence, Preparation, and Properties of Transition Metals and Their Compounds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/19%3A_Transition_Metals_and_Coordination_Chemistry/19.01%3A_Occurrence_Preparation_and_Properties_of_Transition_Metals_and_Their_Compounds",
+          "stable_id": "cbebbc59-b8f7-514c-ad0b-283fbd060a01"
+        },
+        {
+          "order": 3,
+          "title": "19.2: Coordination Chemistry of Transition Metals",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/19%3A_Transition_Metals_and_Coordination_Chemistry/19.02%3A_Coordination_Chemistry_of_Transition_Metals",
+          "stable_id": "9baa2b45-c9d1-5c8c-bf1c-8d159abf9fc8"
+        },
+        {
+          "order": 4,
+          "title": "19.3: Spectroscopic and Magnetic Properties of Coordination Compounds",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/19%3A_Transition_Metals_and_Coordination_Chemistry/19.03%3A_Spectroscopic_and_Magnetic_Properties_of_Coordination_Compounds",
+          "stable_id": "408874ac-05c0-52a1-a7d6-c9590f91e158"
+        },
+        {
+          "order": 5,
+          "title": "19.4: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/19%3A_Transition_Metals_and_Coordination_Chemistry/19.04%3A_Key_Terms",
+          "stable_id": "2697b346-b17f-59ba-8d01-df11176481f3"
+        },
+        {
+          "order": 6,
+          "title": "19.5: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/19%3A_Transition_Metals_and_Coordination_Chemistry/19.05%3A_Summary",
+          "stable_id": "3d16613f-835b-5d1b-8000-3f5336ee1363"
+        },
+        {
+          "order": 7,
+          "title": "19.6: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/19%3A_Transition_Metals_and_Coordination_Chemistry/19.06%3A_Exercises",
+          "stable_id": "18c17fad-a34d-5e03-8734-2ddb6e556d67"
+        }
+      ]
+    },
+    {
+      "order": 20,
+      "title": "20: Organic Chemistry",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/20%3A_Organic_Chemistry",
+      "stable_id": "bb50ccba-2276-52c2-aa9d-9d509334f320",
+      "topics": [
+        {
+          "order": 1,
+          "title": "20.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/20%3A_Organic_Chemistry/20.00%3A_Introduction",
+          "stable_id": "ce0f58b4-4f0c-5890-bd95-ca7a79ac4477"
+        },
+        {
+          "order": 2,
+          "title": "20.1: Hydrocarbons",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/20%3A_Organic_Chemistry/20.01%3A_Hydrocarbons",
+          "stable_id": "d512018e-631e-5370-9ea9-eb2fffb49403"
+        },
+        {
+          "order": 3,
+          "title": "20.2: Alcohols and Ethers",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/20%3A_Organic_Chemistry/20.02%3A_Alcohols_and_Ethers",
+          "stable_id": "ade63070-38e1-5f6f-ba33-689427a8faed"
+        },
+        {
+          "order": 4,
+          "title": "20.3: Aldehydes, Ketones, Carboxylic Acids, and Esters",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/20%3A_Organic_Chemistry/20.03%3A_Aldehydes_Ketones_Carboxylic_Acids_and_Esters",
+          "stable_id": "dde6a8b9-e0bc-56aa-95d8-d4199eda7414"
+        },
+        {
+          "order": 5,
+          "title": "20.4: Amines and Amides",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/20%3A_Organic_Chemistry/20.04%3A_Amines_and_Amides",
+          "stable_id": "e6e5a4dd-1427-55ed-a11b-77f2398fc8ca"
+        },
+        {
+          "order": 6,
+          "title": "20.5: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/20%3A_Organic_Chemistry/20.05%3A_Key_Terms",
+          "stable_id": "77012bad-7bff-5c8c-8a71-86538a7c4a3c"
+        },
+        {
+          "order": 7,
+          "title": "20.6: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/20%3A_Organic_Chemistry/20.06%3A_Summary",
+          "stable_id": "537bff7e-7d42-57e5-a6e7-5d0e85113410"
+        },
+        {
+          "order": 8,
+          "title": "20.7: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/20%3A_Organic_Chemistry/20.07%3A_Exercises",
+          "stable_id": "ff548983-538f-50bc-a5f3-34ec02c66813"
+        }
+      ]
+    },
+    {
+      "order": 21,
+      "title": "21: Nuclear Chemistry",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/21%3A_Nuclear_Chemistry",
+      "stable_id": "5929109e-eb9e-5955-ab36-253c2ff1732a",
+      "topics": [
+        {
+          "order": 1,
+          "title": "21.0: Introduction",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/21%3A_Nuclear_Chemistry/21.00%3A_Introduction",
+          "stable_id": "766a3dc1-b58f-5fef-9780-40d491cba184"
+        },
+        {
+          "order": 2,
+          "title": "21.1: Nuclear Structure and Stability",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/21%3A_Nuclear_Chemistry/21.01%3A_Nuclear_Structure_and_Stability",
+          "stable_id": "8d8161d1-61ed-5b96-b61b-b2504333f62d"
+        },
+        {
+          "order": 3,
+          "title": "21.2: Nuclear Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/21%3A_Nuclear_Chemistry/21.02%3A_Nuclear_Equations",
+          "stable_id": "0fe65617-72bd-5055-842f-55f53435a25b"
+        },
+        {
+          "order": 4,
+          "title": "21.3: Radioactive Decay",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/21%3A_Nuclear_Chemistry/21.03%3A_Radioactive_Decay",
+          "stable_id": "9a7892c5-87f5-5b82-a862-9cc2bf102bcc"
+        },
+        {
+          "order": 5,
+          "title": "21.4: Transmutation and Nuclear Energy",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/21%3A_Nuclear_Chemistry/21.04%3A_Transmutation_and_Nuclear_Energy",
+          "stable_id": "985a7463-2757-586b-8a8c-d93847b12f7b"
+        },
+        {
+          "order": 6,
+          "title": "21.5: Uses of Radioisotopes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/21%3A_Nuclear_Chemistry/21.05%3A_Uses_of_Radioisotopes",
+          "stable_id": "199ae3d3-90c9-5461-9161-ec0995cd0ae2"
+        },
+        {
+          "order": 7,
+          "title": "21.6: Biological Effects of Radiation",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/21%3A_Nuclear_Chemistry/21.06%3A_Biological_Effects_of_Radiation",
+          "stable_id": "a18a81b3-3528-5982-91bc-28b387074087"
+        },
+        {
+          "order": 8,
+          "title": "21.7: Key Terms",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/21%3A_Nuclear_Chemistry/21.07%3A_Key_Terms",
+          "stable_id": "8e327dbd-dd4d-5e48-a678-7d41b6be6fec"
+        },
+        {
+          "order": 9,
+          "title": "21.8: Key Equations",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/21%3A_Nuclear_Chemistry/21.08%3A_Key_Equations",
+          "stable_id": "c2cd3d82-3ff8-51e8-b834-10855f146226"
+        },
+        {
+          "order": 10,
+          "title": "21.9: Summary",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/21%3A_Nuclear_Chemistry/21.09%3A_Summary",
+          "stable_id": "c20add6b-44e7-530e-89cb-4ba6e08a2141"
+        },
+        {
+          "order": 11,
+          "title": "21.10: Exercises",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/21%3A_Nuclear_Chemistry/21.10%3A_Exercises",
+          "stable_id": "560d0a07-0725-5c92-8d20-6382f5e93da7"
+        }
+      ]
+    },
+    {
+      "order": 22,
+      "title": "22: Appendices",
+      "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices",
+      "stable_id": "284bc0ee-df60-5f2e-8d4a-324c96ffb96b",
+      "topics": [
+        {
+          "order": 1,
+          "title": "Appendix A: The Periodic Table",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_A%3A_The_Periodic_Table",
+          "stable_id": "333c7abb-7757-5c65-b153-85fab07c2ffe"
+        },
+        {
+          "order": 2,
+          "title": "Appendix B: Essential Mathematics",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_B%3A_Essential_Mathematics",
+          "stable_id": "d86db879-1af2-5122-a41e-306667cf17b0"
+        },
+        {
+          "order": 3,
+          "title": "Appendix C: Units and Conversion Factors",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_C%3A_Units_and_Conversion_Factors",
+          "stable_id": "73bafedd-d5a9-58a0-87d3-7f0dcc756201"
+        },
+        {
+          "order": 4,
+          "title": "Appendix D: Fundamental Physical Constants",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_D%3A_Fundamental_Physical_Constants",
+          "stable_id": "3443f4eb-be6b-5733-897e-f22d6b3efced"
+        },
+        {
+          "order": 5,
+          "title": "Appendix E: Water Properties",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_E%3A_Water_Properties",
+          "stable_id": "a3e99ded-bc29-5df1-894c-2ba6265880ae"
+        },
+        {
+          "order": 6,
+          "title": "Appendix F: Composition of Commercial Acids and Bases",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_F%3A_Composition_of_Commercial_Acids_and_Bases",
+          "stable_id": "f0e45fdb-8f64-5bb1-91ca-04150296a51b"
+        },
+        {
+          "order": 7,
+          "title": "Appendix G: Standard Thermodynamic Properties for Selected Substances",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_G%3A_Standard_Thermodynamic_Properties_for_Selected_Substances",
+          "stable_id": "239faa43-81c6-508d-b09d-3de8019a0c86"
+        },
+        {
+          "order": 8,
+          "title": "Appendix H: Ionization Constants of Weak Acids",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_H%3A_Ionization_Constants_of_Weak_Acids",
+          "stable_id": "14ac384d-2b04-5c5e-b360-497344b3074a"
+        },
+        {
+          "order": 9,
+          "title": "Appendix I: Ionization Constants of Weak Bases",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_I%3A_Ionization_Constants_of_Weak_Bases",
+          "stable_id": "0152d31a-2bcf-5fb5-9d15-3cff289b90de"
+        },
+        {
+          "order": 10,
+          "title": "Appendix J: Solubility Products",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_J%3A_Solubility_Products",
+          "stable_id": "253bf9ba-2646-5fc9-ac85-f6ed6220f03e"
+        },
+        {
+          "order": 11,
+          "title": "Appendix K: Formation Constants for Complex Ions",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_K%3A_Formation_Constants_for_Complex_Ions",
+          "stable_id": "158302a7-e8e8-553d-b353-c94e80533d92"
+        },
+        {
+          "order": 12,
+          "title": "Appendix L: Standard Electrode (Half-Cell) Potentials",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_L%3A_Standard_Electrode_%28Half-Cell%29_Potentials",
+          "stable_id": "4971118e-47f4-592c-9e20-76f854642716"
+        },
+        {
+          "order": 13,
+          "title": "Appendix M: Half-Lives for Several Radioactive Isotopes",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/Appendix_M%3A_Half-Lives_for_Several_Radioactive_Isotopes",
+          "stable_id": "2458f21b-63e0-5537-9be8-0adbf52bafa1"
+        },
+        {
+          "order": 14,
+          "title": "Answer Keys",
+          "canonical_url": "https://chem.libretexts.org/Bookshelves/General_Chemistry/Chemistry_2e_%28OpenStax%29/22%3A_Appendices/ZZ%3A_Answer_Key",
+          "stable_id": "4d8b3e40-e39c-590c-adb3-487bda83ad35"
+        }
+      ]
+    }
+  ]
+}
