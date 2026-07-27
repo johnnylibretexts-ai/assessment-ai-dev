@@ -802,3 +802,87 @@ def test_html_fallback_returns_empty_for_a_leaf_page():
 def test_book_with_no_parsable_listing_is_an_error():
     with pytest.raises(gen.SeedGeneratorError, match="no content chapters"):
         gen.fetch_outline(BOOK, http_get=_api_denied_http({BOOK: "<html></html>"}))
+
+
+# --------------------------------------------------------------------------
+# `order` is what ADAPT renders as the framework's level ordering.
+# --------------------------------------------------------------------------
+
+
+def test_chapter_order_has_no_gaps_when_a_chapter_is_dropped():
+    """Numbering must come from what is kept, not from the input position.
+
+    An empty chapter is skipped, so enumerating the inputs left a hole -- a
+    seed numbered 1, 3 reads as though chapter 2 went missing.
+    """
+
+    pages = _two_chapter_book()
+    ch3 = f"{BOOK}/03%3A_Three"
+    pages[BOOK].append(_subpage("3: Three", ch3))
+    pages[f"{BOOK}/02%3A_Two"] = []  # middle chapter has no pages
+    pages[ch3] = [_subpage("3.1: X", f"{ch3}/3.01%3A_X", children=False)]
+
+    seed = _build(pages)
+    assert [c["title"] for c in seed["chapters"]] == ["1: One", "3: Three"]
+    assert [c["order"] for c in seed["chapters"]] == [1, 2]
+
+
+def test_topic_order_has_no_gaps_when_a_duplicate_is_dropped():
+    """Same rule one level down, for a page repeated across chapters."""
+
+    ch1 = f"{BOOK}/01%3A_One"
+    shared = f"{ch1}/1.01%3A_First"
+    pages = _two_chapter_book()
+    pages[f"{BOOK}/02%3A_Two"] = [
+        _subpage("2.1: Repeat", shared, children=False),
+        _subpage("2.2: Real", f"{BOOK}/02%3A_Two/2.02%3A_Real", children=False),
+    ]
+
+    seed = _build(pages)
+    second = seed["chapters"][1]
+    assert [t["title"] for t in second["topics"]] == ["2.2: Real"]
+    assert [t["order"] for t in second["topics"]] == [1]
+
+
+def test_every_order_is_a_dense_one_based_sequence():
+    seed = _build()
+    assert [c["order"] for c in seed["chapters"]] == list(
+        range(1, len(seed["chapters"]) + 1)
+    )
+    for chapter in seed["chapters"]:
+        assert [t["order"] for t in chapter["topics"]] == list(
+            range(1, len(chapter["topics"]) + 1)
+        )
+
+
+def test_non_ascii_titles_survive_a_write_and_read(tmp_path, monkeypatch):
+    """render() emits ensure_ascii=False, so the file must be written as UTF-8.
+
+    Without pinning it, a non-Latin-1 title raises UnicodeEncodeError on a
+    machine whose default encoding is not UTF-8.
+    """
+
+    book = "https://chem.libretexts.org/Bookshelves/Fake/Ejemplo"
+    chapter = f"{book}/01%3A_Introduccion"
+    pages = {
+        book: [_subpage("1: Introducción — Ácidos", chapter)],
+        chapter: [
+            _subpage(
+                "1.1: Curvas de valoración", f"{chapter}/1.01%3A_Curvas", children=False
+            )
+        ],
+    }
+    outline = gen.fetch_outline(book, http_get=_fake_http(pages))
+    seed = gen.build_seed(
+        outline, author="A", license_code="ccby", license_version="4.0"
+    )
+
+    destination = tmp_path / "acentos-v1.json"
+    destination.write_text(gen.render(seed), encoding="utf-8")
+    reloaded = json.loads(destination.read_text(encoding="utf-8"))
+
+    assert reloaded["chapters"][0]["title"] == "1: Introducción — Ácidos"
+    assert reloaded == seed
+    assert catalog._load_seed(destination)["chapters"][0]["title"] == (
+        "1: Introducción — Ácidos"
+    )
