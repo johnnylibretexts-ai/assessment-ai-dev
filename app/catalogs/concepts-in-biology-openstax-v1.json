@@ -1,0 +1,567 @@
+{
+  "schema_version": 1,
+  "framework": {
+    "title": "Concepts in Biology (OpenStax)",
+    "author": "OpenStax",
+    "descriptor_type": "Learning Objective",
+    "description": "Curated chapter and page-topic alignment for the LibreTexts Concepts in Biology (OpenStax) book.",
+    "license": "ccby",
+    "license_version": "4.0",
+    "source_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29"
+  },
+  "stable_id_namespace": "ecb241c8-9902-5bab-b95b-8695f1f154c2",
+  "chapters": [
+    {
+      "order": 1,
+      "title": "1: Introduction to Biology",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/01%3A_Introduction_to_Biology",
+      "stable_id": "b06a7475-0922-55c7-b65b-32d095773912",
+      "topics": [
+        {
+          "order": 1,
+          "title": "1.1: Themes and Concepts of Biology",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/01%3A_Introduction_to_Biology/1.01%3A_Themes_and_Concepts_of_Biology",
+          "stable_id": "a0c658f5-e53c-5452-bd1e-1fcca2c8a5d4"
+        },
+        {
+          "order": 2,
+          "title": "1.2: The Process of Science",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/01%3A_Introduction_to_Biology/1.02%3A_The_Process_of_Science",
+          "stable_id": "82c16186-8e20-584a-9ea8-85b46fadf72f"
+        },
+        {
+          "order": 3,
+          "title": "1.E: Introduction to Biology (Exercises)",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/01%3A_Introduction_to_Biology/1.E%3A_Introduction_to_Biology_%28Exercises%29",
+          "stable_id": "5f988d4e-f126-52ca-8add-be145fcd8a17"
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "title": "2: Chemistry of Life",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/02%3A_Chemistry_of_Life",
+      "stable_id": "4ce607e4-b648-51b9-9ee9-a433e73d33d9",
+      "topics": [
+        {
+          "order": 1,
+          "title": "2.1: The Building Blocks of Molecules",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/02%3A_Chemistry_of_Life/2.01%3A_The_Building_Blocks_of_Molecules",
+          "stable_id": "a8c30a36-7fe9-53de-822f-f95baf625c48"
+        },
+        {
+          "order": 2,
+          "title": "2.2: Water",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/02%3A_Chemistry_of_Life/2.02%3A_Water",
+          "stable_id": "87843202-c7ec-58b5-9b64-e7795681c665"
+        },
+        {
+          "order": 3,
+          "title": "2.3: Biological Molecules",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/02%3A_Chemistry_of_Life/2.03%3A_Biological_Molecules",
+          "stable_id": "2ac39571-aaa1-545f-bccc-9fa735ea7005"
+        },
+        {
+          "order": 4,
+          "title": "2.E: Chemistry of Life (Exercises)",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/02%3A_Chemistry_of_Life/2.E%3A_Chemistry_of_Life_%28Exercises%29",
+          "stable_id": "cdc9103a-8d30-54bc-87f4-99c302785a90"
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "title": "3: Cell Structure and Function",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/03%3A_Cell_Structure_and_Function",
+      "stable_id": "db4493d1-71e8-5dfd-9251-3279a8c7e7bc",
+      "topics": [
+        {
+          "order": 1,
+          "title": "3.1: How Cells Are Studied",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/03%3A_Cell_Structure_and_Function/3.01%3A_How_Cells_Are_Studied",
+          "stable_id": "4b3fe3df-6b5a-5215-af2c-41689ca3d6b6"
+        },
+        {
+          "order": 2,
+          "title": "3.2: Comparing Prokaryotic and Eukaryotic Cells",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/03%3A_Cell_Structure_and_Function/3.02%3A_Comparing_Prokaryotic_and_Eukaryotic_Cells",
+          "stable_id": "c5bf0ab6-b7b0-5d61-81b6-e354ea981545"
+        },
+        {
+          "order": 3,
+          "title": "3.3: Eukaryotic Cells",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/03%3A_Cell_Structure_and_Function/3.03%3A_Eukaryotic_Cells",
+          "stable_id": "278533be-b5a3-5980-8b8b-ffbaee2d1eb2"
+        },
+        {
+          "order": 4,
+          "title": "3.4: The Cell Membrane",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/03%3A_Cell_Structure_and_Function/3.04%3A_The_Cell_Membrane",
+          "stable_id": "b16366db-25e8-5f47-bef9-73472e1719ab"
+        },
+        {
+          "order": 5,
+          "title": "3.5: Passive Transport",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/03%3A_Cell_Structure_and_Function/3.05%3A_Passive_Transport",
+          "stable_id": "61f918bc-1991-5573-8c20-7bdd103a9c6e"
+        },
+        {
+          "order": 6,
+          "title": "3.6: Active Transport",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/03%3A_Cell_Structure_and_Function/3.06%3A_Active_Transport",
+          "stable_id": "811ef8c2-8843-5ac4-b256-3ac50c97e710"
+        },
+        {
+          "order": 7,
+          "title": "3.E: Cell Structure and Function (Exercises)",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/03%3A_Cell_Structure_and_Function/3.E%3A_Cell_Structure_and_Function_%28Exercises%29",
+          "stable_id": "f1189cdb-bc80-5397-8740-e7e93516cdae"
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "title": "4: How Cells Obtain Energy",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/04%3A_How_Cells_Obtain_Energy",
+      "stable_id": "46f6f130-be63-5484-a334-b78e4e0e4bc0",
+      "topics": [
+        {
+          "order": 1,
+          "title": "4.1: Energy and Metabolism",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/04%3A_How_Cells_Obtain_Energy/4.01%3A_Energy_and_Metabolism",
+          "stable_id": "72d2951f-c063-5a7f-b371-2dca5d4fc475"
+        },
+        {
+          "order": 2,
+          "title": "4.2: Glycolysis",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/04%3A_How_Cells_Obtain_Energy/4.02%3A_Glycolysis",
+          "stable_id": "35bc8bc7-1833-51fa-b260-c15c71b993d6"
+        },
+        {
+          "order": 3,
+          "title": "4.3: Citric Acid Cycle and Oxidative Phosphorylation",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/04%3A_How_Cells_Obtain_Energy/4.03%3A_Citric_Acid_Cycle_and_Oxidative_Phosphorylation",
+          "stable_id": "7d9ed05c-e17a-552d-af6f-7159ec78ca15"
+        },
+        {
+          "order": 4,
+          "title": "4.4: Fermentation",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/04%3A_How_Cells_Obtain_Energy/4.04%3A_Fermentation",
+          "stable_id": "1d9166c0-7d42-5713-a510-3a938f7e60ed"
+        },
+        {
+          "order": 5,
+          "title": "4.5: Connections to Other Metabolic Pathways",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/04%3A_How_Cells_Obtain_Energy/4.05%3A_Connections_to_Other_Metabolic_Pathways",
+          "stable_id": "57c7a768-cae7-5a5c-8253-82eefa4aa680"
+        },
+        {
+          "order": 6,
+          "title": "4.E: How Cells Obtain Energy (Exercises)",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/04%3A_How_Cells_Obtain_Energy/4.E%3A_How_Cells_Obtain_Energy_%28Exercises%29",
+          "stable_id": "dfd551ca-c0d7-5d56-a44b-cfa61eae5b90"
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "title": "5: Photosynthesis",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/05%3A_Photosynthesis",
+      "stable_id": "267b4798-fee1-57bc-9e15-0f38205b81f8",
+      "topics": [
+        {
+          "order": 1,
+          "title": "5.1: Overview of Photosynthesis",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/05%3A_Photosynthesis/5.01%3A_Overview_of_Photosynthesis",
+          "stable_id": "bccffaab-c771-55a6-827d-5a6117de19c0"
+        },
+        {
+          "order": 2,
+          "title": "5.2: The Light-Dependent Reactions of Photosynthesis",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/05%3A_Photosynthesis/5.02%3A_The_Light-Dependent_Reactions_of_Photosynthesis",
+          "stable_id": "27a91d0a-a7b8-5756-92c0-b3c6e249ac97"
+        },
+        {
+          "order": 3,
+          "title": "5.3: The Calvin Cycle",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/05%3A_Photosynthesis/5.03%3A_The_Calvin_Cycle",
+          "stable_id": "d315a446-5655-5254-8439-3514aad7f94c"
+        },
+        {
+          "order": 4,
+          "title": "5.E: Photosynthesis (Exercises)",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/05%3A_Photosynthesis/5.E%3A_Photosynthesis_%28Exercises%29",
+          "stable_id": "8e15697f-58a1-541d-a441-7daa1cf0b261"
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "title": "6: Reproduction at the Cellular Level",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/06%3A_Reproduction_at_the_Cellular_Level",
+      "stable_id": "1b4de2b4-70e3-542f-af4b-e1d39fd5d5e5",
+      "topics": [
+        {
+          "order": 1,
+          "title": "6.1: The Genome",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/06%3A_Reproduction_at_the_Cellular_Level/6.01%3A_The_Genome",
+          "stable_id": "db6e9f17-123d-5385-8171-e9c6a60d9f86"
+        },
+        {
+          "order": 2,
+          "title": "6.2: The Cell Cycle",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/06%3A_Reproduction_at_the_Cellular_Level/6.02%3A_The_Cell_Cycle",
+          "stable_id": "42dbe623-7aec-54b1-a948-ce4a88ee23d3"
+        },
+        {
+          "order": 3,
+          "title": "6.3: Cancer and the Cell Cycle",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/06%3A_Reproduction_at_the_Cellular_Level/6.03%3A_Cancer_and_the_Cell_Cycle",
+          "stable_id": "20dcfb88-ffb4-5d62-add3-8121bb22f5cc"
+        },
+        {
+          "order": 4,
+          "title": "6.4: Prokaryotic Cell Division",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/06%3A_Reproduction_at_the_Cellular_Level/6.04%3A_Prokaryotic_Cell_Division",
+          "stable_id": "6b20fb29-daaf-5ac5-8cab-9461574ecce7"
+        },
+        {
+          "order": 5,
+          "title": "6.E: Reproduction at the Cellular Level (Exercises)",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/06%3A_Reproduction_at_the_Cellular_Level/6.E%3A_Reproduction_at_the_Cellular_Level_%28Exercises%29",
+          "stable_id": "96a27aae-1b6f-56e1-88c2-176304193c14"
+        }
+      ]
+    },
+    {
+      "order": 7,
+      "title": "7: The Cellular Basis of Inheritance",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/07%3A_The_Cellular_Basis_of_Inheritance",
+      "stable_id": "ded8c983-cc76-579e-8a67-96523c2b08f1",
+      "topics": [
+        {
+          "order": 1,
+          "title": "7.1: Sexual Reproduction",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/07%3A_The_Cellular_Basis_of_Inheritance/7.01%3A_Sexual_Reproduction",
+          "stable_id": "3978c571-5294-5d48-b14d-826404797de3"
+        },
+        {
+          "order": 2,
+          "title": "7.2: Meiosis",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/07%3A_The_Cellular_Basis_of_Inheritance/7.02%3A_Meiosis",
+          "stable_id": "f6bc00a3-9fa9-5182-80ca-ae34d4146669"
+        },
+        {
+          "order": 3,
+          "title": "7.3: Errors in Meiosis",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/07%3A_The_Cellular_Basis_of_Inheritance/7.03%3A_Errors_in_Meiosis",
+          "stable_id": "0712ddcb-7138-5bfe-a8bb-edf59644ec58"
+        },
+        {
+          "order": 4,
+          "title": "7.E: The Cellular Basis of Inheritance (Exercises)",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/07%3A_The_Cellular_Basis_of_Inheritance/7.E%3A_The_Cellular_Basis_of_Inheritance_%28Exercises%29",
+          "stable_id": "10a79e04-dad2-5785-b53c-9cc4151841b2"
+        }
+      ]
+    },
+    {
+      "order": 8,
+      "title": "8: Patterns of Inheritance",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/08%3A_Patterns_of_Inheritance",
+      "stable_id": "73435815-fd37-5c5b-89cd-3fb2318b1a3a",
+      "topics": [
+        {
+          "order": 1,
+          "title": "8.1: Mendel’s Experiments",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/08%3A_Patterns_of_Inheritance/8.01%3A_Mendels_Experiments",
+          "stable_id": "03a5e72f-c8fc-5ff1-95a0-655210150847"
+        }
+      ]
+    },
+    {
+      "order": 9,
+      "title": "9: Molecular Biology",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/09%3A_Molecular_Biology",
+      "stable_id": "cddb6174-7d35-5d55-aa7a-76b3a9dc547b",
+      "topics": [
+        {
+          "order": 1,
+          "title": "9.1: The Structure of DNA",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/09%3A_Molecular_Biology/9.01%3A_The_Structure_of_DNA",
+          "stable_id": "fe010777-b4a0-54c1-b0d2-b43c03217412"
+        },
+        {
+          "order": 2,
+          "title": "9.2: DNA Replication",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/09%3A_Molecular_Biology/9.02%3A_DNA_Replication",
+          "stable_id": "cd631566-1230-5cb4-b3c3-fd1effcefedb"
+        },
+        {
+          "order": 3,
+          "title": "9.3: Transcription",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/09%3A_Molecular_Biology/9.03%3A_Transcription",
+          "stable_id": "c0f45b5d-4e48-5274-b171-b7db01494fe9"
+        },
+        {
+          "order": 4,
+          "title": "9.4: Translation",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/09%3A_Molecular_Biology/9.04%3A_Translation",
+          "stable_id": "b71a6b4f-98dd-5442-b59a-1cf0f77f4652"
+        },
+        {
+          "order": 5,
+          "title": "9.5: How Genes Are Regulated",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/09%3A_Molecular_Biology/9.05%3A_How_Genes_Are_Regulated",
+          "stable_id": "86bc1084-2392-575b-b498-1f8edc8329a7"
+        },
+        {
+          "order": 6,
+          "title": "9.E: Molecular Biology (Exercises)",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/09%3A_Molecular_Biology/9.E%3A_Molecular_Biology_%28Exercises%29",
+          "stable_id": "f0ce63d8-f86c-5956-bae3-3d2980ecbaca"
+        }
+      ]
+    },
+    {
+      "order": 10,
+      "title": "10: Biotechnology",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/10%3A_Biotechnology",
+      "stable_id": "1df94cfc-d232-5cf5-9ae6-a0f73c35e063",
+      "topics": [
+        {
+          "order": 1,
+          "title": "10.1: Cloning and Genetic Engineering",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/10%3A_Biotechnology/10.01%3A_Cloning_and_Genetic_Engineering",
+          "stable_id": "b1105ab6-009a-5baf-9b40-ccbbcb04e3e8"
+        }
+      ]
+    },
+    {
+      "order": 11,
+      "title": "11: Evolution and Its Processes",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/11%3A_Evolution_and_Its_Processes",
+      "stable_id": "6b8b9b42-b5ad-5c67-9d07-29ee5f98b918",
+      "topics": [
+        {
+          "order": 1,
+          "title": "11.1: Discovering How Populations Change",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/11%3A_Evolution_and_Its_Processes/11.01%3A_Discovering_How_Populations_Change",
+          "stable_id": "0ee001d5-8884-55c2-8f9c-d82f6b7afc8d"
+        },
+        {
+          "order": 2,
+          "title": "11.2: Mechanisms of Evolution",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/11%3A_Evolution_and_Its_Processes/11.02%3A_Mechanisms_of_Evolution",
+          "stable_id": "f96a9274-f108-561e-bf04-04f743e81309"
+        },
+        {
+          "order": 3,
+          "title": "11.3: Evidence of Evolution",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/11%3A_Evolution_and_Its_Processes/11.03%3A_Evidence_of_Evolution",
+          "stable_id": "2dc853a6-76cc-5366-925d-db7984851eee"
+        },
+        {
+          "order": 4,
+          "title": "11.4: Speciation",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/11%3A_Evolution_and_Its_Processes/11.04%3A_Speciation",
+          "stable_id": "8973ca57-bfef-5d57-8364-343f7309740f"
+        },
+        {
+          "order": 5,
+          "title": "11.5: Common Misconceptions about Evolution",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/11%3A_Evolution_and_Its_Processes/11.05%3A_Common_Misconceptions_about_Evolution",
+          "stable_id": "4038d246-33de-5f93-a725-9f2d0f77710a"
+        },
+        {
+          "order": 6,
+          "title": "11.E: Evolution and Its Processes (Exercises)",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/11%3A_Evolution_and_Its_Processes/11.E%3A_Evolution_and_Its_Processes_%28Exercises%29",
+          "stable_id": "81450945-8372-5c69-947e-4c3ff9736275"
+        }
+      ]
+    },
+    {
+      "order": 12,
+      "title": "12: Diversity of Life",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/12%3A_Diversity_of_Life",
+      "stable_id": "d9c4ba95-849b-5d2c-a110-29fa5f78663d",
+      "topics": [
+        {
+          "order": 1,
+          "title": "12.1: Organizing Life on Earth",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/12%3A_Diversity_of_Life/12.01%3A_Organizing_Life_on_Earth",
+          "stable_id": "89ae752a-7fc0-5f39-b1a0-aea93236d174"
+        }
+      ]
+    },
+    {
+      "order": 13,
+      "title": "13: Diversity of Microbes, Fungi, and Protists",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/13%3A_Diversity_of_Microbes_Fungi_and_Protists",
+      "stable_id": "510fa04c-2153-522e-ac1a-f7fb9770e353",
+      "topics": [
+        {
+          "order": 1,
+          "title": "13.1: Prokaryotic Diversity",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/13%3A_Diversity_of_Microbes_Fungi_and_Protists/13.01%3A_Prokaryotic_Diversity",
+          "stable_id": "930a14f0-edfb-5e7e-917c-c64ea742149b"
+        }
+      ]
+    },
+    {
+      "order": 14,
+      "title": "14: Diversity of Plants",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/14%3A_Diversity_of_Plants",
+      "stable_id": "8547111e-05ea-5ab8-b3f8-1e5ce043fceb",
+      "topics": [
+        {
+          "order": 1,
+          "title": "14.1: The Plant Kingdom",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/14%3A_Diversity_of_Plants/14.01%3A_The_Plant_Kingdom",
+          "stable_id": "e2e72fc0-c2f6-5862-8463-6905cacbd815"
+        }
+      ]
+    },
+    {
+      "order": 15,
+      "title": "15: Diversity of Animals",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/15%3A_Diversity_of_Animals",
+      "stable_id": "99f7970f-117b-5de7-adfa-3f81e00c2f46",
+      "topics": [
+        {
+          "order": 1,
+          "title": "15.1: Features of the Animal Kingdom",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/15%3A_Diversity_of_Animals/15.01%3A_Features_of_the_Animal_Kingdom",
+          "stable_id": "5489927c-b793-5a7d-84f6-0ce379ba03da"
+        }
+      ]
+    },
+    {
+      "order": 16,
+      "title": "16: The Body's Systems",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/16%3A_The_Body%27s_Systems",
+      "stable_id": "d681d53a-f754-5459-bbbf-0269b16b400d",
+      "topics": [
+        {
+          "order": 1,
+          "title": "16.1: Homeostasis and Osmoregulation",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/16%3A_The_Body%27s_Systems/16.01%3A_Homeostasis_and_Osmoregulation",
+          "stable_id": "a520339f-1078-5ae7-b485-30db68b1385d"
+        }
+      ]
+    },
+    {
+      "order": 17,
+      "title": "17: The Immune System and Disease",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/17%3A_The_Immune_System_and_Disease",
+      "stable_id": "e3bbac2d-22f6-5c7d-a551-70b71ea7b46c",
+      "topics": [
+        {
+          "order": 1,
+          "title": "17.1: Viruses",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/17%3A_The_Immune_System_and_Disease/17.01%3A_Viruses",
+          "stable_id": "f8242312-f122-5b44-9d90-908d148c1408"
+        },
+        {
+          "order": 2,
+          "title": "17.2: Innate Immunity",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/17%3A_The_Immune_System_and_Disease/17.02%3A_Innate_Immunity",
+          "stable_id": "4a0ea4bb-0d37-5588-8b10-eec8b8b5644d"
+        },
+        {
+          "order": 3,
+          "title": "17.3: Adaptive Immunity",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/17%3A_The_Immune_System_and_Disease/17.03%3A_Adaptive_Immunity",
+          "stable_id": "87ea081a-23e2-581d-ae07-5e4e580aee14"
+        },
+        {
+          "order": 4,
+          "title": "17.4: Disruptions in the Immune System",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/17%3A_The_Immune_System_and_Disease/17.04%3A_Disruptions_in_the_Immune_System",
+          "stable_id": "7e484c13-cba6-5714-8a51-3bd30feb740e"
+        },
+        {
+          "order": 5,
+          "title": "17.E: The Immune System and Desease (Exercises)",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/17%3A_The_Immune_System_and_Disease/17.E%3A_The_Immune_System_and_Desease_%28Exercises%29",
+          "stable_id": "fffe5358-ac44-5bc9-ba81-9e0bd0c90d4e"
+        }
+      ]
+    },
+    {
+      "order": 18,
+      "title": "18: Animal Reproduction and Development",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/18%3A_Animal_Reproduction_and_Development",
+      "stable_id": "15fe9f4b-1a78-5a5f-8e46-bdf164d7c971",
+      "topics": [
+        {
+          "order": 1,
+          "title": "18.1: How Animals Reproduce",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/18%3A_Animal_Reproduction_and_Development/18.01%3A_How_Animals_Reproduce",
+          "stable_id": "69594aa3-d7bd-5c7e-9621-7e1c3b41f406"
+        }
+      ]
+    },
+    {
+      "order": 19,
+      "title": "19: Population and Community Ecology",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/19%3A_Population_and_Community_Ecology",
+      "stable_id": "5aa46082-2c22-56f2-8fc7-85ddfc9fd163",
+      "topics": [
+        {
+          "order": 1,
+          "title": "19.1: Population Demographics and Dynamics",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/19%3A_Population_and_Community_Ecology/19.01%3A_Population_Demographics_and_Dynamics",
+          "stable_id": "68e1aa3f-6e36-5b4f-8191-c96af6f998d3"
+        }
+      ]
+    },
+    {
+      "order": 20,
+      "title": "20: Ecosystems and the Biosphere",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/20%3A_Ecosystems_and_the_Biosphere",
+      "stable_id": "8f8d6cbf-f57e-59bc-9c62-74e5da703ba3",
+      "topics": [
+        {
+          "order": 1,
+          "title": "20.1: Energy Flow through Ecosystems",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/20%3A_Ecosystems_and_the_Biosphere/20.01%3A_Energy_Flow_through_Ecosystems",
+          "stable_id": "707a116c-583a-50cb-891a-f9a4f443a623"
+        }
+      ]
+    },
+    {
+      "order": 21,
+      "title": "21: Conservation and Biodiversity",
+      "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/21%3A_Conservation_and_Biodiversity",
+      "stable_id": "1ce356ff-9f76-5130-b6ef-c526942f80ff",
+      "topics": [
+        {
+          "order": 1,
+          "title": "21.1: Importance of Biodiversity",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/21%3A_Conservation_and_Biodiversity/21.01%3A_Importance_of_Biodiversity",
+          "stable_id": "d0e739b1-57bc-5f62-b174-44ea143d687e"
+        },
+        {
+          "order": 2,
+          "title": "21.2: Threats to Biodiversity",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/21%3A_Conservation_and_Biodiversity/21.02%3A_Threats_to_Biodiversity",
+          "stable_id": "65cb040d-5a74-55ed-ab16-47fa91577cbb"
+        },
+        {
+          "order": 3,
+          "title": "21.3: Preserving Biodiversity",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/21%3A_Conservation_and_Biodiversity/21.03%3A_Preserving_Biodiversity",
+          "stable_id": "ca2ad5eb-ec2f-5d56-ad11-02d2ae1b8f52"
+        },
+        {
+          "order": 4,
+          "title": "21.E: Conservation and Biodiversity (Exercises)",
+          "canonical_url": "https://bio.libretexts.org/Bookshelves/Introductory_and_General_Biology/Concepts_in_Biology_%28OpenStax%29/21%3A_Conservation_and_Biodiversity/21.E%3A_Conservation_and_Biodiversity_%28Exercises%29",
+          "stable_id": "98f18e72-40c9-591f-8425-78add36045cd"
+        }
+      ]
+    }
+  ]
+}
