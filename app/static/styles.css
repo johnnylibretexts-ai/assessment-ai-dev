@@ -56,6 +56,8 @@ button.secondary { background: #566575; }
 .generation-options legend { padding: 0 6px; font-weight: 800; }
 .computation-options { border-color: #9ccbe1; background: #f5fbfe; }
 .item-type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 2px 14px; }
+.item-type-grid.is-locked { opacity: .5; }
+.item-type-grid.is-locked .check.compact { cursor: not-allowed; }
 .check.compact { margin: 5px 0; text-transform: capitalize; }
 .job-panel { max-width: 760px; margin: 80px auto 0; text-align: center; }
 .job-panel .loading-dots { font-size: 1.5rem; vertical-align: .08em; }
