@@ -33,6 +33,9 @@ FROM base AS test
 COPY tests ./tests
 COPY Dockerfile Dockerfile.corpus Dockerfile.compute docker-compose.computation.yml uv.lock package.json package-lock.json ./
 COPY deploy ./deploy
+# Maintenance tooling. `test` only -- `runtime` derives from `base`, so this
+# stays out of the production image while still being covered by the gate.
+COPY scripts ./scripts
 # Every check runs, then every exit code is asserted at the end.
 #
 # Two traps this shape exists to avoid, both of which shipped a passing build
