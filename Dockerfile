@@ -63,8 +63,10 @@ RUN playwright install --with-deps chromium || exit 1
 # form puts the working directory on sys.path, and tests/browser imports its
 # harness as `tests.browser.harness`. Bare pytest fails collection with
 # ModuleNotFoundError and exits 2 before running anything.
-RUN ruff check app tests; lint=$?; \
-    ruff format --check app tests; fmt=$?; \
+# `scripts` is linted too: it holds real Python (the catalog seed generator),
+# and code that nothing checks is code that rots.
+RUN ruff check app tests scripts; lint=$?; \
+    ruff format --check app tests scripts; fmt=$?; \
     pytest -q tests/test_computation_service.py; sidecar=$?; \
     pytest -q tests --ignore=tests/test_computation_service.py --ignore=tests/browser; rest=$?; \
     python -m pytest -q tests/browser; browser=$?; \
