@@ -33,6 +33,9 @@ FROM base AS test
 COPY tests ./tests
 COPY Dockerfile Dockerfile.corpus Dockerfile.compute docker-compose.computation.yml uv.lock package.json package-lock.json ./
 COPY deploy ./deploy
+# Maintenance tooling. `test` only -- `runtime` derives from `base`, so this
+# stays out of the production image while still being covered by the gate.
+COPY scripts ./scripts
 # Every check runs, then every exit code is asserted at the end.
 #
 # Two traps this shape exists to avoid, both of which shipped a passing build
@@ -60,8 +63,10 @@ RUN playwright install --with-deps chromium || exit 1
 # form puts the working directory on sys.path, and tests/browser imports its
 # harness as `tests.browser.harness`. Bare pytest fails collection with
 # ModuleNotFoundError and exits 2 before running anything.
-RUN ruff check app tests; lint=$?; \
-    ruff format --check app tests; fmt=$?; \
+# `scripts` is linted too: it holds real Python (the catalog seed generator),
+# and code that nothing checks is code that rots.
+RUN ruff check app tests scripts; lint=$?; \
+    ruff format --check app tests scripts; fmt=$?; \
     pytest -q tests/test_computation_service.py; sidecar=$?; \
     pytest -q tests --ignore=tests/test_computation_service.py --ignore=tests/browser; rest=$?; \
     python -m pytest -q tests/browser; browser=$?; \
