@@ -41,8 +41,10 @@
   const validateSelectedTypes = ({ raiseTotal = false } = {}) => {
     if (!generationMode || !itemCount || generationMode.value !== "selected") {
       itemCount?.setCustomValidity("");
-      // Only lock when we can actually read the mode. If the control is missing
-      // the safe fallback is a usable form, not an unusable one.
+      // Only lock when both the mode control and the item-count field are
+      // readable — the lock is driven by the mode but reported through the
+      // count. If either is missing the safe fallback is a usable form, not a
+      // permanently frozen one.
       const locked = Boolean(generationMode) && Boolean(itemCount);
       itemTypes.forEach((checkbox) => {
         checkbox.disabled = locked;

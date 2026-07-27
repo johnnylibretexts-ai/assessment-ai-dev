@@ -102,7 +102,7 @@ a separate concern from the form UX and which I did not evaluate.
 
 A worktree off current `origin/main`, containing the one genuinely missing piece — the auto-mix lock:
 
-```
+```text
 .worktrees/assessment-ai-generation-mode   [feat/generation-mode-lock]  base 902306c
 ```
 
@@ -126,11 +126,15 @@ Design notes, so you can accept or reject them deliberately:
   `#generation_mode` and `#item-count` to exist, so a markup change that removes them degrades to a
   usable form rather than a permanently frozen one.
 
-### What is NOT done
+### What was NOT done *in the original worktree* (since completed)
 
-- **No tests.** See the warning below — this needs a real one, not a substring assertion.
-- **Not run through `ruff` / `ruff format` / pytest / `docker build --target test`.**
-- **Not deployed, not pushed, no PR.** The box is untouched.
+The three items below describe the handoff state. All three were resolved before this PR:
+
+- ~~**No tests.**~~ Four browser regressions now cover the lock, asserting computed style rather
+  than markup — exactly the way the warning below demands.
+- ~~**Not run through `ruff` / `ruff format` / pytest / `docker build --target test`.**~~ The full
+  Docker gate ran green.
+- ~~**Not deployed, not pushed, no PR.**~~ Pushed as this PR. Deploy is still a separate step.
 
 To drop it entirely: `git worktree remove .worktrees/assessment-ai-generation-mode --force` and
 `git branch -D feat/generation-mode-lock`.
@@ -176,8 +180,10 @@ Two things worth doing instead:
 ## 5. What I deliberately did not touch
 
 - **`app/pipeline.py`, `app/jobs.py`, `app/main.py`** — the generation path is the qualified
-  pipeline. This change is presentation only: no request the server receives is different, and every
-  server-side validation still runs unchanged. Keep it that way unless you actually want the
+  pipeline. **Server-side handling and validation are unchanged.** The requests themselves do
+  differ: browsers omit disabled controls from `FormData`, so in Auto mix `item_types` no longer
+  reaches the server — which changes nothing, because Auto mix discarded those values server-side
+  anyway. That is the whole point of the lock: the UI now tells the truth about what is used. Keep it that way unless you actually want the
   auto-mix ordering to change, which is a much larger conversation.
 - **`app/templates/index.html`** — no markup change was needed; `#item-type-options` and
   `#item-type-help` already exist and are already wired to `aria-describedby`.
