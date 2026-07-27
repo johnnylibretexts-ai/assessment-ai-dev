@@ -23,7 +23,9 @@ seed whose IDs this script does not reproduce.
 from __future__ import annotations
 
 import argparse
+import html
 import json
+import re
 import sys
 import time
 import urllib.error
@@ -37,6 +39,14 @@ SCHEMA_VERSION = 1
 USER_AGENT = "libretexts-dev catalog seed generator"
 REQUEST_TIMEOUT = 45
 POLITE_DELAY = 0.4
+
+# Subpage listing markup, used when the Deki API is not open on a subdomain.
+_LISTING_ANCHOR_RE = re.compile(r"(<a\b[^>]*>)(.*?)</a>", re.S | re.I)
+_HREF_RE = re.compile(r'href="([^"]+)"', re.I)
+_TITLE_SPAN_RE = re.compile(
+    r"<span[^>]*\bmt-sortable-listing-title\b[^>]*>(.*?)</span>", re.S | re.I
+)
+_TITLE_ATTR_RE = re.compile(r'title="([^"]*)"', re.I)
 
 # Front/Back Matter carry no assessable content and are excluded from the
 # curated seeds that already ship, so the generated ones match that shape.
@@ -187,20 +197,95 @@ def is_content_chapter(page: Page) -> bool:
     return page.title.strip().lower() not in SKIPPED_TITLES
 
 
+def is_api_unavailable(error: Exception) -> bool:
+    """Whether an API failure means "use the HTML instead" rather than "stop".
+
+    The Deki API is enabled per subdomain. ``chem.libretexts.org`` serves it
+    anonymously; ``bio.libretexts.org`` answers 403 with
+    ``TokenValidationFailedException``. Both render the same public page HTML,
+    so an auth failure is a reason to change source, not to give up.
+    """
+
+    message = str(error).lower()
+    return any(
+        marker in message
+        for marker in ("http 401", "http 403", "http 404", "token", "forbidden")
+    )
+
+
+def parse_listing_html(payload: str, page_url: str, *, context: str) -> list[Page]:
+    """Extract a page's direct children from its rendered table of contents.
+
+    Selection is by URL, not by CSS class: a book's landing page renders
+    ``mt-sortable-listing-link`` anchors, but its chapter pages render plain
+    ``class="internal"`` ones, so keying on the class found the chapters and
+    then reported every chapter as empty. Any anchor pointing at a direct
+    child of this page is a subpage link.
+
+    Titles prefer the ``mt-sortable-listing-title`` span, then the anchor's own
+    text, and only then the ``title`` attribute -- which on some books carries
+    the whole chapter summary appended to the title.
+    """
+
+    prefix = normalize_source_url(page_url) + "/"
+    pages: list[Page] = []
+    seen: set[str] = set()
+
+    for match in _LISTING_ANCHOR_RE.finditer(payload):
+        open_tag, inner = match.group(1), match.group(2)
+        href_match = _HREF_RE.search(open_tag)
+        if not href_match:
+            continue
+        url = normalize_source_url(html.unescape(href_match.group(1)))
+        if not url.startswith(prefix) or "/" in url[len(prefix) :]:
+            continue  # not a direct child
+        if url in seen:
+            continue
+
+        span = _TITLE_SPAN_RE.search(inner)
+        title = _strip_tags(span.group(1)) if span else ""
+        if not title:
+            title = _strip_tags(inner)
+        if not title:
+            attr = _TITLE_ATTR_RE.search(open_tag)
+            title = html.unescape(attr.group(1)).strip() if attr else ""
+        if not title:
+            continue
+        seen.add(url)
+        pages.append(Page(title=title, canonical_url=url, has_children=True))
+
+    # An empty result is normal: a leaf page has no listing. Callers decide
+    # whether that is a problem -- an empty *book* is caught by fetch_outline.
+    return pages
+
+
+def _strip_tags(fragment: str) -> str:
+    return html.unescape(re.sub(r"<[^>]+>", " ", fragment)).strip()
+
+
+def fetch_children(page_url: str, *, http_get: HttpGet) -> list[Page]:
+    """Direct child pages of a page, via the API where it is open to us."""
+
+    try:
+        return parse_subpages(http_get(subpages_api_url(page_url)), context=page_url)
+    except SeedGeneratorError as error:
+        if not is_api_unavailable(error):
+            raise
+    return parse_listing_html(http_get(page_url), page_url, context=page_url)
+
+
 def fetch_outline(
     book_url: str,
     *,
     http_get: HttpGet = _http_get,
     book_title: str | None = None,
 ) -> BookOutline:
-    """Read a book's chapters and their topic pages from the Deki API."""
+    """Read a book's chapters and their topic pages."""
 
     book_url = normalize_source_url(book_url)
     chapters = [
         page
-        for page in parse_subpages(
-            http_get(subpages_api_url(book_url)), context=book_url
-        )
+        for page in fetch_children(book_url, http_get=http_get)
         if is_content_chapter(page)
     ]
     if not chapters:
@@ -213,10 +298,7 @@ def fetch_outline(
     for chapter in chapters:
         topics = [
             topic
-            for topic in parse_subpages(
-                http_get(subpages_api_url(chapter.canonical_url)),
-                context=chapter.canonical_url,
-            )
+            for topic in fetch_children(chapter.canonical_url, http_get=http_get)
             if is_content_chapter(topic)
         ]
         if topics:
