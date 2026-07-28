@@ -292,8 +292,8 @@ def test_critique_still_rejects_real_contract_violations() -> None:
     """Relaxing the heuristics must not disable the checks that matter."""
 
     for kwargs in (
-        {"issues": ["Use $x$ instead"]},                      # dollar delimiters
-        {"issues": ["<b>bold</b> is not allowed"]},           # raw HTML
+        {"issues": ["Use $x$ instead"]},  # dollar delimiters
+        {"issues": ["<b>bold</b> is not allowed"]},  # raw HTML
         {"distractor_flags": ["\\frac{1}{2} is unbalanced"]},  # TeX outside delimiters
     ):
         payload = {
