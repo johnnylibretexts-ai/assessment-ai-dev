@@ -16,6 +16,7 @@ from app.math_text import (
     validate_generated_math_text,
 )
 from app.schemas import (
+    GeneratedCritique,
     AssessmentItemType,
     BloomLevel,
     Choice,
@@ -266,3 +267,48 @@ def test_server_owned_engine_preview_gets_display_only_canonical_tex() -> None:
     assert r"\(\alpha \pm i\beta\)" in rendered_explanation
     assert r"\(\alpha = -\frac{k_1}{2}\)" in rendered_explanation
     assert rendered_answer == r"\(-3.0\)"
+
+
+def test_critique_prose_may_name_answer_choices() -> None:
+    """Reviewer prose is internal and must not be held to the math contract.
+
+    A critique naming a choice -- "CHOICE_A is not a plausible distractor" --
+    trips the identifier_subscript heuristic, which reads CHOICE_A as an
+    identifier with a subscript. That failed entire generation jobs: the
+    critique stage retried three times and the job died, with an error that
+    blamed pseudo-math for what was ordinary prose.
+    """
+
+    critique = GeneratedCritique(
+        issues=["CHOICE_A is not a plausible distractor"],
+        distractor_flags=["CHOICE_1 restates the stem"],
+        revision_instructions=["Replace CHOICE_B with a common misconception"],
+        revision_required=True,
+    )
+    assert critique.issues == ["CHOICE_A is not a plausible distractor"]
+
+
+def test_critique_still_rejects_real_contract_violations() -> None:
+    """Relaxing the heuristics must not disable the checks that matter."""
+
+    for kwargs in (
+        {"issues": ["Use $x$ instead"]},                      # dollar delimiters
+        {"issues": ["<b>bold</b> is not allowed"]},           # raw HTML
+        {"distractor_flags": ["\\frac{1}{2} is unbalanced"]},  # TeX outside delimiters
+    ):
+        payload = {
+            "issues": [],
+            "distractor_flags": [],
+            "revision_instructions": [],
+            "revision_required": True,
+        }
+        payload.update(kwargs)
+        with pytest.raises(ValidationError):
+            GeneratedCritique(**payload)
+
+
+def test_student_facing_text_still_rejects_ascii_pseudo_math() -> None:
+    """The heuristics stay on for anything a student reads."""
+
+    with pytest.raises(ValueError, match="ASCII pseudo-math"):
+        validate_generated_math_text("k_1 doubles the rate", field_name="stem")
