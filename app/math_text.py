@@ -140,8 +140,15 @@ def canonicalize_server_owned_preview(value: str) -> str:
     return text
 
 
-def validate_generated_math_text(value: str, *, field_name: str) -> None:
-    """Enforce the provider-facing math contract for one human-readable field."""
+def validate_generated_math_text(
+    value: str, *, field_name: str, check_ascii_math: bool = True
+) -> None:
+    """Enforce the provider-facing math contract for one human-readable field.
+
+    ``check_ascii_math`` gates only the pseudo-math heuristics. They are
+    deliberately aggressive, which is right for text a student will read and
+    wrong for internal reviewer prose -- see ``validate_critique_math``.
+    """
 
     if not value:
         return
@@ -167,6 +174,8 @@ def validate_generated_math_text(value: str, *, field_name: str) -> None:
             f"{field_name} contains TeX outside canonical delimiters: "
             f"{raw_tex.group(0)}"
         )
+    if not check_ascii_math:
+        return
     for pattern in _ASCII_MATH_PATTERNS:
         match = pattern.search(outside)
         if match:
@@ -190,11 +199,22 @@ def validate_hint_math(ladder: Any) -> None:
 
 
 def validate_critique_math(critique: Any) -> None:
+    """Validate reviewer prose.
+
+    A critique is internal: it is never shown to a student, never rendered as
+    math, and never reaches QTI. Reviewers routinely name answer choices --
+    "CHOICE_A is not a plausible distractor" -- and the identifier_subscript
+    heuristic reads CHOICE_A as an identifier with a subscript, which failed
+    the whole generation job. Every real contract check (HTML, dollar
+    delimiters, forbidden macros, delimiter balance, raw TeX) still applies.
+    """
+
     for field in ("issues", "distractor_flags", "revision_instructions"):
         for index, value in enumerate(getattr(critique, field)):
             validate_generated_math_text(
                 value,
                 field_name=f"{field}[{index}]",
+                check_ascii_math=False,
             )
 
 
