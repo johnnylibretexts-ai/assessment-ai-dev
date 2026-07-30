@@ -1058,3 +1058,36 @@ def test_earlier_publication_does_not_mark_a_new_revision_as_published(
         assert "Current revision v2 is not yet published." in detail.text
         assert "Revision v1 remains published to ADAPT as question 125." in detail.text
         assert "Earlier revision" in detail.text
+
+
+def test_generate_request_defaults_to_choose_types() -> None:
+    """The shipped default mode must be 'selected'."""
+
+    from app.schemas import GenerateRequest, SourceType
+
+    request = GenerateRequest(
+        source_type=SourceType.PUBLIC,
+        source_locator="https://chem.libretexts.org/x",
+        item_types=["multiple_choice"],
+    )
+    assert request.generation_mode == "selected"
+
+
+def test_choose_types_default_is_unusable_without_a_ticked_format() -> None:
+    """Guards the reason main.py ships DEFAULT_ITEM_TYPE pre-ticked.
+
+    If someone later removes the pre-ticked checkbox from the template, this
+    records why the form would break: the default mode cannot be submitted with
+    an empty item_types list.
+    """
+
+    import pytest
+    from pydantic import ValidationError
+
+    from app.schemas import GenerateRequest, SourceType
+
+    with pytest.raises(ValidationError, match="choose at least one item type"):
+        GenerateRequest(
+            source_type=SourceType.PUBLIC,
+            source_locator="https://chem.libretexts.org/x",
+        )

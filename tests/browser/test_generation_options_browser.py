@@ -80,14 +80,36 @@ def grid_opacity(page) -> float:  # type: ignore[no-untyped-def]
     )
 
 
+def test_choose_types_is_the_default_and_ships_one_format_ticked(page) -> None:
+    """The default must produce a request the API will accept.
+
+    ``GenerateRequest.validate_generation_selection`` rejects ``selected`` mode
+    with no ``item_types``. Defaulting the mode without also ticking a format
+    would make the very first Generate click fail validation.
+    """
+
+    page.goto("/")
+
+    expect(page.locator("#generation_mode")).to_have_value("selected")
+
+    boxes = page.locator(CHECKBOXES)
+    count = boxes.count()
+    assert count > 0, "no item-type checkboxes rendered"
+
+    checked = [i for i in range(count) if boxes.nth(i).is_checked()]
+    assert len(checked) == 1, f"expected exactly one format pre-ticked, got {len(checked)}"
+
+    # and it must be usable, not locked
+    for index in range(count):
+        expect(boxes.nth(index)).to_be_enabled()
+    assert grid_opacity(page) == 1.0
+
+
 def test_auto_mix_locks_every_item_type_checkbox(page) -> None:
     """Auto mix ignores these boxes, so they must not accept input."""
 
     page.goto("/")
-
-    # Auto is the default, and no interaction has happened yet: the very first
-    # paint a tester sees must already be locked.
-    expect(page.locator("#generation_mode")).to_have_value("auto")
+    page.select_option("#generation_mode", "auto")
 
     boxes = page.locator(CHECKBOXES)
     count = boxes.count()
