@@ -220,11 +220,22 @@ Two rules that still stand, and one that was learned landing the merge:
 2. **Never `docker compose build` in `/opt/libretexts/assessment-ai`** — that checkout is stale and
    missing modules. Build from a fresh release tree, deploy with `--no-build`, per
    `/opt/libretexts/assessment-ai/DEPLOY.md`.
-3. **Merging a PR does not run the Docker gate.** Before merging anything into `main`, do a trial
-   merge locally and run `docker build --target test` on the *merged* tree. PR #9 was landed this
-   way — five zeros on the merge result before it touched `main` — precisely because PR #7 had
-   previously left `main` undeployable over one blank line while every status showed green. There is
-   still no PR CI for the gate.
+3. **CI runs the Docker gate on every PR as of 2026-07-30 (#24) — but nothing enforces it.**
+
+   `.github/workflows/gate.yml` runs `docker build --target runtime` on the `pull_request` event,
+   so it builds `refs/pull/N/merge` — the merge *result*, not the branch tip. Its first run gated
+   the PR that unbroke `main`.
+
+   Before that, nothing built anything on a PR, and it cost us twice: PR #7 left `main`
+   undeployable over one blank line while every status showed green, and PR #23 did it again on
+   2026-07-29 by defaulting `generation_mode` in `GenerateRequest`, breaking the BUILD-08 digest
+   test.
+
+   **The gate reports; it does not block.** Branch protection and rulesets both return
+   `403: Upgrade to GitHub Pro or make this repository public` on this private repo, so a red gate
+   can still be merged past. Until that changes, the rule is manual: **do not merge unless
+   `docker build --target runtime` is green.** A local trial merge plus `docker build --target test`
+   on the merged tree remains a valid belt-and-braces check, and is still how PR #9 was landed.
 
 ---
 

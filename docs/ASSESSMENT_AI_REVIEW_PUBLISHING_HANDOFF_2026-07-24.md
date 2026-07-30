@@ -781,12 +781,18 @@ until the guards were isolated. Either drop the same-origin check on this read-o
 in the UI that the link must be clicked, not copied.
 
 **Re-running this.** Scenarios A, C, D, F and G are now automated in `tests/browser/`. They run in
-the Docker `test` stage, which means they execute on an actual `docker build` — the deploy path —
-and **not** on a pull request: there is no CI workflow running the gate, and GitHub's `CLEAN` status
-reflects only the AI reviewers. So a violation can reach `main` and stay invisible until someone
-next builds, which is exactly how the `app/db.py` formatting break in `169d19c` survived merge.
-Adding PR CI that runs the gate would close that window. The remaining manual value is in B, E, H
-and I. The scripts used are throwaway, but the
+the Docker `test` stage, so they execute on an actual `docker build` — the deploy path.
+
+This paragraph used to say they did **not** run on a pull request. **That is fixed as of
+2026-07-30:** `.github/workflows/gate.yml` (added in #24) builds `--target runtime` on every PR,
+against `refs/pull/N/merge` — the merge result. The window this section describes, where a
+violation reaches `main` and stays invisible until someone next builds (how the `app/db.py`
+formatting break in `169d19c` survived merge), is now visible before the merge.
+
+**One caveat: the gate reports, it does not block.** Branch protection and rulesets are both
+Pro-only on this private repo (`403`), so a red gate can still be merged past. Treat a red
+`docker build --target runtime` as a hard stop by convention. The remaining manual value is in
+B, E, H and I. The scripts used are throwaway, but the
 fixtures they rely on live in `tests/browser/harness.py`, including `disposable_instance()`, which
 serves a seeded fake-publishing instance on a real port.
 
