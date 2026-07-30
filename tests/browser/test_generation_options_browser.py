@@ -97,7 +97,9 @@ def test_choose_types_is_the_default_and_ships_one_format_ticked(page) -> None:
     assert count > 0, "no item-type checkboxes rendered"
 
     checked = [i for i in range(count) if boxes.nth(i).is_checked()]
-    assert len(checked) == 1, f"expected exactly one format pre-ticked, got {len(checked)}"
+    assert len(checked) == 1, (
+        f"expected exactly one format pre-ticked, got {len(checked)}"
+    )
 
     # and it must be usable, not locked
     for index in range(count):

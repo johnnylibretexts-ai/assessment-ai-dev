@@ -102,7 +102,6 @@ from .schemas import (
 DEFAULT_ITEM_TYPE = AssessmentItemType.MULTIPLE_CHOICE.value
 
 
-
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
@@ -356,7 +355,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         source_type: str = Form(SourceType.PUBLIC.value),
         source_locator: str | None = Form(None),
         sandbox_path: str | None = Form(None),
-        generation_mode: str = Form("selected"),
+        generation_mode: str = Form("auto"),
         item_types: list[str] = Form(default_factory=list),
         item_count: int = Form(4),
         include_hint_ladder: bool = Form(False),
