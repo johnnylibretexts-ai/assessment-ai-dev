@@ -36,7 +36,7 @@
               Generation mode
               <select name="generation_mode" id="generation_mode">
                 <option value="auto">Auto mix</option>
-                <option value="selected">Choose types</option>
+                <option value="selected" selected>Choose types</option>
               </select>
             </label>
             <label>
@@ -49,7 +49,8 @@
           <div class="item-type-grid" id="item-type-options" aria-describedby="item-type-help">
             {% for item_type in item_type_options %}
               <label class="check compact">
-                <input type="checkbox" name="item_types" value="{{ item_type }}">
+                <input type="checkbox" name="item_types" value="{{ item_type }}"
+                       {% if item_type == default_item_type %}checked{% endif %}>
                 <span>{{ item_type_labels.get(item_type, item_type.replace('_', ' ')|title) }}</span>
               </label>
             {% endfor %}
