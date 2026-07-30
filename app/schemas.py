@@ -653,7 +653,7 @@ class SourceType(StrEnum):
 class GenerateRequest(BaseModel):
     source_type: SourceType
     source_locator: str
-    generation_mode: Literal["auto", "selected"] = "selected"
+    generation_mode: Literal["auto", "selected"] = "auto"
     item_types: list[AssessmentItemType] = Field(default_factory=list, max_length=8)
     item_count: int = Field(default=4, ge=1, le=8)
     include_hint_ladder: bool = True

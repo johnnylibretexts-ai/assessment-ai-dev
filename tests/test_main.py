@@ -1060,34 +1060,20 @@ def test_earlier_publication_does_not_mark_a_new_revision_as_published(
         assert "Earlier revision" in detail.text
 
 
-def test_generate_request_defaults_to_choose_types() -> None:
-    """The shipped default mode must be 'selected'."""
+def test_api_default_mode_is_unchanged() -> None:
+    """The form defaults to Choose types; the API contract must not.
+
+    test_computation_pipeline pins a sha256 of the default GenerateRequest from
+    the BUILD-08 qualification. Defaulting generation_mode in the schema moves
+    that digest and makes the default request unconstructable (selected mode
+    requires item_types), so the default lives in the template only. The
+    rendered form is covered by tests/browser/test_generation_options_browser.
+    """
 
     from app.schemas import GenerateRequest, SourceType
 
     request = GenerateRequest(
-        source_type=SourceType.PUBLIC,
-        source_locator="https://chem.libretexts.org/x",
-        item_types=["multiple_choice"],
+        source_type=SourceType.SANDBOX,
+        source_locator="x",
     )
-    assert request.generation_mode == "selected"
-
-
-def test_choose_types_default_is_unusable_without_a_ticked_format() -> None:
-    """Guards the reason main.py ships DEFAULT_ITEM_TYPE pre-ticked.
-
-    If someone later removes the pre-ticked checkbox from the template, this
-    records why the form would break: the default mode cannot be submitted with
-    an empty item_types list.
-    """
-
-    import pytest
-    from pydantic import ValidationError
-
-    from app.schemas import GenerateRequest, SourceType
-
-    with pytest.raises(ValidationError, match="choose at least one item type"):
-        GenerateRequest(
-            source_type=SourceType.PUBLIC,
-            source_locator="https://chem.libretexts.org/x",
-        )
+    assert request.generation_mode == "auto"
