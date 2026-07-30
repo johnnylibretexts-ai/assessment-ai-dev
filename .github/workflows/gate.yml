@@ -1,0 +1,67 @@
+name: gate
+
+# Runs the same gate the deploy build runs -- `docker build --target runtime`,
+# whose `test` stage must produce /app/.tests-passed or no image exists.
+#
+# Why this workflow exists
+# ------------------------
+# The Dockerfile gate is real, but nothing ran it before a merge. Bot reviews
+# (CodeRabbit, Greptile) are the only required signal today, and they do not
+# build anything. So a PR could be green, merge, and leave `main` undeployable
+# -- which is exactly what happened with #7 and again with #23. The failure is
+# invisible until someone tries to deploy.
+#
+# Why `pull_request` and not `push`
+# ---------------------------------
+# `pull_request` checks out `refs/pull/N/merge`: the MERGE RESULT, not the
+# branch tip. That is the thing that has to build. A branch that builds on its
+# own can still break `main` once combined with what landed in the meantime,
+# and gating the branch alone would not catch it.
+#
+# The `push: main` job is a backstop, not the gate -- it tells us `main` broke,
+# after the fact. Admin merges, direct pushes, and force-pushes all bypass the
+# PR event.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: gate-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docker-gate:
+    name: docker build --target runtime
+    runs-on: ubuntu-latest
+    # The suite is ~6 min of pytest plus a chromium install and two pip
+    # installs; a cold cache lands near 20. 45 leaves headroom without letting
+    # a hung run burn an hour.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # `runtime` COPYs /app/.tests-passed from `test`, so building `runtime`
+      # runs lint, format, and all three pytest invocations. Building `test`
+      # directly would prove less: it is the COPY that makes the gate load
+      # bearing, and that edge only exists on the `runtime` path.
+      #
+      # No `--load` and no registry push: CI only needs to know it builds. The
+      # deployable image is still built on the box from the release tree.
+      - name: Build gated image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
