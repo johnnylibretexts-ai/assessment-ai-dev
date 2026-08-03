@@ -571,6 +571,25 @@ and expose it through a reviewer-protected download route. The official pinned 1
 item and packaging schemas used for offline validation are bundled in `app/qti_schemas`, with source
 URLs and hashes recorded in `SCHEMAS.json`.
 
+## Reviewer authentication
+
+The live reviewer at `https://assess-ai.libretexts.dev` uses a dedicated LibreOne OIDC client behind
+Caddy and OAuth2 Proxy. LibreOne application ID `1003` has `default_access=none`; only users with an
+explicit LibreOne `UserApplication` entitlement can complete the OIDC flow.
+
+On successful authentication, Caddy destroys caller-supplied identity headers *before* the auth
+subrequest, then forwards the OIDC subject UUID as `X-Reviewer`. The UUID is the sole identity that
+crosses the boundary, and the sole persisted audit identity — no email address is forwarded. Caddy
+removes the OIDC cookie and all bearer/access-token headers before the request reaches FastAPI.
+
+See `docs/adr/0001-forward-auth-identity-binding.md` for why the binding is shaped this way, and
+why several apparently-redundant lines in `deploy/Caddyfile.assess-ai` must not be removed.
+
+This browser identity is deliberately independent of ADAPT publishing. Publishing still signs in
+as the dedicated role-5 Assessment AI service account described above; human OIDC credentials are
+never forwarded to ADAPT. See `docs/LIBREONE_SSO_RUNBOOK.md` for provisioning, validation, demo,
+revocation, and rollback.
+
 ## Local development
 
 ```bash
@@ -583,4 +602,4 @@ uvicorn app.main:app --reload
 
 Use `.env.example` as the non-secret template. Never commit `.env` or LLM credentials.
 For Docker Compose on a non-VPS machine, use the non-secret template for validation:
-`ASSESSMENT_AI_ENV_FILE=.env.example docker compose config`.
+`ASSESSMENT_AI_ENV_FILE=.env.example ASSESSMENT_AI_OIDC_ENV_FILE=.env.oidc.example docker compose config`.

@@ -31,7 +31,13 @@ RUN pip install .
 FROM base AS test
 
 COPY tests ./tests
-COPY Dockerfile Dockerfile.corpus Dockerfile.compute docker-compose.computation.yml uv.lock package.json package-lock.json ./
+# `docker-compose.yml` is here for the same reason as
+# `docker-compose.computation.yml`: tests assert against it. In particular
+# tests/test_deployment_contract.py pins the oauth2-proxy image by digest, which
+# is a supply-chain control and is worth gating on rather than skipping when the
+# file happens to be absent. `runtime` derives from `base`, not `test`, so none
+# of these reach the production image.
+COPY Dockerfile Dockerfile.corpus Dockerfile.compute docker-compose.yml docker-compose.computation.yml uv.lock package.json package-lock.json ./
 COPY deploy ./deploy
 # Maintenance tooling. `test` only -- `runtime` derives from `base`, so this
 # stays out of the production image while still being covered by the gate.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import re
 from pathlib import Path
 
 import pytest
@@ -223,7 +224,27 @@ def test_renderer_is_same_origin_safe_and_csp_allows_only_required_styles() -> N
     assert "font-src 'self'" in caddy
     assert "connect-src 'self'" in caddy
     assert "style-src 'self' 'unsafe-inline'" in caddy
-    assert "https:" not in caddy
+
+    # The renderer must stay same-origin, but `form-action` carries one
+    # deliberate exception: the CAS origin. Without it, `form-action` is enforced
+    # across the redirect chain and every form POST fails *silently* once the SSO
+    # session expires. So assert the precise property -- no remote source
+    # anywhere except that one origin, and only in `form-action` -- rather than
+    # banning the substring outright.
+    policy = re.search(r'Content-Security-Policy "([^"]+)"', caddy)
+    assert policy is not None, "no Content-Security-Policy header found"
+    directives = [d.strip() for d in policy.group(1).split(";") if d.strip()]
+
+    assert not re.search(r"(?<!/)\bhttps:(?!//)", policy.group(1)), (
+        "the bare `https:` scheme-source permits ANY origin"
+    )
+    for directive in directives:
+        name, *sources = directive.split()
+        remote = [s for s in sources if "//" in s]
+        if name == "form-action":
+            assert remote == ["https://one.libretexts.dev"], directive
+        else:
+            assert not remote, f"{name} must stay same-origin: {directive}"
 
 
 def test_corpus_renderer_is_display_only_and_excludes_machine_fields() -> None:

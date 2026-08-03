@@ -1,4 +1,5 @@
 .env
+.env.oidc
 .venv/
 __pycache__/
 *.py[cod]

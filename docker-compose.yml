@@ -24,5 +24,31 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  assessment-ai-oidc:
+    image: quay.io/oauth2-proxy/oauth2-proxy@sha256:10a1165743a192e1940b4708fb9647027185ce11a681a1c5519b442ff7f1f561
+    container_name: assessment-ai-oidc
+    restart: unless-stopped
+    init: true
+    read_only: true
+    env_file:
+      - ${ASSESSMENT_AI_OIDC_ENV_FILE:-.env.oidc}
+    command:
+      - --config=/etc/oauth2-proxy.cfg
+    ports:
+      - "127.0.0.1:8194:4180"
+    volumes:
+      - ./deploy/oauth2-proxy.cfg:/etc/oauth2-proxy.cfg:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 100
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   assessment_ai_data:
