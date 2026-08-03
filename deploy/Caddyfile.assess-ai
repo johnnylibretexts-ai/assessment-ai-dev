@@ -1,8 +1,18 @@
+# Assessment AI edge configuration.
+#
+# Authentication is oauth2-proxy -> LibreOne OIDC/CAS. There is deliberately no
+# `import gate` (Basic Auth) here: it would sit in FRONT of SSO.
+#
+# Several lines below look redundant and are not. Read
+# docs/adr/0001-forward-auth-identity-binding.md before simplifying anything --
+# tests/test_deployment_contract.py enforces the parts that matter.
 assess-ai.libretexts.dev {
 	import secheaders
-	import gate
 	header {
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
+		# `form-action` must list the CAS origin: it is enforced across the
+		# redirect chain, so on session expiry a form POST redirecting out to
+		# LibreOne is blocked, and the button appears silently dead.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self' https://one.libretexts.dev; frame-ancestors 'none'; object-src 'none'"
 		Permissions-Policy "camera=(), geolocation=(), microphone=()"
 		X-Frame-Options "DENY"
 	}
@@ -12,14 +22,111 @@ assess-ai.libretexts.dev {
 		max_size 256KB
 	}
 
-	reverse_proxy 127.0.0.1:8093 {
-		# Rebuild specialist identity only from the authenticated edge context.
-		# The token is supplied to the Caddy process at runtime; an unset value
-		# remains fail-closed in the backend.
-		header_up -X-Assessment-AI-Proxy-Token
-		header_up -{$ASSESSMENT_AI_COMPUTATION_SPECIALIST_SUBJECT_HEADER:X-Assessment-AI-Authenticated-Subject}
-		header_up X-Reviewer {http.auth.user.id}
-		header_up {$ASSESSMENT_AI_COMPUTATION_SPECIALIST_SUBJECT_HEADER:X-Assessment-AI-Authenticated-Subject} {http.auth.user.id}
-		header_up X-Assessment-AI-Proxy-Token "{$ASSESSMENT_AI_COMPUTATION_TRUSTED_PROXY_TOKEN}"
+	# ---- oauth2-proxy's own endpoints --------------------------------------
+	# Nothing the client sends may masquerade as proxy-asserted identity here
+	# either. oauth2-proxy honours X-Auth-Request-Redirect and
+	# X-Forwarded-{Proto,Host,Uri} when building redirects
+	# (pkg/app/redirect/director.go GetRedirect); `whitelist_domains` is the
+	# backstop and these strips are the belt.
+	handle /oauth2/* {
+		reverse_proxy 127.0.0.1:8194 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Uri {uri}
+			header_up -Authorization
+			header_up -X-Reviewer
+			header_up -X-Reviewer-Email
+			header_up -X-Auth-Request-User
+			header_up -X-Auth-Request-Email
+			header_up -X-Auth-Request-Preferred-Username
+			header_up -X-Auth-Request-Groups
+			header_up -X-Auth-Request-Access-Token
+			header_up -X-Assessment-AI-Proxy-Token
+			header_up -{$ASSESSMENT_AI_COMPUTATION_SPECIALIST_SUBJECT_HEADER:X-Assessment-AI-Authenticated-Subject}
+		}
+	}
+
+	# ---- the application ----------------------------------------------------
+	handle {
+		# `route` is REQUIRED, not stylistic. The Caddyfile adapter sorts
+		# `request_header` AFTER `forward_auth` in defaultDirectiveOrder
+		# (caddyconfig/httpcaddyfile/directives.go), so without it the strips
+		# below would run after the copy and delete the identity they exist to
+		# protect, leaving the backend with nothing.
+		route {
+			# 1. Destroy every client-supplied claim to identity, BEFORE the auth
+			#    subrequest. On Caddy < 2.11.2 these lines are the only defence
+			#    against CVE-2026-30851 (GHSA-7r4p-vjf4-gxv4): there `copy_headers`
+			#    emits no Delete, so a 2xx auth response that omits
+			#    X-Auth-Request-* leaves the client's forged value in place. On
+			#    >= 2.11.2 they are redundant and free. Do not remove them.
+			request_header -X-Reviewer
+			request_header -X-Reviewer-Email
+			request_header -X-Assessment-AI-Proxy-Token
+			request_header -{$ASSESSMENT_AI_COMPUTATION_SPECIALIST_SUBJECT_HEADER:X-Assessment-AI-Authenticated-Subject}
+
+			# 2. Authenticate. /oauth2/auth answers 202 (AuthOnly) or 401;
+			#    forward_auth treats any 2xx as a pass.
+			#
+			#    X-Auth-Request-User is the OIDC `sub` claim -- for the OIDC
+			#    provider oauth2-proxy defaults UserClaim to "sub" and never
+			#    assigns it from user_id_claim. OpenID Connect Core 5.7 makes
+			#    `sub` the only claim an RP may key on, so this is the identity.
+			#
+			#    X-Auth-Request-Email is deliberately NOT copied: nothing reads
+			#    it, and user_id_claim="sub" makes it carry a subject rather than
+			#    an email. Every extra copy_headers entry is extra CVE-2026-30851
+			#    surface, since oauth2-proxy omits a header entirely for an empty
+			#    claim.
+			forward_auth 127.0.0.1:8194 {
+				uri /oauth2/auth
+				header_up X-Real-IP {remote_host}
+				copy_headers {
+					X-Auth-Request-User>X-Reviewer
+				}
+
+				@unauthorized status 401
+				handle_response @unauthorized {
+					redir * /oauth2/sign_in?rd={scheme}://{host}{uri}
+				}
+			}
+
+			# 3. Proxy to the app, deriving the computation-specialist subject
+			#    from the COPIED identity: copy_headers mutates the original
+			#    request, and this proxy's placeholders read that same live header
+			#    map. `copy_headers` is a map[from]to, so one source header cannot
+			#    feed two destinations -- hence the derivation rather than a
+			#    second copy.
+			#
+			#    DO NOT add `header_up -<name>` for any name Set here.
+			#    HeaderOps.ApplyTo runs Delete AFTER Set within one block, so the
+			#    delete wins and the header never arrives. That was the bug on
+			#    main: both computation headers were set and then deleted, so the
+			#    specialist path has never received either. Strips belong in the
+			#    `request_header` lines above.
+			#
+			#    An unset ASSESSMENT_AI_COMPUTATION_TRUSTED_PROXY_TOKEN expands to
+			#    the empty string; the backend then returns None before comparing,
+			#    so the specialist path stays fail-closed. It is disabled by
+			#    intent -- see ADR-0001.
+			reverse_proxy 127.0.0.1:8093 {
+				header_up {$ASSESSMENT_AI_COMPUTATION_SPECIALIST_SUBJECT_HEADER:X-Assessment-AI-Authenticated-Subject} {http.request.header.X-Reviewer}
+				header_up X-Assessment-AI-Proxy-Token "{$ASSESSMENT_AI_COMPUTATION_TRUSTED_PROXY_TOKEN}"
+
+				header_up -Authorization
+				header_up -Cookie
+				header_up -X-Auth-Request-User
+				header_up -X-Auth-Request-Email
+				header_up -X-Auth-Request-Preferred-Username
+				header_up -X-Auth-Request-Groups
+				header_up -X-Auth-Request-Access-Token
+				header_up -X-Auth-Request-Redirect
+				header_up -GAP-Auth
+				header_up -X-Forwarded-Access-Token
+				header_up -X-Forwarded-User
+				header_up -X-Forwarded-Email
+				header_up -X-Forwarded-Preferred-Username
+				header_up -X-Forwarded-Groups
+			}
+		}
 	}
 }

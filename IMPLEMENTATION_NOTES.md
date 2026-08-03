@@ -17,8 +17,14 @@ from the working P0 service described here.
   is validated again with the same Pydantic contract before persistence.
 - ADAPT has no POST framework-sync endpoint. Question alignment is written through the
   `framework_item_sync_question` field on question create/update.
-- ADAPT publication uses a dedicated JWT role-5 editor and an owned `my_questions` folder. Caddy
-  authentication for the review UI remains a separate gate and does not satisfy that API contract.
+- ADAPT publication uses a dedicated JWT role-5 editor and an owned `my_questions` folder. Human
+  reviewers authenticate at Caddy through Assessment AI's separate LibreOne OIDC client. Caddy
+  forwards the verified LibreOne UUID as `X-Reviewer`, but that human identity never satisfies or
+  replaces the ADAPT API contract. The publishing client continues to obtain and use only the
+  dedicated role-5 service JWT.
+  CAS resolves verified UUID/email claims and checks the `UserApplication` entitlement through a
+  separate read-only LibreOne API actor; the operator-only grant/revoke actor is never mounted into
+  CAS or Assessment AI.
   Approval and publication are separate actions. The create response supplies additive question and
   page IDs; deterministic tags provide reconciliation without duplicate POST retries.
 - The first curated framework is a committed two-level Chemistry seed (29 chapters and 252 immediate

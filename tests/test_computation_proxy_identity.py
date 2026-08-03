@@ -49,6 +49,20 @@ GENERAL_REVIEWER = "reviewer@example.edu"
 
 
 def test_deploy_proxy_rebuilds_specialist_headers_from_trusted_context() -> None:
+    """The specialist headers are stripped, then rebuilt from authenticated context.
+
+    This test previously asserted the *opposite* shape: that
+    ``header_up -X-Assessment-AI-Proxy-Token`` appeared before
+    ``header_up X-Assessment-AI-Proxy-Token "..."`` in the same
+    ``reverse_proxy`` block. That ordering looks right and is not.
+    ``HeaderOps.ApplyTo`` runs Delete *after* Set regardless of Caddyfile order,
+    so co-locating them silently dropped both headers -- the specialist path has
+    never received either one in production.
+
+    The strips now live in ``request_header`` lines inside the ``route``, ahead
+    of ``forward_auth``. See ``docs/adr/0001-forward-auth-identity-binding.md``.
+    """
+
     caddyfile = (
         Path(__file__).resolve().parents[1] / "deploy" / "Caddyfile.assess-ai"
     ).read_text(encoding="utf-8")
@@ -56,19 +70,32 @@ def test_deploy_proxy_rebuilds_specialist_headers_from_trusted_context() -> None
         "{$ASSESSMENT_AI_COMPUTATION_SPECIALIST_SUBJECT_HEADER:"
         "X-Assessment-AI-Authenticated-Subject}"
     )
-    directives = [
-        "header_up -X-Assessment-AI-Proxy-Token",
-        f"header_up -{subject_header}",
-        "header_up X-Reviewer {http.auth.user.id}",
-        f"header_up {subject_header} {{http.auth.user.id}}",
-        (
-            "header_up X-Assessment-AI-Proxy-Token "
-            '"{$ASSESSMENT_AI_COMPUTATION_TRUSTED_PROXY_TOKEN}"'
-        ),
-    ]
 
-    positions = [caddyfile.index(directive) for directive in directives]
-    assert positions == sorted(positions)
+    # Client-supplied values are destroyed before the auth subrequest runs...
+    strip_token = "request_header -X-Assessment-AI-Proxy-Token\n"
+    strip_subject = f"request_header -{subject_header}"
+    assert strip_token in caddyfile
+    assert strip_subject in caddyfile
+
+    # ...and only then rebuilt: the subject from the identity `copy_headers`
+    # wrote, the token from the environment. Never from anything the client sent.
+    set_subject = f"header_up {subject_header} {{http.request.header.X-Reviewer}}"
+    set_token = (
+        "header_up X-Assessment-AI-Proxy-Token "
+        '"{$ASSESSMENT_AI_COMPUTATION_TRUSTED_PROXY_TOKEN}"'
+    )
+    assert set_subject in caddyfile
+    assert set_token in caddyfile
+
+    auth_at = caddyfile.index("forward_auth 127.0.0.1:8194")
+    assert caddyfile.index(strip_token) < auth_at
+    assert caddyfile.index(strip_subject) < auth_at
+    assert auth_at < caddyfile.index(set_subject)
+    assert auth_at < caddyfile.index(set_token)
+
+    # The Basic Auth placeholder expands to its own literal text under
+    # forward_auth, which is non-empty and would therefore fail OPEN.
+    assert "{http.auth.user.id}" not in caddyfile
     assert PROXY_TOKEN not in caddyfile
 
 
