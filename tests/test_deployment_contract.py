@@ -1,15 +1,21 @@
 """Contract tests for the edge deployment config.
 
 These assert properties of ``deploy/Caddyfile.assess-ai`` and
-``deploy/oauth2-proxy.cfg`` as text, because the security properties they encode
-are properties of the *configuration*, not of any Python we ship. See
+``deploy/oauth2-proxy.cfg``, because the security properties they encode are
+properties of the *configuration*, not of any Python we ship. See
 ``docs/adr/0001-forward-auth-identity-binding.md`` for why each one matters --
 several of these lines look redundant and must not be "cleaned up".
+
+``oauth2-proxy.cfg`` is parsed as TOML rather than substring-matched: a
+commented-out directive satisfies ``"x = true" in text`` , so a text assertion
+stays green while the setting it guards is switched off. The Caddyfile has no
+parser available here and is still matched as text.
 """
 
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 
 
@@ -76,34 +82,37 @@ def _header_up_fields(body: str) -> tuple[set[str], set[str]]:
 
 def test_oidc_proxy_is_pinned_and_does_not_forward_tokens() -> None:
     compose = (ROOT / "docker-compose.yml").read_text()
-    proxy = (ROOT / "deploy" / "oauth2-proxy.cfg").read_text()
+    # Parse rather than grep. oauth2-proxy's config is TOML, and substring
+    # assertions are satisfied by a COMMENTED-OUT directive -- so every security
+    # property below would have stayed "green" while switched off.
+    proxy = tomllib.loads((ROOT / "deploy" / "oauth2-proxy.cfg").read_text())
     assert (
         "quay.io/oauth2-proxy/oauth2-proxy@"
         "sha256:10a1165743a192e1940b4708fb9647027185ce11a681a1c5519b442ff7f1f561"
     ) in compose
     assert "./deploy/oauth2-proxy.cfg:/etc/oauth2-proxy.cfg:ro" in compose
-    assert 'client_id = "assessment-ai-dev"' in proxy
-    assert 'user_id_claim = "sub"' in proxy
-    assert 'code_challenge_method = "S256"' in proxy
-    assert "insecure_oidc_skip_nonce = false" in proxy
-    assert 'oidc_enabled_signing_algs = ["RS256"]' in proxy
-    assert "pass_access_token = false" in proxy
-    assert "pass_authorization_header = false" in proxy
-    assert "pass_basic_auth = false" in proxy
-    assert "pass_user_headers = false" in proxy
-    assert 'cookie_name = "__Host-assessment-ai"' in proxy
+    assert proxy["client_id"] == "assessment-ai-dev"
+    assert proxy["user_id_claim"] == "sub"
+    assert proxy["code_challenge_method"] == "S256"
+    assert proxy["insecure_oidc_skip_nonce"] is False
+    assert proxy["oidc_enabled_signing_algs"] == ["RS256"]
+    assert proxy["pass_access_token"] is False
+    assert proxy["pass_authorization_header"] is False
+    assert proxy["pass_basic_auth"] is False
+    assert proxy["pass_user_headers"] is False
+    assert proxy["cookie_name"] == "__Host-assessment-ai"
     # reverse_proxy without trusted_proxy_ips lets any connecting IP set X-Forwarded-*,
-    # which oauth2-proxy uses to build the post-login return target. Assert the setting
-    # exists rather than its exact CIDR: Docker can renumber the bridge, and pinning the
+    # which oauth2-proxy uses to build the post-login return target. Require a non-empty
+    # list rather than one exact CIDR: Docker can renumber the bridge, and pinning the
     # value here would turn a recoverable config drift into a red test.
-    assert "reverse_proxy = true" in proxy
-    assert "trusted_proxy_ips = [" in proxy
-    assert 'cookie_expire = "2h"' in proxy
+    assert proxy["reverse_proxy"] is True
+    assert proxy["trusted_proxy_ips"]
     # cookie_expire is the whole session bound only while these two hold: no
     # refresh, and a minimal session that cannot carry a refresh token. Pin them
     # so raising the expiry again cannot quietly become "unbounded session".
-    assert 'cookie_refresh = "0"' in proxy
-    assert "session_cookie_minimal = true" in proxy
+    assert proxy["cookie_expire"] == "2h"
+    assert proxy["cookie_refresh"] == "0"
+    assert proxy["session_cookie_minimal"] is True
     assert "127.0.0.1:8194:4180" in compose
 
 
