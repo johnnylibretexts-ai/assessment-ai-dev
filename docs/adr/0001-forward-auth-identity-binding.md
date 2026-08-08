@@ -1,6 +1,6 @@
 # Bind reviewer identity to the oauth2-proxy subject, not `{http.auth.user.id}`
 
-**Status:** accepted (2026-08-02)
+**Status:** accepted (2026-08-02) · **verified in production (2026-08-08)**
 
 `deploy/Caddyfile.assess-ai` diverged in both directions: `main` kept Basic Auth (`import gate`) and
 gained `encode zstd gzip` plus the computation-specialist wiring, while `feat/libreone-sso` replaced
@@ -110,9 +110,60 @@ before suspecting the configuration.
 
 ## Not verified here
 
+> **Superseded 2026-08-08 — this section was accurate when written and is no longer. See
+> [Verified in production](#verified-in-production-2026-08-08) below.**
+
 This configuration has never been exercised against the real LibreOne issuer. Every behavioural claim
 above is either read from upstream Go source at a pinned tag or measured against a local harness on
 Caddy v2.11.4 and v2.10.2 — see `research/2026-08-02-forward-auth-identity-binding/` in the
 workspace. Before deploying, confirm with a real session that a forged `X-Reviewer` does not reach
 the backend, that a forged proxy token is refused, and that no cookie yields a 302 to
 `/oauth2/sign_in`.
+
+## Verified in production 2026-08-08
+
+Exercised against the real LibreOne issuer on `assess-ai.libretexts.dev`, in Chrome as an
+interactively authenticated reviewer, with server-side confirmation from the `assessment-ai`
+container, CAS, and the application database. All three checks the section above asked for pass, plus
+the CSP repro that had been carried since 2026-08-01.
+
+**Finding a discriminator was the hard part, and is worth recording.** `reviewer_identity()` accepts
+any non-empty value — no allowlist, no format check — and the app exposes no identity-echo endpoint,
+so a forged header that *did* reach the backend would produce a 200 indistinguishable from success.
+The usable discriminator is `GET /assistant/conversation`, which is read-only and **identity-scoped**:
+it returns `history(reviewer)`. Seed one message as the real reviewer, then replay with forged
+headers. Same history ⇒ the forgery was destroyed at the edge. Different (empty) history ⇒ it landed.
+
+| claim | result | evidence |
+|---|---|---|
+| Forged identity does not reach the backend | **PASS** | With a 1-message history seeded, `GET /assistant/conversation` returned `count=1` under forged `X-Reviewer`, `X-Forwarded-Email`, `X-Forwarded-User`, and `X-Forwarded-Preferred-Username`. Identity resolved to the real OIDC `sub` in every case. |
+| Forged proxy token is refused | **PASS** | `POST /drafts/{id}/computation/attest` carrying both a forged `X-Assessment-AI-Proxy-Token` and a forged subject header → `303` → `GET /drafts/{id}?error=Assessment+computation+is+disabled.` `computation_attestations` remained at **0 rows**, and a uniquely-labelled probe string persisted in no table in the database. |
+| No cookie yields 302 | **PASS** | `302` → `/oauth2/sign_in?rd=…` |
+| Form POST on a dead session is not silently blocked (the CSP `form-action` fix) | **PASS** | Session killed first, then a form POST submitted from the stale page. It navigated cross-origin to CAS — `AUTHENTICATION_SUCCESS`, `SERVICE_TICKET_VALIDATE_SUCCESS` — and back, with no `form-action` violation. |
+
+Nothing was mutated: the draft used as a target retained its pre-existing `last_reviewed_at` and
+`updated_at`, and the seeded assistant conversation was reset afterwards.
+
+**The computation path fails closed by refusal, not merely by omission.** The ADR previously inferred
+this from no `ASSESSMENT_AI_COMPUTATION_*` variable being set. The application in fact answers
+explicitly — *"Assessment computation is disabled"* — which is the stronger property, and means a
+future operator who sets the token without intending to enable the path will see it change behaviour
+rather than silently activate.
+
+**One correction to the expected behaviour.** Signing out of the application kills only the
+`__Host-assessment-ai` cookie; the **CAS SSO session survives it**. The redirect chain therefore
+re-authenticates *silently* and returns to the application rather than presenting a login form. Since
+the 302 converts the POST to a GET and discards the body, the request arrives back at a POST-only
+route as `405 Method Not Allowed`. The success criterion for this check is that **the navigation
+completes**, not that a login page appears — a login page only appears when the CAS session is dead
+too.
+
+*Limitation, stated plainly:* browser console capture began after page load, so the **absence** of a
+`form-action` violation was not recorded with tracking live from the first paint. The conclusive
+evidence for the last row is behavioural — the cross-origin navigation completed, which is precisely
+what the fix enables and what was silently blocked before it. The identity and proxy-token rows do
+not depend on console capture at all.
+
+The GHSA-6365 race remains unaddressed and unaddressable; nothing in this verification bears on it.
+A failure in this site that presents as *intermittent* should still be attributed to that race before
+the configuration.
