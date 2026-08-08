@@ -92,7 +92,12 @@ def test_oidc_proxy_is_pinned_and_does_not_forward_tokens() -> None:
     assert "pass_basic_auth = false" in proxy
     assert "pass_user_headers = false" in proxy
     assert 'cookie_name = "__Host-assessment-ai"' in proxy
-    assert 'cookie_expire = "15m"' in proxy
+    assert 'cookie_expire = "2h"' in proxy
+    # cookie_expire is the whole session bound only while these two hold: no
+    # refresh, and a minimal session that cannot carry a refresh token. Pin them
+    # so raising the expiry again cannot quietly become "unbounded session".
+    assert 'cookie_refresh = "0"' in proxy
+    assert "session_cookie_minimal = true" in proxy
     assert "127.0.0.1:8194:4180" in compose
 
 
