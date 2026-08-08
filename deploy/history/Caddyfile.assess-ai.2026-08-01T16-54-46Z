@@ -1,0 +1,54 @@
+assess-ai.libretexts.dev {
+	import secheaders
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
+		Permissions-Policy "camera=(), geolocation=(), microphone=()"
+		X-Frame-Options "DENY"
+	}
+
+	request_body {
+		max_size 256KB
+	}
+
+	handle /oauth2/* {
+		reverse_proxy 127.0.0.1:8194 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Uri {uri}
+			header_up -Authorization
+			header_up -X-Reviewer
+			header_up -X-Reviewer-Email
+			header_up -X-Auth-Request-User
+			header_up -X-Auth-Request-Email
+			header_up -X-Auth-Request-Access-Token
+		}
+	}
+
+	handle {
+		forward_auth 127.0.0.1:8194 {
+			uri /oauth2/auth
+			header_up X-Real-IP {remote_host}
+			copy_headers {
+				X-Auth-Request-User>X-Reviewer
+				X-Auth-Request-Email>X-Reviewer-Email
+			}
+
+			@unauthorized status 401
+			handle_response @unauthorized {
+				redir * /oauth2/sign_in?rd={scheme}://{host}{uri}
+			}
+		}
+
+		reverse_proxy 127.0.0.1:8093 {
+			header_up -Authorization
+			header_up -Cookie
+			header_up -X-Auth-Request-User
+			header_up -X-Auth-Request-Email
+			header_up -X-Auth-Request-Access-Token
+			header_up -X-Forwarded-Access-Token
+			header_up -X-Forwarded-User
+			header_up -X-Forwarded-Email
+			header_up -X-Forwarded-Preferred-Username
+			header_up -X-Forwarded-Groups
+		}
+	}
+}
