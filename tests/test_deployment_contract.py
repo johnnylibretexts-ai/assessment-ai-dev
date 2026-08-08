@@ -92,6 +92,12 @@ def test_oidc_proxy_is_pinned_and_does_not_forward_tokens() -> None:
     assert "pass_basic_auth = false" in proxy
     assert "pass_user_headers = false" in proxy
     assert 'cookie_name = "__Host-assessment-ai"' in proxy
+    # reverse_proxy without trusted_proxy_ips lets any connecting IP set X-Forwarded-*,
+    # which oauth2-proxy uses to build the post-login return target. Assert the setting
+    # exists rather than its exact CIDR: Docker can renumber the bridge, and pinning the
+    # value here would turn a recoverable config drift into a red test.
+    assert "reverse_proxy = true" in proxy
+    assert "trusted_proxy_ips = [" in proxy
     assert 'cookie_expire = "2h"' in proxy
     # cookie_expire is the whole session bound only while these two hold: no
     # refresh, and a minimal session that cannot carry a refresh token. Pin them
