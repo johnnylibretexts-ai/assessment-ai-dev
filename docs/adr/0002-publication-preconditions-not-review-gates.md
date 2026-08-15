@@ -4,8 +4,8 @@
 
 The codebase and its documentation talk about "the three review gates," but nothing in the code
 enumerates them. What exists is seven `blockers.append(...)` sites in one readiness routine
-(`PublicationService._evaluate_readiness` when this was written; now `collect_readiness_blockers`
-in `app/publishing.py`, which is where the not-yet-ported ones remain), of which
+(`PublicationService._evaluate_readiness` when this was written; all seven are now ported, and the
+list lives in `app/publication_preconditions.py` behind `collect_precondition_blockers`), of which
 three are the ones people call gates and four are called preconditions — and nothing distinguishes
 the two groups. **We are making *publication precondition* the structural concept: one enumerated
 list of seven, each answering `evaluate(context) -> Blocker | None`. "Review gate" survives as
