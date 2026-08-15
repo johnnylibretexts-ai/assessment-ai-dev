@@ -415,7 +415,13 @@ async def test_publication_evaluates_the_computation_gate_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The gate performs repository reads, so publish must not run it twice."""
+    """The gate performs repository reads, so publish must not run it twice.
+
+    Counts `evaluate_computation_gate`, which is the half of the old
+    `require_computation_gate` that does those reads. The other half -- the
+    raise -- moved into `ComputationEvidenceAccepted`, so the assembler no
+    longer calls the `require_` form at all.
+    """
 
     config = configured_settings(tmp_path)
     app = create_app(config)
@@ -426,7 +432,7 @@ async def test_publication_evaluates_the_computation_gate_once(
         approve_hint_ladder(repository, draft_id)
 
         calls = 0
-        original = publishing_module.require_computation_gate
+        original = publishing_module.evaluate_computation_gate
 
         def counting_gate(*args: object, **kwargs: object) -> object:
             nonlocal calls
@@ -435,7 +441,7 @@ async def test_publication_evaluates_the_computation_gate_once(
 
         monkeypatch.setattr(
             publishing_module,
-            "require_computation_gate",
+            "evaluate_computation_gate",
             counting_gate,
         )
         topic = suggested_topic(ISOTOPES_URL)
