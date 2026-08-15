@@ -64,7 +64,12 @@ from app.parameterized import (
     compile_parameterized_item,
     compile_typed_parameterized_item,
 )
-from app.schemas import AssessmentItemType, QuestionDraft, ReviewStatus
+from app.publication_preconditions import (
+    PublicationBlocker,
+    PublicationContext,
+    collect_precondition_blockers,
+)
+from app.schemas import AssessmentItemType, QuestionDraft
 
 
 PAYLOAD_MAPPER_VERSION = "adapt-assessment-items-v3"
@@ -72,12 +77,6 @@ PAYLOAD_MAPPER_VERSION = "adapt-assessment-items-v3"
 
 class PublicationValidationError(ValueError):
     pass
-
-
-@dataclass(frozen=True)
-class PublicationBlocker:
-    code: str
-    message: str
 
 
 @dataclass(frozen=True)
@@ -154,6 +153,44 @@ class PublicationService:
         )
         return readiness
 
+    def _assemble_context(
+        self,
+        draft: Draft,
+        *,
+        license_resolved: bool,
+    ) -> PublicationContext:
+        """Gather what every publication precondition needs, exactly once.
+
+        Preconditions judge; they do not fetch. Both lazy relationship walks and
+        the computation gate's repository reads happen here, so evaluating the
+        list issues no query of its own.
+
+        Deliberately not substitutable: there is no assembler interface and no
+        fake. A precondition test constructs `PublicationContext` directly.
+        """
+
+        computation_decision: ComputationGateDecision | None = None
+        computation_error: ComputationPolicyError | None = None
+        try:
+            computation_decision = require_computation_gate(
+                self._settings,
+                self._repository,
+                draft,
+                action="publication",
+            )
+        except ComputationPolicyError as exc:
+            computation_error = exc
+        return PublicationContext(
+            draft=draft,
+            settings=self._settings,
+            hint_record=draft.current_hint_ladder,
+            engine_validation=draft.current_engine_validation,
+            computation_decision=computation_decision,
+            computation_error=computation_error,
+            alignment=alignment_for_source(draft.source.canonical_url),
+            license_resolved=license_resolved,
+        )
+
     def _evaluate_readiness(
         self,
         draft: Draft,
@@ -163,21 +200,21 @@ class PublicationService:
         """Collect every blocker, and return the gate decision when it passed.
 
         `publish()` needs the decision itself, not just "did the gate block".
-        Returning it here keeps the gate evaluated exactly once per publish
-        attempt instead of running its five repository reads twice.
+        Assembling the context once per evaluation keeps the gate evaluated
+        exactly once per publish attempt instead of running its five repository
+        reads twice.
         """
 
-        blockers: list[PublicationBlocker] = []
-        if draft.status != ReviewStatus.READY_TO_PUBLISH:
-            blockers.append(
-                PublicationBlocker(
-                    "question_not_approved",
-                    "Approve the current question revision.",
-                )
-            )
+        context = self._assemble_context(draft, license_resolved=license_resolved)
+        blockers: list[PublicationBlocker] = list(
+            collect_precondition_blockers(context)
+        )
 
-        hint_record = draft.current_hint_ladder
-        if self._settings.hint_publication_enabled:
+        # Everything below is a publication precondition that has not been
+        # ported to the enumerated list yet. Blockers are reported in the order
+        # they are appended, so each one joins the tail of the list as it moves.
+        hint_record = context.hint_record
+        if context.settings.hint_publication_enabled:
             if hint_record is None:
                 blockers.append(
                     PublicationBlocker(
@@ -228,7 +265,7 @@ class PublicationService:
             AssessmentItemType.WEBWORK,
             AssessmentItemType.IMATHAS,
         }:
-            validation = draft.current_engine_validation
+            validation = context.engine_validation
             if (
                 validation is None
                 or validation.status != "passed"
@@ -241,38 +278,29 @@ class PublicationService:
                     )
                 )
 
-        computation_decision: ComputationGateDecision | None = None
-        try:
-            computation_decision = require_computation_gate(
-                self._settings,
-                self._repository,
-                draft,
-                action="publication",
-            )
-        except ComputationPolicyError as exc:
+        if context.computation_error is not None:
             blockers.append(
                 PublicationBlocker(
                     "computation_evidence_invalid",
-                    str(exc),
+                    str(context.computation_error),
                 )
             )
 
-        alignment = alignment_for_source(draft.source.canonical_url)
-        if alignment is None:
+        if context.alignment is None:
             blockers.append(
                 PublicationBlocker(
                     "framework_unmapped",
                     "This source does not yet have a curated framework topic.",
                 )
             )
-        if not license_resolved:
+        if not context.license_resolved:
             blockers.append(
                 PublicationBlocker(
                     "license_unresolved",
                     "Verify and select the source license.",
                 )
             )
-        if self._settings.adapt_publishing_status != "configured":
+        if context.settings.adapt_publishing_status != "configured":
             blockers.append(
                 PublicationBlocker(
                     "publishing_not_configured",
@@ -281,10 +309,10 @@ class PublicationService:
             )
         return (
             PublicationReadiness(
-                alignment=alignment,
+                alignment=context.alignment,
                 blockers=tuple(blockers),
             ),
-            computation_decision,
+            context.computation_decision,
         )
 
     async def publish(
