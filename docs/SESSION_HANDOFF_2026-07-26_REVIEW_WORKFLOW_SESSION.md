@@ -189,5 +189,5 @@ Practical rules that would have prevented it:
    despite `build: .`; see `DEPLOY.md` beside that compose file, and the `assessment-ai-deploy-source-trap`
    memory entry.
 3. Declare scope via `/kimi-multi-session` when working concurrently.
-4. Shared memory under `~/.claude/projects/-Users-johnnyrobot-code-libretexts-dev/memory/` is the one
+4. Shared memory under `~/.claude/projects/<workspace-slug>/memory/` is the one
    channel between sessions — the `assessment-ai-demo-assistant` entry carries the review findings.

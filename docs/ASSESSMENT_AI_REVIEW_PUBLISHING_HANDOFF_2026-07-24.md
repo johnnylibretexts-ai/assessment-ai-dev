@@ -97,7 +97,7 @@ These rules apply to every continuation of this work:
 Local worktree:
 
 ```text
-/Users/johnnyrobot/code/libretexts-dev/.worktrees/assessment-ai-math-rendering
+<workspace-root>/.worktrees/assessment-ai-math-rendering
 ```
 
 Writable repository:
@@ -152,7 +152,7 @@ Graphify output is generated locally and must not be committed.
 Local worktree:
 
 ```text
-/Users/johnnyrobot/code/libretexts-dev/.worktrees/adapt-review-publishing-workflow
+<workspace-root>/.worktrees/adapt-review-publishing-workflow
 ```
 
 Writable remote:
@@ -380,9 +380,9 @@ e2e5cabebdc12c6d106726fbd19dcb9b8a1ac804238e1e7f2aa65a3d32b2931e  fundamentals-g
 Verify them with:
 
 ```bash
-cd /Users/johnnyrobot/code/libretexts-dev/.worktrees/assessment-ai-math-rendering
+cd <workspace-root>/.worktrees/assessment-ai-math-rendering
 uv run python scripts/verify_framework_catalogs.py \
-  --adapt-root /Users/johnnyrobot/code/libretexts-dev/.worktrees/adapt-review-publishing-workflow
+  --adapt-root <workspace-root>/.worktrees/adapt-review-publishing-workflow
 ```
 
 ## Live deployment state
@@ -643,7 +643,7 @@ The focused PHPUnit test used an isolated disposable MySQL database, not the liv
 ### Assessment AI full local suite
 
 ```bash
-cd /Users/johnnyrobot/code/libretexts-dev/.worktrees/assessment-ai-math-rendering
+cd <workspace-root>/.worktrees/assessment-ai-math-rendering
 uv sync --frozen --extra dev
 uv run ruff check .
 uv run ruff format --check app tests
@@ -653,7 +653,7 @@ uv run pytest -q
 ### Assessment AI focused workflow suite
 
 ```bash
-cd /Users/johnnyrobot/code/libretexts-dev/.worktrees/assessment-ai-math-rendering
+cd <workspace-root>/.worktrees/assessment-ai-math-rendering
 uv run pytest -q \
   tests/test_catalog.py \
   tests/test_hint_audit.py \
@@ -668,7 +668,7 @@ uv run pytest -q \
 This executes the repository’s complete test target in a clean container:
 
 ```bash
-cd /Users/johnnyrobot/code/libretexts-dev/.worktrees/assessment-ai-math-rendering
+cd <workspace-root>/.worktrees/assessment-ai-math-rendering
 docker build --target test -t assessment-ai:review-workflow-test .
 ```
 
@@ -679,7 +679,7 @@ verified. The script converts SQLite URLs to read-only mode and examines only th
 hint version.
 
 ```bash
-cd /Users/johnnyrobot/code/libretexts-dev/.worktrees/assessment-ai-math-rendering
+cd <workspace-root>/.worktrees/assessment-ai-math-rendering
 uv run python scripts/audit_hint_grounding.py \
   --database-url sqlite:////absolute/path/to/copied-assessment-ai.db \
   --json
@@ -699,7 +699,7 @@ checksum is unchanged before and after the run.
 Never point this test at the live database. Use a disposable MySQL service/database, then run:
 
 ```bash
-cd /Users/johnnyrobot/code/libretexts-dev/.worktrees/adapt-review-publishing-workflow
+cd <workspace-root>/.worktrees/adapt-review-publishing-workflow
 php -l app/Console/Commands/LibreTexts/ProvisionAssessmentAI.php
 php -l app/Console/Commands/LibreTexts/SeedDemo.php
 php -l app/Question.php
@@ -720,9 +720,9 @@ legacy IMathAS runtime: 2 tests, 7 assertions
 Always run after changing either catalog copy:
 
 ```bash
-cd /Users/johnnyrobot/code/libretexts-dev/.worktrees/assessment-ai-math-rendering
+cd <workspace-root>/.worktrees/assessment-ai-math-rendering
 uv run python scripts/verify_framework_catalogs.py \
-  --adapt-root /Users/johnnyrobot/code/libretexts-dev/.worktrees/adapt-review-publishing-workflow
+  --adapt-root <workspace-root>/.worktrees/adapt-review-publishing-workflow
 ```
 
 ## Manual browser QA results — executed 2026-07-26
@@ -1222,8 +1222,8 @@ Do not run `docker compose down`, and never run it with `-v`.
 5. Confirm all remotes before any push:
 
    ```bash
-   git -C /Users/johnnyrobot/code/libretexts-dev/.worktrees/assessment-ai-math-rendering remote -v
-   git -C /Users/johnnyrobot/code/libretexts-dev/.worktrees/adapt-review-publishing-workflow remote -v
+   git -C <workspace-root>/.worktrees/assessment-ai-math-rendering remote -v
+   git -C <workspace-root>/.worktrees/adapt-review-publishing-workflow remote -v
    ```
 
 6. Run the exact diff commands and confirm the bases.

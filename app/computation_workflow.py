@@ -2199,21 +2199,6 @@ def _native_numeric_tolerance(
     return _finite_float(str(max(absolute, relative)))
 
 
-def _within_native_tolerance(
-    candidate: str,
-    expected: str,
-    blueprint: AssessmentComputationBlueprint,
-) -> bool:
-    actual = Decimal(candidate)
-    target = Decimal(expected)
-    difference = abs(actual - target)
-    permitted = max(
-        Decimal(blueprint.tolerance.absolute),
-        Decimal(blueprint.tolerance.relative) * abs(target),
-    )
-    return difference <= permitted
-
-
 def _literal_float(node: ExpressionNode | None) -> float:
     if node is None:
         raise ComputationWorkflowError("Parameterized range literal is missing.")

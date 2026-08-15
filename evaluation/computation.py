@@ -8200,24 +8200,6 @@ def _render_expression(node: ExpressionNode | Mapping[str, Any]) -> str:
     raise ValueError("cannot render unsupported typed expression")
 
 
-def _render_comparison(value: Mapping[str, Any]) -> str:
-    operators = {
-        "eq": "==",
-        "ne": "!=",
-        "lt": "<",
-        "le": "<=",
-        "gt": ">",
-        "ge": ">=",
-    }
-    op = value.get("op")
-    if op not in operators:
-        raise ValueError("cannot render unsupported comparison")
-    return (
-        f"({_render_expression(value['left'])} {operators[op]} "
-        f"{_render_expression(value['right'])})"
-    )
-
-
 def _difficulty_for_index(index: int) -> FixtureDifficulty:
     if 1 <= index <= 8:
         return FixtureDifficulty.BASIC
@@ -8249,25 +8231,6 @@ def _validate_twenty_case_distribution(cases: Sequence[Any], label: str) -> None
     split = Counter(case.split for case in cases)
     if split != {FixtureSplit.DEVELOPMENT: 14, FixtureSplit.SEALED: 6}:
         raise ValueError(f"{label} requires a deterministic 14/6 split")
-
-
-def _paired_study_passed(summary: PairedStudySummary | None) -> bool:
-    if summary is None:
-        return False
-    quality_improved = (
-        summary.treatment_defect_rate <= summary.control_defect_rate / 2
-        or summary.treatment_median_correction_seconds
-        <= summary.control_median_correction_seconds * 0.8
-    )
-    return bool(
-        summary.control_count == 50
-        and summary.treatment_count == 50
-        and summary.reviewer_approval_complete
-        and summary.treatment_correct_without_edit_rate >= 0.95
-        and quality_improved
-        and summary.source_grounding_delta >= -0.05
-        and summary.pedagogy_delta >= -0.05
-    )
 
 
 def _ratio(numerator: int, denominator: int) -> float:
