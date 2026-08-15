@@ -12,14 +12,18 @@ database behind it.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
 from .catalog import CuratedAlignment
 from .computation_policy import ComputationGateDecision, ComputationPolicyError
 from .config import Settings
-from .db import Draft, EngineValidationRecord, HintLadderRecord
+from .db import (
+    Draft,
+    EngineValidationRecord,
+    HintLadderRecord,
+    inspect_hint_grounding,
+)
 from .schemas import AssessmentItemType, ReviewStatus
 
 
@@ -50,11 +54,11 @@ class PublicationContext:
     settings: Settings
     hint_record: HintLadderRecord | None
     engine_validation: EngineValidationRecord | None
-    # The gate either returns a decision or raises, so exactly one of the next
-    # two is set: `publish()` needs the decision itself, and the computation
-    # precondition needs the error to phrase its blocker.
-    computation_decision: ComputationGateDecision | None
-    computation_error: ComputationPolicyError | None
+    # The decision, not the verdict. Evaluating the gate is the part that reads
+    # the database, so the assembler does it; deciding whether an unallowed
+    # decision blocks publication is the precondition's own business, and it
+    # raises there rather than here.
+    computation_decision: ComputationGateDecision
     alignment: CuratedAlignment | None
     license_resolved: bool
 
@@ -84,6 +88,56 @@ class QuestionRevisionApproved:
 
 
 @dataclass(frozen=True)
+class HintLadderApproved:
+    """Review gate: the current revision's hint ladder is grounded and approved.
+
+    Three blockers, but they are alternatives in a chain rather than a set:
+    a ladder is missing, or it needs repair, or it is unapproved. At most one
+    can be the reviewer's next action, so the single-blocker interface holds
+    without widening.
+
+    Feature-flagged. With hint publication off the precondition stays in the
+    list and returns nothing -- not even for a missing ladder, because there was
+    nothing to generate.
+    """
+
+    def evaluate(self, context: PublicationContext) -> PublicationBlocker | None:
+        if not context.settings.hint_publication_enabled:
+            return None
+        hint_record = context.hint_record
+        if hint_record is None:
+            return PublicationBlocker(
+                "hints_missing",
+                "Generate and review the three-rung hint ladder.",
+            )
+        grounding = inspect_hint_grounding(context.draft.current, hint_record.ladder)
+        if grounding:
+            # A concept mismatch is not a citation problem, so naming it
+            # "repair citations" sends the reviewer to the wrong field.
+            citation_issues = [issue for issue in grounding if issue.rung is not None]
+            return PublicationBlocker(
+                "hints_need_repair",
+                (
+                    "Repair hint citations outside the current "
+                    "question source before approval."
+                    if citation_issues
+                    else grounding[0].message
+                ),
+            )
+        if any(rung.answer_leak_detected for rung in hint_record.ladder.rungs):
+            return PublicationBlocker(
+                "hints_need_repair",
+                "Resolve possible answer leakage before hint approval.",
+            )
+        if hint_record.status != "approved":
+            return PublicationBlocker(
+                "hints_not_approved",
+                "Approve all three current hint rungs.",
+            )
+        return None
+
+
+@dataclass(frozen=True)
 class EngineValidationPassed:
     """An external-engine draft carries passing fixed-seed validation evidence.
 
@@ -109,6 +163,28 @@ class EngineValidationPassed:
                 "engine_validation_missing",
                 "Complete a successful 25-seed engine validation.",
             )
+        return None
+
+
+@dataclass(frozen=True)
+class ComputationEvidenceAccepted:
+    """The computation policy gate allows this revision to be published.
+
+    The one precondition with a dynamic reason: it reports which piece of
+    evidence was rejected, because "blocked" alone would send the reviewer
+    hunting. That reason is the policy error's own message, and this is where
+    the error is caught -- the assembler evaluates the gate but does not catch,
+    so the whole condition reads in one place.
+
+    Feature-flagged in the decision rather than here: off and assist both come
+    back allowed, so the precondition stays in the list and returns nothing.
+    """
+
+    def evaluate(self, context: PublicationContext) -> PublicationBlocker | None:
+        try:
+            context.computation_decision.require_allowed(action="publication")
+        except ComputationPolicyError as exc:
+            return PublicationBlocker("computation_evidence_invalid", str(exc))
         return None
 
 
@@ -174,46 +250,29 @@ class PublishingConfigured:
 # second place that decides which preconditions exist.
 PUBLICATION_PRECONDITIONS: tuple[PublicationPrecondition, ...] = (
     QuestionRevisionApproved(),
+    HintLadderApproved(),
     EngineValidationPassed(),
+    ComputationEvidenceAccepted(),
     FrameworkMapped(),
     LicenseResolved(),
     PublishingConfigured(),
 )
 
 
-# Temporary scaffolding, deleted when the hint ladder and computation conditions
-# are ported. Both still live inline in `publishing.py` and both fall in the
-# middle of the reported order -- hints after the question review, computation
-# after the engine validation -- and blocker order is user-visible. So readiness
-# runs the list in the three stretches those two carve it into. These are slices
-# of the one list, never a second enumeration: together they always cover it, so
-# a precondition appended to `PUBLICATION_PRECONDITIONS` is still reached.
-#
-# Inserting is the case to be careful with, and it is exactly what porting the
-# last two conditions does: an entry added anywhere but the end silently shifts
-# these boundaries, which reorders reported blockers. Update the indices in the
-# same edit. `test_readiness_reports_every_blocker_in_the_order_it_always_has`
-# is the backstop that fails if you do not.
-PRECONDITIONS_BEFORE_HINT_LADDER = PUBLICATION_PRECONDITIONS[:1]
-PRECONDITIONS_BETWEEN_HINT_LADDER_AND_COMPUTATION = PUBLICATION_PRECONDITIONS[1:2]
-PRECONDITIONS_AFTER_COMPUTATION = PUBLICATION_PRECONDITIONS[2:]
-
-
 def collect_precondition_blockers(
     context: PublicationContext,
-    preconditions: Sequence[PublicationPrecondition] = PUBLICATION_PRECONDITIONS,
 ) -> tuple[PublicationBlocker, ...]:
     """Run every enumerated precondition against the context, in list order.
 
-    `preconditions` exists only for the scaffolding above: readiness passes the
-    stretches of the list it must interleave the two unported conditions with.
-    It is not a seam -- nothing substitutes a different set of preconditions.
+    Every precondition is evaluated on every call and every blocker is
+    collected: nothing short-circuits, so a reviewer sees all of them at once
+    rather than one per round-trip.
     """
 
     return tuple(
         blocker
         for blocker in (
-            precondition.evaluate(context) for precondition in preconditions
+            precondition.evaluate(context) for precondition in PUBLICATION_PRECONDITIONS
         )
         if blocker is not None
     )

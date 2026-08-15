@@ -22,11 +22,7 @@ from app.catalog import (
     alignment_for_source,
     source_license,
 )
-from app.computation_policy import (
-    ComputationGateDecision,
-    ComputationPolicyError,
-    require_computation_gate,
-)
+from app.computation_policy import ComputationGateDecision, evaluate_computation_gate
 from app.computation import AssessmentComputationBlueprint, deterministic_seeds
 from app.computation_workflow import (
     parameterized_spec_from_blueprint,
@@ -65,9 +61,6 @@ from app.parameterized import (
     compile_typed_parameterized_item,
 )
 from app.publication_preconditions import (
-    PRECONDITIONS_AFTER_COMPUTATION,
-    PRECONDITIONS_BEFORE_HINT_LADDER,
-    PRECONDITIONS_BETWEEN_HINT_LADDER_AND_COMPUTATION,
     PublicationBlocker,
     PublicationContext,
     collect_precondition_blockers,
@@ -76,94 +69,6 @@ from app.schemas import AssessmentItemType, QuestionDraft
 
 
 PAYLOAD_MAPPER_VERSION = "adapt-assessment-items-v3"
-
-
-def collect_readiness_blockers(
-    context: PublicationContext,
-) -> tuple[PublicationBlocker, ...]:
-    """Every blocker a readiness evaluation reports, in the order it reports them.
-
-    Takes the assembled context and nothing else, so the reported order can be
-    pinned by a test that builds one by hand rather than by seeding a database
-    with a draft that fails all seven conditions at once.
-
-    Two preconditions are not ported to `PUBLICATION_PRECONDITIONS` yet and both
-    fall in the middle of that order. Porting them collapses this function into a
-    single call to `collect_precondition_blockers`.
-    """
-
-    blockers: list[PublicationBlocker] = list(
-        collect_precondition_blockers(context, PRECONDITIONS_BEFORE_HINT_LADDER)
-    )
-
-    # The hint ladder and the computation evidence are the two preconditions not
-    # ported to the enumerated list yet. Each is spliced back into the stretch of
-    # the list its blocker has always been reported in.
-    draft = context.draft
-    hint_record = context.hint_record
-    if context.settings.hint_publication_enabled:
-        if hint_record is None:
-            blockers.append(
-                PublicationBlocker(
-                    "hints_missing",
-                    "Generate and review the three-rung hint ladder.",
-                )
-            )
-        else:
-            grounding = inspect_hint_grounding(
-                draft.current,
-                hint_record.ladder,
-            )
-            if grounding:
-                # A concept mismatch is not a citation problem, so naming it
-                # "repair citations" sends the reviewer to the wrong field.
-                citation_issues = [
-                    issue for issue in grounding if issue.rung is not None
-                ]
-                blockers.append(
-                    PublicationBlocker(
-                        "hints_need_repair",
-                        (
-                            "Repair hint citations outside the current "
-                            "question source before approval."
-                            if citation_issues
-                            else grounding[0].message
-                        ),
-                    )
-                )
-            elif any(rung.answer_leak_detected for rung in hint_record.ladder.rungs):
-                blockers.append(
-                    PublicationBlocker(
-                        "hints_need_repair",
-                        "Resolve possible answer leakage before hint approval.",
-                    )
-                )
-            elif hint_record.status != "approved":
-                blockers.append(
-                    PublicationBlocker(
-                        "hints_not_approved",
-                        "Approve all three current hint rungs.",
-                    )
-                )
-
-    blockers.extend(
-        collect_precondition_blockers(
-            context, PRECONDITIONS_BETWEEN_HINT_LADDER_AND_COMPUTATION
-        )
-    )
-
-    if context.computation_error is not None:
-        blockers.append(
-            PublicationBlocker(
-                "computation_evidence_invalid",
-                str(context.computation_error),
-            )
-        )
-
-    blockers.extend(
-        collect_precondition_blockers(context, PRECONDITIONS_AFTER_COMPUTATION)
-    )
-    return tuple(blockers)
 
 
 class PublicationValidationError(ValueError):
@@ -256,28 +161,26 @@ class PublicationService:
         repository reads happen here, so evaluating the list issues no query of
         its own.
 
+        `evaluate_computation_gate`, not `require_computation_gate`: the reads
+        belong here and the raise belongs to `ComputationEvidenceAccepted`. An
+        unallowed decision is data, and turning it into a blocker is the
+        precondition's job -- catching it here would split one condition across
+        two modules.
+
         Deliberately not substitutable: there is no assembler interface and no
         fake. A precondition test constructs `PublicationContext` directly.
         """
 
-        computation_decision: ComputationGateDecision | None = None
-        computation_error: ComputationPolicyError | None = None
-        try:
-            computation_decision = require_computation_gate(
-                self._settings,
-                self._repository,
-                draft,
-                action="publication",
-            )
-        except ComputationPolicyError as exc:
-            computation_error = exc
         return PublicationContext(
             draft=draft,
             settings=self._settings,
             hint_record=draft.current_hint_ladder,
             engine_validation=draft.current_engine_validation,
-            computation_decision=computation_decision,
-            computation_error=computation_error,
+            computation_decision=evaluate_computation_gate(
+                self._settings,
+                self._repository,
+                draft,
+            ),
             alignment=alignment_for_source(draft.source.canonical_url),
             license_resolved=license_resolved,
         )
@@ -287,20 +190,23 @@ class PublicationService:
         draft: Draft,
         *,
         license_resolved: bool,
-    ) -> tuple[PublicationReadiness, ComputationGateDecision | None]:
-        """Collect every blocker, and return the gate decision when it passed.
+    ) -> tuple[PublicationReadiness, ComputationGateDecision]:
+        """Collect every blocker, and return the gate decision alongside them.
 
         `publish()` needs the decision itself, not just "did the gate block".
         Assembling the context once per evaluation keeps the gate evaluated
         exactly once per publish attempt instead of running its five repository
         reads twice.
+
+        The decision is always present now, including when it blocks -- readiness
+        having no blockers is what tells `publish()` it was allowed.
         """
 
         context = self._assemble_context(draft, license_resolved=license_resolved)
         return (
             PublicationReadiness(
                 alignment=context.alignment,
-                blockers=collect_readiness_blockers(context),
+                blockers=collect_precondition_blockers(context),
             ),
             context.computation_decision,
         )
@@ -341,13 +247,16 @@ class PublicationService:
             raise PublicationValidationError(
                 "The selected framework topic does not match this source."
             )
-        if computation_decision is None:
-            # Unreachable while the gate is evaluated unconditionally above and
-            # every failure becomes a blocker, but not an assert: `python -O`
-            # strips those, which would turn this into an AttributeError deeper
-            # in the publication path.
+        if not computation_decision.allowed:
+            # Unreachable while `ComputationEvidenceAccepted` turns every
+            # unallowed decision into a blocker above, but not an assert:
+            # `python -O` strips those, and publishing past a blocking
+            # computation decision is exactly the corrupt record the
+            # precondition list exists to prevent. The wording matches
+            # `require_allowed` so the two cannot drift apart.
             raise PublicationValidationError(
-                "The computation policy gate did not produce a decision."
+                f"Computation evidence blocks publication: "
+                f"{computation_decision.message}"
             )
         compiled = None
         engine_binding = None

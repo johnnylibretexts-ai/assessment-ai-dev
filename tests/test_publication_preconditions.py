@@ -3,27 +3,32 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
 from pydantic import SecretStr
 
 from app.catalog import CuratedAlignment, CuratedFramework, CuratedTopic
-from app.computation_policy import ComputationPolicyError
+from app.computation_policy import ComputationGateDecision, ComputationPolicyError
 from app.config import Settings
-from app.db import Draft, EngineValidationRecord
+from app.db import Draft, EngineValidationRecord, HintLadderRecord
 from app.publication_preconditions import (
+    ComputationEvidenceAccepted,
     EngineValidationPassed,
     FrameworkMapped,
+    HintLadderApproved,
     LicenseResolved,
     PublicationContext,
     PublishingConfigured,
     QuestionRevisionApproved,
     collect_precondition_blockers,
 )
-from app.publishing import collect_readiness_blockers
 from app.schemas import (
     AssessmentItemType,
     BloomLevel,
     Choice,
     Difficulty,
+    HintLadderDraft,
+    HintRungDraft,
+    HintRungType,
     ItemResponse,
     ParameterizedItemSpec,
     ParameterVariable,
@@ -101,8 +106,11 @@ def context(**overrides: Any) -> PublicationContext:
         "settings": Settings(_env_file=None),
         "hint_record": None,
         "engine_validation": None,
-        "computation_decision": None,
-        "computation_error": None,
+        "computation_decision": gate_decision(
+            mode="off",
+            reason_code="mode_not_enforced",
+            message="Computation policy is not enforced.",
+        ),
         "alignment": None,
         "license_resolved": False,
     }
@@ -124,7 +132,7 @@ def test_readiness_reports_every_blocker_in_the_order_it_always_has() -> None:
     the only way to see the whole order at once.
     """
 
-    blockers = collect_readiness_blockers(
+    blockers = collect_precondition_blockers(
         context(
             draft=Draft(
                 status=ReviewStatus.READY_FOR_REVIEW,
@@ -133,7 +141,9 @@ def test_readiness_reports_every_blocker_in_the_order_it_always_has() -> None:
                 ),
             ),
             settings=Settings(_env_file=None, hint_generation_enabled=True),
-            computation_error=ComputationPolicyError("Computation evidence is stale."),
+            computation_decision=gate_decision(
+                allowed=False, message="Computation evidence is stale."
+            ),
         )
     )
 
@@ -146,6 +156,254 @@ def test_readiness_reports_every_blocker_in_the_order_it_always_has() -> None:
         "license_unresolved",
         "publishing_not_configured",
     ]
+
+
+def hint_ladder(
+    *,
+    concept_label: str = "Conservation of energy",
+    citation_paragraphs: list[int] | None = None,
+    answer_leak_detected: bool = False,
+) -> HintLadderDraft:
+    """A three-rung ladder, grounded in the same paragraph the question cites."""
+
+    cited = citation_paragraphs if citation_paragraphs is not None else [2]
+    return HintLadderDraft(
+        concept_label=concept_label,
+        rungs=[
+            HintRungDraft(
+                rung=rung,
+                text=f"A {rung.value} nudge towards the relationship.",
+                citation_paragraphs=list(cited),
+                answer_leak_detected=answer_leak_detected,
+            )
+            for rung in (
+                HintRungType.CONCEPTUAL,
+                HintRungType.STRATEGIC,
+                HintRungType.SPECIFIC,
+            )
+        ],
+    )
+
+
+def hint_context(
+    *,
+    hints_enabled: bool = True,
+    ladder: HintLadderDraft | None = None,
+    status: str = "approved",
+    record: bool = True,
+) -> PublicationContext:
+    return context(
+        settings=Settings(_env_file=None, hint_generation_enabled=hints_enabled),
+        hint_record=(
+            HintLadderRecord(
+                ladder_json=(
+                    ladder if ladder is not None else hint_ladder()
+                ).model_dump(mode="json"),
+                status=status,
+            )
+            if record
+            else None
+        ),
+    )
+
+
+def test_a_draft_with_no_hint_ladder_at_all_blocks() -> None:
+    blocker = HintLadderApproved().evaluate(hint_context(record=False))
+
+    assert blocker is not None
+    assert blocker.code == "hints_missing"
+    assert blocker.message == "Generate and review the three-rung hint ladder."
+
+
+def test_a_hint_citing_outside_the_question_source_blocks_for_repair() -> None:
+    blocker = HintLadderApproved().evaluate(
+        hint_context(ladder=hint_ladder(citation_paragraphs=[9]))
+    )
+
+    assert blocker is not None
+    assert blocker.code == "hints_need_repair"
+    assert blocker.message == (
+        "Repair hint citations outside the current question source before approval."
+    )
+
+
+def test_a_ladder_that_changed_the_concept_says_so_rather_than_naming_citations() -> (
+    None
+):
+    """A concept mismatch is not a citation problem.
+
+    The generic repair message would send the reviewer to the wrong field, so
+    this branch keeps the grounding issue's own words.
+    """
+
+    blocker = HintLadderApproved().evaluate(
+        hint_context(ladder=hint_ladder(concept_label="Momentum"))
+    )
+
+    assert blocker is not None
+    assert blocker.code == "hints_need_repair"
+    assert blocker.message == "A hint ladder cannot change the selected concept."
+
+
+def test_a_possible_answer_leak_blocks_before_approval_is_considered() -> None:
+    blocker = HintLadderApproved().evaluate(
+        hint_context(ladder=hint_ladder(answer_leak_detected=True), status="approved")
+    )
+
+    assert blocker is not None
+    assert blocker.code == "hints_need_repair"
+    assert blocker.message == "Resolve possible answer leakage before hint approval."
+
+
+def test_a_grounded_but_unapproved_ladder_blocks_on_approval() -> None:
+    blocker = HintLadderApproved().evaluate(hint_context(status="ready_for_review"))
+
+    assert blocker is not None
+    assert blocker.code == "hints_not_approved"
+    assert blocker.message == "Approve all three current hint rungs."
+
+
+def test_an_approved_grounded_ladder_emits_no_blocker() -> None:
+    assert HintLadderApproved().evaluate(hint_context()) is None
+
+
+def test_the_hint_precondition_emits_one_blocker_even_when_all_three_apply() -> None:
+    """The three hint blockers are alternatives, so the single-blocker interface holds.
+
+    This ladder is ungrounded, leaks the answer and is unapproved at once. Only
+    the first condition in the chain is reported -- widening the interface to
+    return several would change what the reviewer sees.
+    """
+
+    blocker = HintLadderApproved().evaluate(
+        hint_context(
+            ladder=hint_ladder(citation_paragraphs=[9], answer_leak_detected=True),
+            status="ready_for_review",
+        )
+    )
+
+    assert blocker is not None
+    assert blocker.code == "hints_need_repair"
+    assert blocker.message == (
+        "Repair hint citations outside the current question source before approval."
+    )
+
+
+def test_hints_disabled_by_configuration_block_nothing() -> None:
+    """The precondition stays in the list with the flag off and stays silent.
+
+    Not even a missing ladder blocks: with hint publication off there is nothing
+    to have generated.
+    """
+
+    assert HintLadderApproved().evaluate(hint_context(hints_enabled=False)) is None
+    assert (
+        HintLadderApproved().evaluate(hint_context(hints_enabled=False, record=False))
+        is None
+    )
+    assert (
+        HintLadderApproved().evaluate(
+            hint_context(
+                hints_enabled=False,
+                ladder=hint_ladder(citation_paragraphs=[9]),
+                status="ready_for_review",
+            )
+        )
+        is None
+    )
+
+
+def gate_decision(
+    *,
+    mode: str = "enforce",
+    allowed: bool = True,
+    message: str = "Computation evidence is current.",
+    reason_code: str = "evidence_current",
+) -> ComputationGateDecision:
+    return ComputationGateDecision(
+        mode=mode,
+        scoped=mode == "enforce",
+        allowed=allowed,
+        validation_status="passed" if allowed else None,
+        reason_code=reason_code,
+        message=message,
+    )
+
+
+def test_a_gate_decision_that_blocks_publication_keeps_its_own_words() -> None:
+    """The one precondition whose reason is dynamic.
+
+    Every other blocker states a fixed next action; this one has to say which
+    piece of evidence was rejected, or the reviewer is left hunting.
+    """
+
+    blocker = ComputationEvidenceAccepted().evaluate(
+        context(
+            computation_decision=gate_decision(
+                allowed=False,
+                reason_code="evidence_missing",
+                message="No accepted evidence exists for this revision.",
+            )
+        )
+    )
+
+    assert blocker is not None
+    assert blocker.code == "computation_evidence_invalid"
+    assert blocker.message == (
+        "Computation evidence blocks publication: "
+        "No accepted evidence exists for this revision."
+    )
+
+
+def test_the_computation_precondition_catches_its_own_policy_error() -> None:
+    """The catch belongs to the precondition, not to the assembler.
+
+    The same decision raises when asked directly -- so the precondition is
+    demonstrably the thing turning that exception into a blocker, rather than
+    reading an error some other module already caught for it.
+    """
+
+    decision = gate_decision(allowed=False, message="Evidence is stale.")
+
+    with pytest.raises(ComputationPolicyError):
+        decision.require_allowed(action="publication")
+
+    assert (
+        ComputationEvidenceAccepted().evaluate(context(computation_decision=decision))
+        is not None
+    )
+
+
+def test_accepted_computation_evidence_emits_no_blocker() -> None:
+    assert (
+        ComputationEvidenceAccepted().evaluate(
+            context(computation_decision=gate_decision(allowed=True))
+        )
+        is None
+    )
+
+
+def test_computation_policy_that_is_not_enforced_blocks_nothing() -> None:
+    """The precondition stays in the list with the policy off and stays silent.
+
+    Off and assist both come back allowed, so the flag state is expressed in the
+    decision rather than in a second branch here.
+    """
+
+    for mode in ("off", "assist"):
+        assert (
+            ComputationEvidenceAccepted().evaluate(
+                context(
+                    computation_decision=gate_decision(
+                        mode=mode,
+                        allowed=True,
+                        reason_code="mode_not_enforced",
+                        message="Computation policy is not enforced.",
+                    )
+                )
+            )
+            is None
+        )
 
 
 def engine_context(
@@ -310,8 +568,9 @@ def test_an_approved_revision_emits_no_blocker() -> None:
 def test_every_ported_precondition_is_reached_through_the_enumerated_list() -> None:
     """Defining a precondition is not enough; readiness must run it from the list.
 
-    The two absent codes are the hint ladder and the computation evidence, which
-    are ported separately and still run inline.
+    Three of the seven are satisfied by this context rather than absent from the
+    list: hint publication is off, the draft runs no external engine, and an
+    unenforced computation policy comes back allowed.
     """
 
     blockers = collect_precondition_blockers(context_for(ReviewStatus.READY_FOR_REVIEW))
