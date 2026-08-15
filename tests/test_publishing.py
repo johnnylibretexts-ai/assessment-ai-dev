@@ -23,6 +23,7 @@ from app.db import (
     DraftRepository,
     DraftWrite,
     EngineValidationRecord,
+    Publication,
     PublicationState,
 )
 from app.main import create_app
@@ -1014,6 +1015,135 @@ async def test_qti_storage_outage_resumes_without_duplicate_adapt_create(
         assert completed.qti_path is not None
         assert fake.create_calls == 1
         assert len(repository.require_draft(draft_id).publications) == 1
+
+
+@pytest.mark.asyncio
+async def test_hints_synced_publication_resumes_without_a_second_adapt_create(
+    tmp_path: Path,
+) -> None:
+    """A publication stopped after its hint rungs synced finishes on the retry.
+
+    The resume branch treats `adapt_created` and `hints_synced` alike, but only
+    the first of those had coverage. This pins the second: a publication whose
+    hints landed and whose QTI finalization then failed must resume into
+    finalization without re-creating the ADAPT question or re-syncing the rungs.
+    """
+
+    blocked_storage = tmp_path / "blocked-hint-qti-storage"
+    blocked_storage.write_text("not a directory", encoding="utf-8")
+    # Hint publication is derived, not a plain flag: an approved ladder is only
+    # bound into the publication when `hint_publication_enabled` is true, which
+    # this flag is one of the two ways to reach.
+    config = configured_settings(tmp_path).model_copy(
+        update={
+            "qti_storage_dir": blocked_storage,
+            "hint_generation_enabled": True,
+        }
+    )
+    app = create_app(config)
+    fake = FakeAdapt()
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_approved(repository)
+        approve_hint_ladder(repository, draft_id)
+        service = PublicationService(config, repository, fake)
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+        arguments = {
+            "publisher": "reviewer@example.org",
+            "topic_stable_id": topic.stable_id,
+            "alignment_confirmed": True,
+        }
+
+        stopped = await service.publish(draft_id, **arguments)
+        assert stopped.state == PublicationState.HINTS_SYNCED.value
+        assert stopped.error_code == "qti_finalize_failed"
+        assert stopped.hints_synced_at is not None
+        assert stopped.adapt_question_id == 501
+        assert stopped.qti_path is None
+        assert fake.create_calls == 1
+        assert fake.hint_sync_calls == 1
+
+        blocked_storage.unlink()
+        completed = await service.publish(draft_id, **arguments)
+
+        assert completed.state == PublicationState.SUCCEEDED.value
+        assert completed.adapt_question_id == 501
+        assert completed.qti_path is not None
+        assert completed.hints_synced_at == stopped.hints_synced_at
+        assert fake.create_calls == 1
+        assert fake.hint_sync_calls == 1
+        assert len(repository.require_draft(draft_id).publications) == 1
+        persisted = repository.require_publication(completed.id)
+        assert [attempt.action for attempt in persisted.attempts] == [
+            "adapt_create",
+            "adapt_hint_sync",
+            "qti_finalize",
+            "qti_finalize",
+        ]
+
+
+@pytest.mark.asyncio
+async def test_unrecognised_publication_state_republishes_from_the_start(
+    tmp_path: Path,
+) -> None:
+    """Characterization, not intent: an unrecognised state retries everything.
+
+    Unrecognised is not `PublicationState.UNKNOWN`, which is a recognised state
+    with its own reconcile path. This is a value outside the enum entirely: the
+    state column is a plain string with no constraint, so one is representable.
+    The resume dispatch matches four known states and anything else falls off
+    the end into the full publish path, which sends a second create for a
+    question ADAPT already holds.
+
+    Nobody chose this behaviour, so it is recorded rather than endorsed -- the
+    refactor is measured against what the code does, not against what it ought
+    to do. If a later change makes this reuse the existing question instead,
+    that is an improvement, and this test should be rewritten deliberately as
+    part of it rather than treated as a regression.
+    """
+
+    config = configured_settings(tmp_path)
+    app = create_app(config)
+    fake = FakeAdapt()
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_approved(repository)
+        service = PublicationService(config, repository, fake)
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+        arguments = {
+            "publisher": "reviewer@example.org",
+            "topic_stable_id": topic.stable_id,
+            "alignment_confirmed": True,
+        }
+
+        published = await service.publish(draft_id, **arguments)
+        assert published.state == PublicationState.SUCCEEDED.value
+        assert fake.create_calls == 1
+
+        # `update_publication` takes the enum, so an unrecognised value can only
+        # be written around the repository -- which is also the only way one
+        # arrives in production: a rollback to a build whose enum is older, or a
+        # hand-edited row.
+        with app.state.database.session_factory.begin() as session:
+            stored = session.get(Publication, published.id)
+            assert stored is not None
+            stored.state = "awaiting_engine_binding"
+
+        retried = await service.publish(draft_id, **arguments)
+
+        assert retried.state == PublicationState.SUCCEEDED.value
+        assert fake.create_calls == 2
+        assert retried.adapt_question_id == 501
+        assert len(repository.require_draft(draft_id).publications) == 1
+        persisted = repository.require_publication(retried.id)
+        assert [attempt.action for attempt in persisted.attempts] == [
+            "adapt_create",
+            "qti_finalize",
+            "adapt_create",
+            "qti_finalize",
+        ]
 
 
 @pytest.mark.asyncio
