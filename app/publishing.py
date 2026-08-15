@@ -65,6 +65,9 @@ from app.parameterized import (
     compile_typed_parameterized_item,
 )
 from app.publication_preconditions import (
+    PRECONDITIONS_AFTER_COMPUTATION,
+    PRECONDITIONS_BEFORE_HINT_LADDER,
+    PRECONDITIONS_BETWEEN_HINT_LADDER_AND_COMPUTATION,
     PublicationBlocker,
     PublicationContext,
     collect_precondition_blockers,
@@ -73,6 +76,94 @@ from app.schemas import AssessmentItemType, QuestionDraft
 
 
 PAYLOAD_MAPPER_VERSION = "adapt-assessment-items-v3"
+
+
+def collect_readiness_blockers(
+    context: PublicationContext,
+) -> tuple[PublicationBlocker, ...]:
+    """Every blocker a readiness evaluation reports, in the order it reports them.
+
+    Takes the assembled context and nothing else, so the reported order can be
+    pinned by a test that builds one by hand rather than by seeding a database
+    with a draft that fails all seven conditions at once.
+
+    Two preconditions are not ported to `PUBLICATION_PRECONDITIONS` yet and both
+    fall in the middle of that order. Porting them collapses this function into a
+    single call to `collect_precondition_blockers`.
+    """
+
+    blockers: list[PublicationBlocker] = list(
+        collect_precondition_blockers(context, PRECONDITIONS_BEFORE_HINT_LADDER)
+    )
+
+    # The hint ladder and the computation evidence are the two preconditions not
+    # ported to the enumerated list yet. Each is spliced back into the stretch of
+    # the list its blocker has always been reported in.
+    draft = context.draft
+    hint_record = context.hint_record
+    if context.settings.hint_publication_enabled:
+        if hint_record is None:
+            blockers.append(
+                PublicationBlocker(
+                    "hints_missing",
+                    "Generate and review the three-rung hint ladder.",
+                )
+            )
+        else:
+            grounding = inspect_hint_grounding(
+                draft.current,
+                hint_record.ladder,
+            )
+            if grounding:
+                # A concept mismatch is not a citation problem, so naming it
+                # "repair citations" sends the reviewer to the wrong field.
+                citation_issues = [
+                    issue for issue in grounding if issue.rung is not None
+                ]
+                blockers.append(
+                    PublicationBlocker(
+                        "hints_need_repair",
+                        (
+                            "Repair hint citations outside the current "
+                            "question source before approval."
+                            if citation_issues
+                            else grounding[0].message
+                        ),
+                    )
+                )
+            elif any(rung.answer_leak_detected for rung in hint_record.ladder.rungs):
+                blockers.append(
+                    PublicationBlocker(
+                        "hints_need_repair",
+                        "Resolve possible answer leakage before hint approval.",
+                    )
+                )
+            elif hint_record.status != "approved":
+                blockers.append(
+                    PublicationBlocker(
+                        "hints_not_approved",
+                        "Approve all three current hint rungs.",
+                    )
+                )
+
+    blockers.extend(
+        collect_precondition_blockers(
+            context, PRECONDITIONS_BETWEEN_HINT_LADDER_AND_COMPUTATION
+        )
+    )
+
+    if context.computation_error is not None:
+        blockers.append(
+            PublicationBlocker(
+                "computation_evidence_invalid",
+                str(context.computation_error),
+            )
+        )
+
+    blockers.extend(
+        collect_precondition_blockers(context, PRECONDITIONS_AFTER_COMPUTATION)
+    )
+    return tuple(blockers)
 
 
 class PublicationValidationError(ValueError):
@@ -161,9 +252,9 @@ class PublicationService:
     ) -> PublicationContext:
         """Gather what every publication precondition needs, exactly once.
 
-        Preconditions judge; they do not fetch. Both lazy relationship walks and
-        the computation gate's repository reads happen here, so evaluating the
-        list issues no query of its own.
+        Preconditions judge; they do not fetch. The computation gate's five
+        repository reads happen here, so evaluating the list issues no query of
+        its own.
 
         Deliberately not substitutable: there is no assembler interface and no
         fake. A precondition test constructs `PublicationContext` directly.
@@ -206,111 +297,10 @@ class PublicationService:
         """
 
         context = self._assemble_context(draft, license_resolved=license_resolved)
-        blockers: list[PublicationBlocker] = list(
-            collect_precondition_blockers(context)
-        )
-
-        # Everything below is a publication precondition that has not been
-        # ported to the enumerated list yet. Blockers are reported in the order
-        # they are appended, so each one joins the tail of the list as it moves.
-        hint_record = context.hint_record
-        if context.settings.hint_publication_enabled:
-            if hint_record is None:
-                blockers.append(
-                    PublicationBlocker(
-                        "hints_missing",
-                        "Generate and review the three-rung hint ladder.",
-                    )
-                )
-            else:
-                grounding = inspect_hint_grounding(
-                    draft.current,
-                    hint_record.ladder,
-                )
-                if grounding:
-                    # A concept mismatch is not a citation problem, so naming it
-                    # "repair citations" sends the reviewer to the wrong field.
-                    citation_issues = [
-                        issue for issue in grounding if issue.rung is not None
-                    ]
-                    blockers.append(
-                        PublicationBlocker(
-                            "hints_need_repair",
-                            (
-                                "Repair hint citations outside the current "
-                                "question source before approval."
-                                if citation_issues
-                                else grounding[0].message
-                            ),
-                        )
-                    )
-                elif any(
-                    rung.answer_leak_detected for rung in hint_record.ladder.rungs
-                ):
-                    blockers.append(
-                        PublicationBlocker(
-                            "hints_need_repair",
-                            "Resolve possible answer leakage before hint approval.",
-                        )
-                    )
-                elif hint_record.status != "approved":
-                    blockers.append(
-                        PublicationBlocker(
-                            "hints_not_approved",
-                            "Approve all three current hint rungs.",
-                        )
-                    )
-
-        if draft.current.item_type in {
-            AssessmentItemType.WEBWORK,
-            AssessmentItemType.IMATHAS,
-        }:
-            validation = context.engine_validation
-            if (
-                validation is None
-                or validation.status != "passed"
-                or validation.seed_count < 25
-            ):
-                blockers.append(
-                    PublicationBlocker(
-                        "engine_validation_missing",
-                        "Complete a successful 25-seed engine validation.",
-                    )
-                )
-
-        if context.computation_error is not None:
-            blockers.append(
-                PublicationBlocker(
-                    "computation_evidence_invalid",
-                    str(context.computation_error),
-                )
-            )
-
-        if context.alignment is None:
-            blockers.append(
-                PublicationBlocker(
-                    "framework_unmapped",
-                    "This source does not yet have a curated framework topic.",
-                )
-            )
-        if not context.license_resolved:
-            blockers.append(
-                PublicationBlocker(
-                    "license_unresolved",
-                    "Verify and select the source license.",
-                )
-            )
-        if context.settings.adapt_publishing_status != "configured":
-            blockers.append(
-                PublicationBlocker(
-                    "publishing_not_configured",
-                    "ADAPT publishing is not configured for this service.",
-                )
-            )
         return (
             PublicationReadiness(
                 alignment=context.alignment,
-                blockers=tuple(blockers),
+                blockers=collect_readiness_blockers(context),
             ),
             context.computation_decision,
         )
