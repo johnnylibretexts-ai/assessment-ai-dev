@@ -58,12 +58,41 @@ real one:
 openssl rand -base64 32 | tr -- '+/' '-_'
 ```
 
-**Every URL default in `.env.example` points at the LibreTexts.dev development
-box.** Replace them with your own before deploying — in particular
-`ASSESSMENT_AI_ALLOWED_ORIGIN`, `ASSESSMENT_AI_ADAPT_BASE_URL`,
-`ASSESSMENT_AI_HOTSPOT_MEDIA_PUBLIC_BASE`, `ASSESSMENT_AI_WEBWORK_*`,
-`ASSESSMENT_AI_IMATHAS_BASE_URL`, and `ASSESSMENT_AI_SANDBOX_ROOT`, which
-defaults to one person's CXone sandbox path.
+**The URL defaults in `.env.example` point at the LibreTexts.dev development
+box.** Replace these five with your own before deploying:
+
+```dotenv
+ASSESSMENT_AI_ALLOWED_ORIGIN
+ASSESSMENT_AI_ADAPT_BASE_URL
+ASSESSMENT_AI_HOTSPOT_MEDIA_PUBLIC_BASE
+ASSESSMENT_AI_WEBWORK_BASE_URL   /   ASSESSMENT_AI_WEBWORK_RENDERER_URL
+ASSESSMENT_AI_IMATHAS_BASE_URL
+```
+
+### Two settings are pinned, not defaulted — do not try to change them
+
+`sandbox_root` and `cxone_host` look like ordinary settings and are not. Each
+has a `field_validator` in `app/config.py` that **rejects any other value**:
+
+```
+sandbox_root  →  pinned to "Sandboxes/johnnyphung"
+cxone_host    →  pinned to "dev.libretexts.org"
+```
+
+Setting either to anything else raises a `ValidationError` at startup, which
+reads like a broken build and is actually the guard working. Together they are
+the CXone write scope: they confine everything this service can reach in CXone
+Expert to a single sandbox, and `tests/test_config.py::test_cxone_scope_is_not_runtime_expandable`
+asserts that the scope cannot be widened at runtime.
+
+Neither appears in `.env.example`, deliberately — there is nothing to configure.
+(`ASSESSMENT_AI_SANDBOX_SOURCES_ENABLED`, which *is* in there, is a different
+setting: it toggles whether sandbox pages may be used as generation sources at
+all.)
+
+**A fork that needs a different CXone scope must change those validators in
+code and re-scope the guard deliberately** — it is not an environment change,
+and it should not be made into one casually.
 
 Every capability ships **disabled**. That is the intended starting state:
 
