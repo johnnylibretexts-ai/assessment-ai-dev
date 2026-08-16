@@ -124,7 +124,57 @@ def revision_label(edit_count: Any) -> str:
     return f"v{max(count, 0) + 1}"
 
 
+PUBLICATION_STATE_HEADLINES: dict[PublicationState, str] = {
+    PublicationState.PENDING: "Publication pending",
+    PublicationState.UNKNOWN: "Awaiting ADAPT reconciliation",
+    PublicationState.ADAPT_CREATED: "ADAPT item created — QTI pending",
+    PublicationState.HINTS_SYNCED: (
+        "ADAPT item created, hint rungs synced — QTI pending"
+    ),
+    PublicationState.SUCCEEDED: "Published to ADAPT",
+    PublicationState.FAILED: "Publication failed",
+}
+
+
+def publication_state_headline(state_value: Any) -> str:
+    """Name what a publication record's state means, one state at a time.
+
+    The history card used to choose with an ``{% else %}`` written for
+    ``pending``, which silently absorbed every state the chain above it did not
+    name. A mapping keyed by the enum is the point: an unnamed state is a
+    missing key rather than a wrong headline, and
+    ``test_every_publication_state_has_its_own_headline`` fails before the
+    reviewer ever sees one.
+
+    Membership is asked of ``PublicationState`` rather than of a set kept here,
+    the same way ``Publisher._refuse_unreadable_publication_state`` asks it, so
+    the refusal and this headline cannot disagree about what is readable. A
+    state outside the enum was written by something else -- a successor build or
+    a hand edit -- so it is named as unreadable and shown raw, because the
+    refusal that sends an operator to this page names it too. ADR 0003.
+
+    A recognised state with no entry is *unrecognised*, which is a different
+    sentence from *unreadable*: this build declares the state and simply has no
+    headline for it, so blaming a successor build would send an operator hunting
+    a rollback that never happened. It does not raise, because a ``KeyError``
+    inside a template render takes out the whole of ``GET /drafts/{id}`` -- one
+    forgotten entry would make every draft that ever reached that state
+    unviewable, which is worse than the mislabelled card this replaces and lands
+    on the page ADR 0003 sends an operator to. The test is what forces the entry
+    to exist; this is only what the page does if that guard is bypassed.
+    """
+
+    try:
+        state = PublicationState(state_value)
+    except ValueError:
+        return f"Unreadable publication state: {state_value}"
+    return PUBLICATION_STATE_HEADLINES.get(
+        state, f"Unrecognised publication state: {state.value}"
+    )
+
+
 templates.env.globals["revision_label"] = revision_label
+templates.env.globals["publication_state_headline"] = publication_state_headline
 REVIEW_CONFIRMATION_ERROR = (
     "Confirm both the Bloom level and difficulty before approving this draft."
 )

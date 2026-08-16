@@ -810,13 +810,7 @@
           {% for publication in draft.publications %}
             <article class="publication-record state-{{ publication.state }}">
               <div class="card-topline">
-                <strong>
-                  {% if publication.state == 'succeeded' %}Published to ADAPT
-                  {% elif publication.state == 'adapt_created' %}ADAPT item created — QTI pending
-                  {% elif publication.state == 'unknown' %}Awaiting ADAPT reconciliation
-                  {% elif publication.state == 'failed' %}Publication failed
-                  {% else %}Publication pending{% endif %}
-                </strong>
+                <strong>{{ publication_state_headline(publication.state) }}</strong>
                 <span class="muted">
                   Revision {{ revision_label(publication.edit_count) }}
                   · {% if publication.is_current_edit %}Current revision{% else %}Earlier revision{% endif %}
