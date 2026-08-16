@@ -1043,8 +1043,14 @@ def test_item_json_is_refused_for_a_multiple_choice_draft(tmp_path: Path) -> Non
         assert after.current.specialist_review_required is True
 
 
-def ordering_question() -> QuestionDraft:
-    """A typed item, so the review page would offer it the JSON editor."""
+def ordering_question(*, specialist: bool = True) -> QuestionDraft:
+    """A typed item, so the review page would offer it the JSON editor.
+
+    Flagged by default, because the tests built on it are about the flag. The
+    keyword is for the one that needs the generator *not* to have raised it --
+    the common case in the corpus, and the only starting state from which the
+    raising direction can be exercised at all.
+    """
 
     return QuestionDraft(
         concept_label="Energy conservation",
@@ -1060,11 +1066,11 @@ def ordering_question() -> QuestionDraft:
         citation_paragraphs=[0],
         item_type=AssessmentItemType.ORDERING,
         response=ItemResponse(correct_order=["A", "B", "C"]),
-        specialist_review_required=True,
+        specialist_review_required=specialist,
     )
 
 
-def seed_typed(repository: DraftRepository) -> int:
+def seed_typed(repository: DraftRepository, *, specialist: bool = True) -> int:
     stored = repository.replace_generated_drafts(
         page=page(),
         pipeline_version="test-v1",
@@ -1076,11 +1082,11 @@ def seed_typed(repository: DraftRepository) -> int:
                     description="Energy changes form without disappearing.",
                     source_paragraphs=[0],
                 ),
-                raw=ordering_question(),
+                raw=ordering_question(specialist=specialist),
                 critique=Critique(
                     issues=["Order was unclear."], revision_required=True
                 ),
-                revised=ordering_question(),
+                revised=ordering_question(specialist=specialist),
             )
         ],
         llm_calls=[],
@@ -1161,6 +1167,57 @@ def test_a_typed_edit_cannot_retract_the_specialist_requirement(
         assert after.edit_count == before.edit_count
         assert after.current.specialist_review_required is True
         assert after.current.stem == before.current.stem
+
+
+def test_a_typed_edit_cannot_raise_the_specialist_requirement(
+    tmp_path: Path,
+) -> None:
+    """Refusing the raise is a decision, not a leftover of a symmetric guard.
+
+    #20 asked for the opposite answer, and the case for it was real: raising is
+    strictly safer than clearing, because it *adds* a review requirement rather
+    than removing one, so a reviewer who recognises an item needs a subject
+    specialist could say so without reopening the bypass above. Declined, and
+    ADR 0005 records why.
+
+    Nothing would receive the escalation. There is no assignment, no
+    notification, no queue filter and no status for an item awaiting a
+    specialist, so the reviewer who raises the flag is the one standing in front
+    of the acknowledgement it arms, and can tick it in the same session. What a
+    reviewer actually needs is already there and is stronger: reject the
+    revision and say so in the notes, which is persisted, attributed, and stops
+    publication outright where this only asks for a tick. And the field could
+    not carry a human's claim anyway -- it is defined as something the generator
+    said about its own output, so a reviewer writing to it would leave `True`
+    unable to say who asserted it.
+
+    Pinned because both directions come off one comparison in the route.
+    Narrowing that to clear-no/raise-yes is the change #20 proposed, and without
+    this test it would pass every other test in this file.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        repository = app.state.repository
+        draft_id = seed_typed(repository, specialist=False)
+        before = repository.require_draft(draft_id)
+        assert before.current.specialist_review_required is False
+        payload = typed_payload(repository, draft_id)
+        payload["specialist_review_required"] = True
+        payload["stem"] = "Order these by increasing energy, carefully."
+
+        response = edit(client, draft_id, item_json=json.dumps(payload))
+
+        assert refused(response, "specialist_review_required")
+        after = repository.require_draft(draft_id)
+        assert after.edit_count == before.edit_count
+        assert after.current.specialist_review_required is False
+        assert after.current.stem == before.current.stem
+        # And the guard it would have armed is still absent from the page.
+        assert (
+            "flagged for specialist review"
+            not in client.get(f"/drafts/{draft_id}").text
+        )
 
 
 def test_a_typed_edit_cannot_put_words_in_the_generator_s_mouth(
