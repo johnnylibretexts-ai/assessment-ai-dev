@@ -81,6 +81,12 @@ misreading, at the moment and place someone would make it.
 - **`needs_human_verification` is covered by the policy but not by this change.** It is read by
   nothing at all today. Surfacing it to the reviewer as a read-only note is tracked separately, so
   that #11 stays scoped to the flag it was filed about.
+  - *Done in #21 (2026-08-16):* the field reaches the reviewer as a note that attributes the claim
+    to the generator, and nothing else. No control, no column, no precondition — the informing half
+    of the policy without the gating half. Frequency was unmeasured when the ADR was written and is
+    now measured: **1 of the 380 corpus drafts** carries it, and it is not the same item as the one
+    carrying `specialist_review_required` (overlap: zero). So the note is rare enough to mean
+    something when it appears, and it covers an item the specialist flag does not.
 - **The door to persistence is not nailed shut, and its hinges are named.** If an accreditation or
   clinical-safety process ever needs this record, the work is: make the flag human-raisable, decide
   who counts as a specialist (the allowlist already exists for computation), add the column with
