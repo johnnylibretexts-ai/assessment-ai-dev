@@ -1,0 +1,23 @@
+name: trigger-probe
+
+# Temporary diagnostic. `gate.yml` declares `pull_request` and `push` and has
+# never once fired on either -- only `workflow_dispatch`. Its file is provably
+# correct (GitHub's own parsed copy shows all three triggers), the account is
+# fine (every sibling repo auto-runs), and repo settings match a working repo.
+# This probe isolates the remaining question: is the failure specific to
+# gate.yml, or does this repository not receive Actions events at all?
+#
+# Delete once answered.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "fired on event=${{ github.event_name }} ref=${{ github.ref }}"
