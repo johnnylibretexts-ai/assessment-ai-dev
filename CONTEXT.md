@@ -56,6 +56,13 @@ written by something else — a successor build, or a hand edit — so this buil
 already happened to it.
 _Avoid_: unknown state (that's a different, recognised thing), invalid state, corrupt
 
+**Publication tone**:
+The visual grouping the publication history renders a record in, derived from its state rather than
+being the state. A closed set written in this build, so the class it produces is always one the
+stylesheet knows — which is the point, because an *unreadable publication state* carries a raw value
+no selector could have named in advance. Colour groups; the headline is what names a state.
+_Avoid_: status colour, state class (that is `state-*`, which carries the raw stored value), severity
+
 **Publication precondition**:
 A condition that must hold before a draft may be published. There is one enumerated set of them;
 each either passes or emits a blocker. This is the structural concept — *gate* is a property some

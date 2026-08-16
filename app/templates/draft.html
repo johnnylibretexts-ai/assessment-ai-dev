@@ -808,7 +808,7 @@
         <section class="publication-history" aria-labelledby="publication-history-heading">
           <h3 id="publication-history-heading">Publication history</h3>
           {% for publication in draft.publications %}
-            <article class="publication-record state-{{ publication.state }}">
+            <article class="publication-record state-{{ publication.state }} tone-{{ publication_state_tone(publication.state) }}">
               <div class="card-topline">
                 <strong>{{ publication_state_headline(publication.state) }}</strong>
                 <span class="muted">

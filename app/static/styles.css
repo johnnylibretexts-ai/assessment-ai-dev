@@ -206,9 +206,20 @@ fieldset { margin: 0 0 18px; border: 1px solid var(--line); border-radius: 9px; 
 .license-evidence { margin-bottom: 15px; background: #f0fdf4; border-color: #86c99b; }
 .license-evidence p { margin: 5px 0; }
 .publication-record { margin: 12px 0; }
-.publication-record.state-succeeded { border-color: #86c99b; background: #f0fdf4; }
-.publication-record.state-unknown, .publication-record.state-adapt_created { border-color: #e8c866; background: #fffbeb; }
-.publication-record.state-failed { border-color: #ef9a9a; background: var(--danger-bg); }
+/* Keyed off the tone the template derives, never off `state-*`: a state written
+by a successor build carries a class no selector here could have named, and that
+is the record ADR 0003 sends an operator to find. `state-*` still carries the raw
+value in the DOM for reading; it no longer carries the colour, so the two cannot
+drift. */
+.publication-record.tone-succeeded { border-color: #86c99b; background: #f0fdf4; }
+.publication-record.tone-in-flight { border-color: #e8c866; background: #fffbeb; }
+.publication-record.tone-failed { border-color: #ef9a9a; background: var(--danger-bg); }
+/* `article` is load bearing, not decoration. The raw state reaches the class
+attribute unescaped of whitespace, so a value like `x tone-succeeded` puts a
+second tone class on the card -- and only an unreadable state can do that, which
+is exactly the card that must not end up looking published. The element selector
+outranks any injected tone class, so this no longer depends on staying last. */
+article.publication-record.tone-anomalous { border-style: dashed; border-color: var(--muted); background: #eef2f7; }
 .publication-links { display: flex; flex-wrap: wrap; gap: 16px; }
 .error-text { color: var(--danger); }
 button:disabled { cursor: not-allowed; opacity: .55; }

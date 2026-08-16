@@ -36,6 +36,7 @@ from tests.browser.harness import (  # noqa: E402
     REVIEWER,
     UNGROUNDED_PARAGRAPH,
     disposable_instance,
+    force_publication_state,
     mark_published,
     seed_draft,
 )
@@ -189,6 +190,67 @@ def test_published_revision_offers_no_duplicate_publish(page, workspace) -> None
     expect(page.locator('form[action$="/publish"]')).to_have_count(0)
     # And no outbound call happened as a side effect of merely viewing it.
     assert workspace["fake"].create_calls == 0
+
+
+def _paint_of_publication_state(page, workspace, state: str) -> dict:  # type: ignore[no-untyped-def]
+    """What the browser actually paints a publication card in this state as."""
+
+    repository = workspace["repository"]
+    draft_id = seed_draft(repository, variant=state)
+    mark_published(repository, draft_id)
+    force_publication_state(workspace["app"], draft_id, state)
+
+    page.goto(f"/drafts/{draft_id}")
+    return page.locator("article.publication-record").first.evaluate(
+        """node => {
+            const style = getComputedStyle(node);
+            return {
+                background: style.backgroundColor,
+                borderColour: style.borderTopColor,
+                borderStyle: style.borderTopStyle,
+            };
+        }"""
+    )
+
+
+def test_an_unreadable_publication_state_is_painted_apart_from_every_other(
+    page, workspace
+) -> None:
+    """The cascade, which is the half a rendered-class assertion cannot see.
+
+    Two things could still leave the card ADR 0003 sends an operator to find
+    looking like one of the ordinary ones. The stylesheet could lack a rule for
+    the tone, and the neutral default would make that look deliberate -- the
+    original `hints_synced` bug. Or the raw state could inject a second tone
+    class: `state-{{ publication.state }}` escapes quotes but not whitespace, so
+    a successor build writing `x tone-succeeded` puts a green tone class on that
+    same card. Only an unreadable state can do that, since every state this build
+    declares is a single token.
+
+    Asserted on the colours rather than on the whole computed paint, because
+    `border-style` is declared by the anomalous rule alone: a card painted
+    entirely as "succeeded" keeps a dashed border, so a border-style assertion
+    passes while the operator sees a green card.
+    """
+
+    ordinary = {
+        state: _paint_of_publication_state(page, workspace, state)
+        for state in ("pending", "succeeded", "adapt_created", "failed")
+    }
+    unreadable = _paint_of_publication_state(
+        page, workspace, "quarantined tone-succeeded"
+    )
+    expect(page.locator("body")).to_contain_text("Unreadable publication state")
+
+    def colours(paint: dict) -> dict:
+        return {key: paint[key] for key in ("background", "borderColour")}
+
+    for state, paint in ordinary.items():
+        assert colours(paint) != colours(unreadable), state
+    # Dashed as well as differently coloured, so the card is still the odd one
+    # out for a reviewer who cannot rely on hue.
+    assert unreadable["borderStyle"] == "dashed"
+    assert ordinary["pending"]["borderStyle"] == "solid"
 
 
 def test_earlier_publication_does_not_claim_the_current_revision(

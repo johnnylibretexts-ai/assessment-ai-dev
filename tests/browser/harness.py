@@ -27,7 +27,7 @@ from pydantic import SecretStr
 
 from app.adapt import AdaptCreateResult, FrameworkItem, ResolvedAlignment
 from app.config import Settings
-from app.db import DraftRepository, DraftWrite, PublicationState
+from app.db import DraftRepository, DraftWrite, Publication, PublicationState
 from app.main import create_app
 from app.publishing import PublicationService
 from app.schemas import (
@@ -293,6 +293,26 @@ def mark_published(
         adapt_page_id=adapt_question_id,
         finalized_at=datetime.now(UTC),
     )
+
+
+def force_publication_state(app: Any, draft_id: int, state: str) -> None:
+    """Write a publication state around the repository, as a successor build would.
+
+    ``update_publication`` takes the enum, so a state this build cannot read is
+    only representable by writing the column directly -- which is also the only
+    way one arrives in production: a rollback to a build whose enum is older, or
+    a hand-edited row. The column is a plain ``String(30)`` with no constraint.
+    """
+
+    repository: DraftRepository = app.state.repository
+    publications = repository.require_draft(draft_id).publications
+    if len(publications) != 1:  # pragma: no cover - defensive
+        raise RuntimeError(f"expected exactly one publication, got {len(publications)}")
+    with app.state.database.session_factory.begin() as session:
+        stored = session.get(Publication, publications[0].id)
+        if stored is None:  # pragma: no cover - defensive
+            raise RuntimeError("publication vanished between read and write")
+        stored.state = state
 
 
 class LiveServer:

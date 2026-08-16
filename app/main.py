@@ -124,6 +124,28 @@ def revision_label(edit_count: Any) -> str:
     return f"v{max(count, 0) + 1}"
 
 
+def _readable_publication_state(state_value: Any) -> PublicationState | None:
+    """Ask whether this build can read a stored publication state.
+
+    The single boundary the history card has between *readable* and
+    *unreadable*, shared by the headline and the tone rather than written out
+    twice. They must give the same answer: a record headlined "Published to
+    ADAPT" while wearing the card that means "nobody here can read this" is
+    worse than either mistake alone, and two copies of ``PublicationState(...)``
+    is how that arrives -- one of them later taught to tolerate a variant value
+    while the other stays strict.
+
+    ``ValueError`` from the enum is the same boundary
+    ``Publisher._refuse_unreadable_publication_state`` takes, so the page and the
+    refusal that sends an operator to it cannot disagree either. ADR 0003.
+    """
+
+    try:
+        return PublicationState(state_value)
+    except ValueError:
+        return None
+
+
 PUBLICATION_STATE_HEADLINES: dict[PublicationState, str] = {
     PublicationState.PENDING: "Publication pending",
     PublicationState.UNKNOWN: "Awaiting ADAPT reconciliation",
@@ -146,12 +168,12 @@ def publication_state_headline(state_value: Any) -> str:
     ``test_every_publication_state_has_its_own_headline`` fails before the
     reviewer ever sees one.
 
-    Membership is asked of ``PublicationState`` rather than of a set kept here,
-    the same way ``Publisher._refuse_unreadable_publication_state`` asks it, so
-    the refusal and this headline cannot disagree about what is readable. A
-    state outside the enum was written by something else -- a successor build or
-    a hand edit -- so it is named as unreadable and shown raw, because the
-    refusal that sends an operator to this page names it too. ADR 0003.
+    Readability is asked of ``_readable_publication_state`` rather than of a set
+    kept here, so the refusal, this headline and the tone cannot disagree about
+    what is readable. A state outside the enum was written by something else -- a
+    successor build or a hand edit -- so it is named as unreadable and shown raw,
+    because the refusal that sends an operator to this page names it too. ADR
+    0003.
 
     A recognised state with no entry is *unrecognised*, which is a different
     sentence from *unreadable*: this build declares the state and simply has no
@@ -164,17 +186,62 @@ def publication_state_headline(state_value: Any) -> str:
     to exist; this is only what the page does if that guard is bypassed.
     """
 
-    try:
-        state = PublicationState(state_value)
-    except ValueError:
+    state = _readable_publication_state(state_value)
+    if state is None:
         return f"Unreadable publication state: {state_value}"
     return PUBLICATION_STATE_HEADLINES.get(
         state, f"Unrecognised publication state: {state.value}"
     )
 
 
+ANOMALOUS_PUBLICATION_TONE = "anomalous"
+
+PUBLICATION_STATE_TONES: dict[PublicationState, str] = {
+    PublicationState.PENDING: "pending",
+    PublicationState.UNKNOWN: "in-flight",
+    PublicationState.ADAPT_CREATED: "in-flight",
+    PublicationState.HINTS_SYNCED: "in-flight",
+    PublicationState.SUCCEEDED: "succeeded",
+    PublicationState.FAILED: "failed",
+}
+
+
+def publication_state_tone(state_value: Any) -> str:
+    """Group a publication record's state into a tone the stylesheet can match.
+
+    The colours used to be keyed off ``state-<raw value>``, which works only for
+    states a stylesheet author could name in advance. Two could not be. A state
+    outside ``PublicationState`` was written by a successor build or a hand edit,
+    so its class is whatever that value happens to be and no selector could have
+    anticipated it -- and that is precisely the record ADR 0003's refusal sends an
+    operator to find. ``hints_synced`` was merely forgotten, and inherited the
+    neutral default that means "nothing has happened yet" while sitting one step
+    past ``adapt_created``, which is amber.
+
+    So the template emits a derived tone beside the raw class rather than asking
+    CSS to enumerate states. The three-way answer is the one the headline gives
+    -- outside the enum, declared but unmapped, declared and mapped -- and the
+    first of those three is asked of the shared
+    ``_readable_publication_state``, not re-derived here, so a state cannot be
+    named one thing in words and grouped as another in colour.
+
+    Tones are a closed set of literals written here, never the stored value, so
+    the class they build is always one the stylesheet knows. Both anomalies share
+    ``anomalous``: the sentence that separates *unreadable* from *unrecognised*
+    belongs to the headline, while the colour has one job for both, which is to
+    make the card findable. The neutral default is left to ``pending`` alone,
+    because that is the only state where nothing having happened is the truth.
+    """
+
+    state = _readable_publication_state(state_value)
+    if state is None:
+        return ANOMALOUS_PUBLICATION_TONE
+    return PUBLICATION_STATE_TONES.get(state, ANOMALOUS_PUBLICATION_TONE)
+
+
 templates.env.globals["revision_label"] = revision_label
 templates.env.globals["publication_state_headline"] = publication_state_headline
+templates.env.globals["publication_state_tone"] = publication_state_tone
 REVIEW_CONFIRMATION_ERROR = (
     "Confirm both the Bloom level and difficulty before approving this draft."
 )
