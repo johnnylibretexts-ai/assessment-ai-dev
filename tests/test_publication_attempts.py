@@ -38,6 +38,7 @@ from app.publication_attempts import (
     StepOutcome,
     StepSucceeded,
     run_publication_step,
+    steps_after,
 )
 
 
@@ -440,6 +441,71 @@ def test_a_broken_contract_is_not_reviewer_facing_validation() -> None:
     """
 
     assert not isinstance(PublicationStepContractError("broken"), ValueError)
+
+
+@pytest.mark.parametrize(
+    ("state", "left"),
+    [
+        (PublicationState.ADAPT_CREATED, ("adapt_hint_sync", "qti_finalize")),
+        (PublicationState.HINTS_SYNCED, ("qti_finalize",)),
+        (PublicationState.SUCCEEDED, ()),
+    ],
+)
+def test_a_state_a_step_reached_says_what_is_left_to_run(
+    state: PublicationState,
+    left: tuple[str, ...],
+) -> None:
+    """Where a resume re-enters, derived rather than restated.
+
+    A publication's state names the step that put it there, and everything after
+    that step in the list is what has not run. Resume asking the list this is
+    what stops the order existing a second time in a chain of `if`s that has to
+    be kept in step with the first by hand.
+
+    An empty answer is not "nothing to resume" -- it is the last step reporting
+    that the publication is finished.
+    """
+
+    remaining = steps_after(state.value)
+
+    assert remaining is not None
+    assert tuple(step.action for step in remaining) == left
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        PublicationState.PENDING.value,
+        PublicationState.FAILED.value,
+        PublicationState.UNKNOWN.value,
+        "awaiting_engine_binding",
+    ],
+)
+def test_a_state_no_step_reached_is_not_a_position_in_the_sequence(
+    state: str,
+) -> None:
+    """None and an empty tuple are different answers, and the dispatch needs both.
+
+    Reserved-but-not-started, failed, and the state whose recovery rejoins the
+    sequence partway are not places in it -- neither is a state written by a
+    build this one is not. Answering `()` for any of them would say "finished"
+    and hand back a publication that had done nothing.
+    """
+
+    assert steps_after(state) is None
+
+
+def test_no_two_steps_reach_the_same_state() -> None:
+    """What makes reading the order off the list unambiguous in the first place.
+
+    `steps_after` finds the step a state names and takes what follows. Two steps
+    reaching one state would make that lookup a coin toss between two re-entry
+    points, and it would resolve silently -- to whichever was declared first.
+    """
+
+    reached = [step.reaches for step in PUBLICATION_STEPS if step.reaches is not None]
+
+    assert len(reached) == len(set(reached))
 
 
 def test_every_declared_step_is_in_the_ordered_list() -> None:

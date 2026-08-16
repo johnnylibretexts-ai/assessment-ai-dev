@@ -66,10 +66,12 @@ from app.publication_attempts import (
     IMATHAS_CREATE,
     QTI_FINALIZE,
     QTI_PREFLIGHT,
+    PublicationStepContractError,
     StepFailed,
     StepOutcome,
     StepSucceeded,
     run_publication_step,
+    steps_after,
 )
 from app.publication_preconditions import (
     PublicationBlocker,
@@ -415,16 +417,23 @@ class PublicationService:
             raise PublicationValidationError(
                 "The publication key conflicts with a different draft revision."
             )
-        if publication.state == PublicationState.SUCCEEDED.value:
-            return publication
-        if publication.state in {
-            PublicationState.ADAPT_CREATED.value,
-            PublicationState.HINTS_SYNCED.value,
-        }:
+        # Where a resume re-enters is read off the step list rather than named
+        # here: the state says which step put the publication there, and what
+        # follows that step is what has not run. Adding a step no longer means
+        # remembering to add its state to a set in this method.
+        remaining = steps_after(publication.state)
+        if remaining is not None:
+            if not remaining:
+                # The last step reached this state; there is nothing left to run.
+                return publication
             return await self._continue_after_adapt(
                 publication, title=title, metadata=metadata
             )
+        # Below here the state is not a position in the sequence at all.
         if publication.state == PublicationState.UNKNOWN.value:
+            # Deliberately not a step: the recovery rejoins the sequence partway
+            # rather than holding a place in it, so the list cannot answer for
+            # it and this branch stays written out.
             return await self._reconcile(
                 publication, tag=tag, title=title, metadata=metadata
             )
@@ -604,6 +613,33 @@ class PublicationService:
         title: str,
         metadata: dict[str, Any],
     ) -> Publication:
+        """Run the tail of the sequence: the rungs if they are owed, then QTI.
+
+        Reached three ways -- forward after a create, from the recovery, and
+        from a resume -- and in all three the publication's own state says where
+        in the sequence it is.
+
+        The guard is the payoff for resume reading the list. A sixth step
+        declared between the create and the finalize would land in `remaining`
+        and be silently skipped by a resume that jumps straight here; naming
+        what this method can actually run turns that into a failure instead.
+        """
+
+        # Before the ADAPT question ID check, not after. A step declared *ahead*
+        # of the create would leave a resumed publication owing that create, so
+        # its question ID is legitimately absent -- and the missing-ID message
+        # would send a reviewer looking at ADAPT for a problem that is a step
+        # this method cannot run.
+        unrunnable = [
+            step.action
+            for step in steps_after(publication.state) or ()
+            if step not in {ADAPT_HINT_SYNC, QTI_FINALIZE}
+        ]
+        if unrunnable:
+            raise PublicationStepContractError(
+                f"a publication in {publication.state!r} still owes {unrunnable}, "
+                "and continuing after the ADAPT create cannot run those steps"
+            )
         if publication.adapt_question_id is None:
             raise PublicationValidationError(
                 "The ADAPT question ID is required before publication can continue."
