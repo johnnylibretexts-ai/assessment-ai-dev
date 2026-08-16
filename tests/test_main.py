@@ -120,7 +120,7 @@ def seed(
     return stored.draft_ids[0]
 
 
-SPECIALIST_REFUSAL = "A qualified specialist must confirm this item before approval."
+SPECIALIST_REFUSAL = "Confirm you have seen the specialist-review flag before approving."
 CONFIRMATION_REFUSAL = (
     "Confirm both the Bloom level and difficulty before approving this draft."
 )
@@ -810,23 +810,62 @@ def test_missing_everything_reports_the_bloom_and_difficulty_refusal_first(
         assert SPECIALIST_REFUSAL not in refused.text
 
 
+def test_the_specialist_notice_says_it_is_not_recorded(tmp_path: Path) -> None:
+    """The whole of ADR 0005's fix is one sentence on the page.
+
+    The decision not to persist is defensible only because the reviewer is told
+    so where they would otherwise assume otherwise. An ADR cannot do that job;
+    the ADR explains why, the sentence is what prevents the misreading. Losing
+    it in a template tidy would restore the original defect in full while every
+    other test still passed, so it is pinned rather than trusted.
+
+    The fieldset assertion is the second half: the control is outside `Required
+    human checks` deliberately, and sliding back in would make it look like a
+    peer of two constraint-backed confirmations again.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        detail = client.get(f"/drafts/{seed(app.state.repository, specialist=True)}")
+
+        assert detail.status_code == 200
+        assert "This acknowledgement is not recorded." in detail.text
+        assert "flagged for specialist review" in detail.text
+        # Not a claim about the reviewer's credentials -- the thing this
+        # control was rewritten to stop asserting.
+        assert "I am qualified" not in detail.text
+
+        page_html = detail.text
+        notice = page_html.index('class="specialist-flag"')
+        fieldset = page_html.index("Required human checks")
+        assert notice < fieldset, "the notice must sit outside the checks fieldset"
+
+    with TestClient(create_app(settings(tmp_path / "b"))) as client:
+        unflagged = client.get(f"/drafts/{seed(client.app.state.repository)}")
+
+        assert "flagged for specialist review" not in unflagged.text
+
+
 def test_a_specialist_confirmation_is_recorded_in_no_column(tmp_path: Path) -> None:
-    """The tripwire for the decision this issue was split from.
+    """The tripwire for a decision that has now been made: ADR 0005.
 
     Bloom and difficulty each persist three columns and are enforced by a
-    database constraint. Specialist review persists nothing -- so an approval
-    that required a specialist is indistinguishable afterwards from one that did
-    not. That is the defect under discussion, and pinning it here means the day
-    someone adds the column, this test fails and says so, instead of the change
-    landing unremarked.
+    database constraint. The specialist acknowledgement persists nothing -- so an
+    approval that carried the flag is indistinguishable afterwards from one that
+    did not. That was filed as a defect, and the answer is that it is correct:
+    the flag is a model self-assessment, and storing a reviewer's self-declared
+    qualification against it would produce a record that reads like specialist
+    sign-off without being one.
 
-    Two things this does not cover, both worth knowing before reading it as full
-    coverage of the gap. `ReviewService.decide` accepts no specialist signal at
-    all -- the check exists only in the HTTP handler, unlike bloom and difficulty
-    which are also enforced in the review decision, in the transition, and by the
-    database. And the flag itself is editable: the edit route's JSON branch
-    rebuilds the question without carrying it forward, so a reviewer can clear it
-    and approve unchallenged.
+    So this test no longer pins a gap awaiting a fix. It pins the decision. The
+    day someone adds the column, it fails and points at the ADR, instead of the
+    change landing unremarked.
+
+    One thing it deliberately does not cover: `ReviewService.decide` accepts no
+    specialist signal at all -- the check lives only in the HTTP handler, unlike
+    bloom and difficulty which are also enforced in the review decision, in the
+    transition, and by the database. That asymmetry is a consequence of the same
+    decision, not an oversight beside it.
     """
 
     app = create_app(settings(tmp_path))
