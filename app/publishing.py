@@ -61,7 +61,11 @@ from app.parameterized import (
     compile_typed_parameterized_item,
 )
 from app.publication_attempts import (
+    ADAPT_CREATE,
     ADAPT_HINT_SYNC,
+    IMATHAS_CREATE,
+    QTI_FINALIZE,
+    QTI_PREFLIGHT,
     StepFailed,
     StepOutcome,
     StepSucceeded,
@@ -427,56 +431,65 @@ class PublicationService:
         if not reserved and publication.state == PublicationState.PENDING.value:
             return publication
 
-        try:
-            preflight_qti(
-                draft.current,
-                publication_key=publication_key,
-                title=title,
-                metadata=metadata,
-            )
-        except QTIExportError as exc:
-            failed = self._repository.update_publication(
-                publication.id,
-                state=PublicationState.FAILED,
-                error_code="qti_preflight_failed",
-                error_message=str(exc),
-            )
-            self._repository.record_publication_attempt(
-                publication.id,
-                action="qti_preflight",
-                resulting_state=PublicationState.FAILED,
-                error_code="qti_preflight_failed",
-                error_message=str(exc),
-            )
-            return failed
+        async def preflight_qti_package() -> StepOutcome:
+            """The step body: the local package check, and nothing around it."""
+
+            try:
+                preflight_qti(
+                    draft.current,
+                    publication_key=publication_key,
+                    title=title,
+                    metadata=metadata,
+                )
+            except QTIExportError as exc:
+                return StepFailed(code="qti_preflight_failed", message=str(exc))
+            return StepSucceeded()
+
+        preflight = await run_publication_step(
+            self._repository,
+            publication,
+            QTI_PREFLIGHT,
+            preflight_qti_package,
+        )
+        if not preflight.succeeded:
+            return preflight.publication
 
         if compiled is not None:
             technology_id = None
             if draft.current.item_type == AssessmentItemType.IMATHAS:
-                try:
-                    engine_question = await self._imathas.create_question(
-                        publication_key=publication_key,
-                        description=title,
-                        author=destination.author,
-                        source=compiled.source,
-                        source_url=draft.source.canonical_url,
-                    )
+                engine_source = compiled.source
+
+                async def create_engine_question() -> StepOutcome:
+                    """The step body: the bridge create.
+
+                    The engine question ID is the one thing a step produces that
+                    is neither a publication column nor attempt evidence -- it
+                    goes into the ADAPT payload -- so it is bound here instead of
+                    carried through a module that has nowhere to put it.
+                    """
+
+                    nonlocal technology_id
+                    try:
+                        engine_question = await self._imathas.create_question(
+                            publication_key=publication_key,
+                            description=title,
+                            author=destination.author,
+                            source=engine_source,
+                            source_url=draft.source.canonical_url,
+                        )
+                    except EnginePublishingError as exc:
+                        return StepFailed(code=exc.code, message=str(exc))
                     technology_id = engine_question.question_id
-                except EnginePublishingError as exc:
-                    failed = self._repository.update_publication(
-                        publication.id,
-                        state=PublicationState.FAILED,
-                        error_code=exc.code,
-                        error_message=str(exc),
-                    )
-                    self._repository.record_publication_attempt(
-                        publication.id,
-                        action="imathas_create",
-                        resulting_state=PublicationState.FAILED,
-                        error_code=exc.code,
-                        error_message=str(exc),
-                    )
-                    return failed
+                    return StepSucceeded()
+
+                engine = await run_publication_step(
+                    self._repository,
+                    publication,
+                    IMATHAS_CREATE,
+                    create_engine_question,
+                )
+                if not engine.succeeded:
+                    return engine.publication
             payload = build_external_engine_payload(
                 draft.current,
                 destination=destination,
@@ -489,58 +502,39 @@ class PublicationService:
                 imathas_base_url=self._settings.imathas_base_url,
             )
 
-        try:
-            created = await self._adapt.create_question(payload)
-        except AdaptAmbiguousError as exc:
-            unknown = self._repository.update_publication(
-                publication.id,
-                state=PublicationState.UNKNOWN,
-                error_code=exc.code,
-                error_message=str(exc),
-            )
-            self._repository.record_publication_attempt(
-                publication.id,
-                action="adapt_create",
-                resulting_state=PublicationState.UNKNOWN,
-                error_code=exc.code,
-                error_message=str(exc),
-            )
-            return unknown
-        except AdaptPublishingError as exc:
-            failed = self._repository.update_publication(
-                publication.id,
-                state=PublicationState.FAILED,
-                error_code=exc.code,
-                error_message=str(exc),
-            )
-            self._repository.record_publication_attempt(
-                publication.id,
-                action="adapt_create",
-                resulting_state=PublicationState.FAILED,
-                error_code=exc.code,
-                error_message=str(exc),
-            )
-            return failed
+        async def create_adapt_question() -> StepOutcome:
+            """The step body: the ADAPT create, and nothing around it."""
 
-        publication = self._repository.update_publication(
-            publication.id,
-            state=PublicationState.ADAPT_CREATED,
-            adapt_question_id=created.question_id,
-            adapt_page_id=created.page_id,
-            error_code=None,
-            error_message=None,
+            try:
+                created = await self._adapt.create_question(payload)
+            except AdaptAmbiguousError as exc:
+                # The one place a body reports ambiguity: ADAPT may hold the
+                # question already. `ADAPT_CREATE` is what turns that into
+                # `unknown`, the state the reconcile path recovers from.
+                return StepFailed(code=exc.code, message=str(exc), ambiguous=True)
+            except AdaptPublishingError as exc:
+                return StepFailed(code=exc.code, message=str(exc))
+            return StepSucceeded(
+                values={
+                    "adapt_question_id": created.question_id,
+                    "adapt_page_id": created.page_id,
+                },
+                response={
+                    "question_id": created.question_id,
+                    "page_id": created.page_id,
+                },
+            )
+
+        attempt = await run_publication_step(
+            self._repository,
+            publication,
+            ADAPT_CREATE,
+            create_adapt_question,
         )
-        self._repository.record_publication_attempt(
-            publication.id,
-            action="adapt_create",
-            resulting_state=PublicationState.ADAPT_CREATED,
-            response={
-                "question_id": created.question_id,
-                "page_id": created.page_id,
-            },
-        )
+        if not attempt.succeeded:
+            return attempt.publication
         return await self._continue_after_adapt(
-            publication, title=title, metadata=metadata
+            attempt.publication, title=title, metadata=metadata
         )
 
     async def _reconcile(
@@ -653,68 +647,66 @@ class PublicationService:
             if not attempt.succeeded:
                 return attempt.publication
             publication = attempt.publication
-        return self._finalize_qti(publication, title=title, metadata=metadata)
+        return await self._finalize_qti(publication, title=title, metadata=metadata)
 
-    def _finalize_qti(
+    async def _finalize_qti(
         self,
         publication: Publication,
         *,
         title: str,
         metadata: dict[str, Any],
     ) -> Publication:
+        """Async only so it can reach the attempts module; it awaits no I/O.
+
+        The QTI write is synchronous, and stays synchronous inside the body.
+        """
+
         if publication.adapt_question_id is None:
             raise PublicationValidationError(
                 "The ADAPT question ID is required before QTI finalization."
             )
-        try:
-            artifact = write_qti_package(
-                QuestionDraft.model_validate(publication.question_snapshot_json),
-                publication_key=publication.publication_key,
-                title=title,
-                metadata={
-                    **metadata,
-                    "adapt_question_id": publication.adapt_question_id,
-                    "adapt_page_id": publication.adapt_page_id,
+        question = QuestionDraft.model_validate(publication.question_snapshot_json)
+        qti_metadata = {
+            **metadata,
+            "adapt_question_id": publication.adapt_question_id,
+            "adapt_page_id": publication.adapt_page_id,
+        }
+
+        async def write_qti_artifact() -> StepOutcome:
+            """The step body: the package write, and nothing around it."""
+
+            try:
+                artifact = write_qti_package(
+                    question,
+                    publication_key=publication.publication_key,
+                    title=title,
+                    metadata=qti_metadata,
+                    storage_dir=Path(self._settings.qti_storage_dir),
+                )
+            except (QTIExportError, OSError):
+                # The reviewer is told the question exists; the exception text is
+                # a storage detail that would only mislead.
+                return StepFailed(
+                    code="qti_finalize_failed",
+                    message="ADAPT created the question, but QTI finalization failed.",
+                )
+            return StepSucceeded(
+                values={
+                    "qti_path": str(artifact.path),
+                    "qti_sha256": artifact.sha256,
+                    "qti_size": artifact.size,
+                    "finalized_at": utc_now(),
                 },
-                storage_dir=Path(self._settings.qti_storage_dir),
+                response={"sha256": artifact.sha256, "size": artifact.size},
             )
-        except (QTIExportError, OSError):
-            message = "ADAPT created the question, but QTI finalization failed."
-            retained_state = (
-                PublicationState.HINTS_SYNCED
-                if publication.state == PublicationState.HINTS_SYNCED.value
-                else PublicationState.ADAPT_CREATED
-            )
-            self._repository.record_publication_attempt(
-                publication.id,
-                action="qti_finalize",
-                resulting_state=retained_state,
-                error_code="qti_finalize_failed",
-                error_message=message,
-            )
-            return self._repository.update_publication(
-                publication.id,
-                state=retained_state,
-                error_code="qti_finalize_failed",
-                error_message=message,
-            )
-        succeeded = self._repository.update_publication(
-            publication.id,
-            state=PublicationState.SUCCEEDED,
-            qti_path=str(artifact.path),
-            qti_sha256=artifact.sha256,
-            qti_size=artifact.size,
-            finalized_at=utc_now(),
-            error_code=None,
-            error_message=None,
+
+        attempt = await run_publication_step(
+            self._repository,
+            publication,
+            QTI_FINALIZE,
+            write_qti_artifact,
         )
-        self._repository.record_publication_attempt(
-            publication.id,
-            action="qti_finalize",
-            resulting_state=PublicationState.SUCCEEDED,
-            response={"sha256": artifact.sha256, "size": artifact.size},
-        )
-        return succeeded
+        return attempt.publication
 
     def _verified_external_compilation(
         self,

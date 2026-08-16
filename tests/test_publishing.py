@@ -26,11 +26,13 @@ from app.db import (
     Publication,
     PublicationState,
 )
+from app.engines import IMathASQuestion
 from app.main import create_app
 from app.pipeline import ReviewService
 from app.parameterized import compile_parameterized_item
 from app import publishing as publishing_module
 from app.publishing import PublicationService, PublicationValidationError
+from app.qti import QTIExportError
 from app.schemas import (
     AssessmentItemType,
     BloomLevel,
@@ -275,6 +277,103 @@ def seed_approved_webwork(repository: DraftRepository) -> tuple[int, str, str]:
         reviewer="reviewer@example.org",
     )
     return draft_id, compiled.compiler_version, compiled.source_sha256
+
+
+def seed_approved_imathas(repository: DraftRepository) -> int:
+    """An approved IMathAS draft: the one item type that calls the bridge.
+
+    Same shape as the WeBWorK seed, and deliberately a separate helper rather
+    than a parameter on it -- the tests that use that one are load bearing for
+    the computation modes, and this needs none of that.
+    """
+
+    text = "A numerical sum adds one term to another term."
+    page = NormalizedPage(
+        title="2.3: Isotopes and Atomic Weight",
+        plaintext=text,
+        htmlBody=f"<p>{text}</p>",
+        paragraphs=[Paragraph(index=0, text=text, start=0, end=len(text))],
+        source=SourceInfo(
+            backend="libretexts_public",
+            canonical_url=ISOTOPES_URL,
+            path=(
+                "chem.libretexts.org/Bookshelves/Introductory_Chemistry/"
+                "Fundamentals_of_General_Organic_and_Biological_Chemistry_(LibreTexts)/"
+                "02:_Atoms_and_the_Periodic_Table/2.03:_Isotopes_and_Atomic_Weight"
+            ),
+            page_id="86190-imathas",
+        ),
+    )
+    spec = ParameterizedItemSpec(
+        engine="imathas",
+        variables=[
+            ParameterVariable(name="first", minimum=1, maximum=10, step=1),
+            ParameterVariable(name="second", minimum=2, maximum=12, step=2),
+        ],
+        constraints=["first != second"],
+        prompt_template="Find the sum of {first} and {second}.",
+        answer_expression="first + second",
+        explanation_template="Add {first} to {second}.",
+        tolerance=0.01,
+    )
+    question = QuestionDraft(
+        item_type=AssessmentItemType.IMATHAS,
+        concept_label="Numerical sums",
+        stem="Find the sum of the displayed terms.",
+        response=ItemResponse(parameterized=spec),
+        explanation="Add the two displayed terms.",
+        bloom=BloomLevel.APPLY,
+        difficulty=Difficulty.EASY,
+        citation_paragraphs=[0],
+        specialist_review_required=True,
+    )
+    compiled = compile_parameterized_item(spec, validation_seeds=25)
+    stored = repository.replace_generated_drafts(
+        page=page,
+        pipeline_version="test-imathas-v1",
+        drafts=[
+            DraftWrite(
+                position=0,
+                concept=Concept(
+                    label="Numerical sums",
+                    description="Add two numerical terms.",
+                    source_paragraphs=[0],
+                ),
+                raw=question,
+                critique=Critique(issues=[], revision_required=False),
+                revised=question,
+                engine_validation={
+                    "engine": compiled.engine,
+                    "compiler_version": compiled.compiler_version,
+                    "source_sha256": compiled.source_sha256,
+                    "seed_count": len(compiled.previews),
+                    "previews": [
+                        {
+                            "seed": preview.seed,
+                            "variables": preview.variables,
+                            "prompt": preview.prompt,
+                            "answer": preview.answer,
+                            "explanation": preview.explanation,
+                        }
+                        for preview in compiled.previews
+                    ],
+                },
+            )
+        ],
+        llm_calls=[],
+    )
+    draft_id = stored.draft_ids[0]
+    ReviewService(repository).decide(
+        draft_id,
+        ReviewDecision(
+            status=ReviewStatus.READY_TO_PUBLISH,
+            bloom_confirmed=True,
+            difficulty_confirmed=True,
+            reviewer_notes="Labels, source, and engine evidence checked.",
+        ),
+        reviewer="reviewer@example.org",
+    )
+    return draft_id
 
 
 class FakeAdapt:
@@ -893,6 +992,162 @@ async def test_qualification_canary_publishes_approved_hints_with_flag_false(
         "adapt_hint_sync",
         "qti_finalize",
     ]
+
+
+@pytest.mark.asyncio
+async def test_failed_qti_preflight_fails_before_any_adapt_create(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The preflight's whole purpose: fail before anything external happens.
+
+    Its failure disposition is `failed`, and it is the cheapest one to justify
+    -- a local check that wrote nothing leaves nothing behind, so a retry from
+    the start costs nothing either. Uncovered until now, which is a hole in the
+    safety net at the point the attempt module takes the step over.
+    """
+
+    config = configured_settings(tmp_path)
+    app = create_app(config)
+    fake = FakeAdapt()
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_approved(repository)
+        service = PublicationService(config, repository, fake)
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+
+        def refuse_preflight(*_args: object, **_kwargs: object) -> None:
+            raise QTIExportError("The QTI package would not validate.")
+
+        monkeypatch.setattr(publishing_module, "preflight_qti", refuse_preflight)
+
+        failed = await service.publish(
+            draft_id,
+            publisher="reviewer@example.org",
+            topic_stable_id=topic.stable_id,
+            alignment_confirmed=True,
+        )
+
+        assert failed.state == PublicationState.FAILED.value
+        assert failed.error_code == "qti_preflight_failed"
+        assert failed.error_message == "The QTI package would not validate."
+        assert failed.adapt_question_id is None
+        assert failed.qti_path is None
+        assert fake.create_calls == 0
+        persisted = repository.require_publication(failed.id)
+        assert [attempt.action for attempt in persisted.attempts] == ["qti_preflight"]
+        assert persisted.attempts[0].resulting_state == PublicationState.FAILED.value
+
+
+@pytest.mark.asyncio
+async def test_failed_imathas_create_fails_before_any_adapt_create(
+    tmp_path: Path,
+) -> None:
+    """The bridge write that must land before ADAPT is told the question exists.
+
+    Its failure disposition is `failed`, and unlike the ADAPT create there is no
+    ambiguous case: the bridge keys on `publication_key`, so a retry after a
+    write that may have landed returns the same question rather than making a
+    second one.
+
+    An unconfigured bridge is the real refusal, not a stubbed one -- the client
+    raises before it opens a connection.
+    """
+
+    config = configured_settings(tmp_path)
+    assert config.imathas_publishing_status != "configured"
+    app = create_app(config)
+    fake = FakeAdapt()
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_approved_imathas(repository)
+        service = PublicationService(config, repository, fake)
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+
+        failed = await service.publish(
+            draft_id,
+            publisher="reviewer@example.org",
+            topic_stable_id=topic.stable_id,
+            alignment_confirmed=True,
+        )
+
+        assert failed.state == PublicationState.FAILED.value
+        assert failed.error_code == "imathas_not_configured"
+        assert failed.adapt_question_id is None
+        assert fake.create_calls == 0
+        persisted = repository.require_publication(failed.id)
+        assert [attempt.action for attempt in persisted.attempts] == ["imathas_create"]
+        assert persisted.attempts[0].resulting_state == PublicationState.FAILED.value
+
+
+@pytest.mark.asyncio
+async def test_imathas_question_id_reaches_the_adapt_payload_and_records_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The success half of the bridge step, which is a value and not a state.
+
+    The engine question ID is the one thing a step produces that is neither a
+    publication column nor attempt evidence: it goes straight into the ADAPT
+    payload. So this pins the value arriving, and pins the deliberate silence
+    around it -- a successful bridge create writes no attempt row and moves no
+    state, unlike every other step here.
+
+    The bridge client is replaced at its construction site rather than on the
+    built service, so the service still wires its own collaborator.
+    """
+
+    bridge_calls: list[dict[str, object]] = []
+
+    class RecordingBridge:
+        def __init__(self, _settings: Settings) -> None:
+            pass
+
+        async def create_question(self, **kwargs: object) -> IMathASQuestion:
+            bridge_calls.append(kwargs)
+            return IMathASQuestion(question_id=8801, created=True)
+
+    class PayloadCapturingAdapt(FakeAdapt):
+        def __init__(self) -> None:
+            super().__init__()
+            self.payloads: list[dict[str, object]] = []
+
+        async def create_question(
+            self, _payload: dict[str, object]
+        ) -> AdaptCreateResult:
+            self.payloads.append(_payload)
+            return await super().create_question(_payload)
+
+    monkeypatch.setattr(publishing_module, "IMathASBridgeClient", RecordingBridge)
+    config = configured_settings(tmp_path)
+    app = create_app(config)
+    fake = PayloadCapturingAdapt()
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_approved_imathas(repository)
+        service = PublicationService(config, repository, fake)
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+
+        published = await service.publish(
+            draft_id,
+            publisher="reviewer@example.org",
+            topic_stable_id=topic.stable_id,
+            alignment_confirmed=True,
+        )
+
+        assert published.state == PublicationState.SUCCEEDED.value
+        assert len(bridge_calls) == 1
+        assert bridge_calls[0]["publication_key"] == published.publication_key
+        assert fake.payloads[0]["technology_id"] == 8801
+        assert fake.payloads[0]["technology"] == "imathas"
+        persisted = repository.require_publication(published.id)
+        assert [attempt.action for attempt in persisted.attempts] == [
+            "adapt_create",
+            "qti_finalize",
+        ]
 
 
 @pytest.mark.asyncio
