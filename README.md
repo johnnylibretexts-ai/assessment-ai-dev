@@ -2,6 +2,10 @@
 
 Standalone, review-gated assessment drafting from public LibreTexts pages.
 
+**Deploying this?** Start with [`DEPLOY.md`](DEPLOY.md) — the services, the
+identity chain, and six ways this fails silently. Licensing and the commercial
+AI APIs it calls are in [`THIRD-PARTY.md`](THIRD-PARTY.md).
+
 The first vertical slice is deliberately narrow:
 
 1. read one public LibreTexts page through the fixed read proxy;
