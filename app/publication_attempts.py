@@ -1,4 +1,4 @@
-"""The declared steps of the publish path, and the module that runs one.
+"""The declared steps of the publish path, and the module that runs them.
 
 `CONTEXT.md` fixes the vocabulary -- *publication*, *publication attempt* -- and
 the module is named for the table the schema already has: `publication_attempts`.
@@ -21,6 +21,33 @@ from typing import Any, Protocol
 from .db import Publication, PublicationState
 
 
+class PublicationStepContractError(RuntimeError):
+    """A step declaration and its body disagree. A code defect, not a condition.
+
+    Deliberately not a `ValueError`. The publish route catches `ValueError` and
+    renders its text to the reviewer as a 422, so raising one here would show
+    someone trying to publish a question a sentence about `StepSucceeded`, and
+    would blame them for it. A broken contract is the service's fault and reads
+    like one: it leaves a traceback for whoever wrote the step.
+    """
+
+
+class RetainsCurrentState:
+    """A disposition that is a rule rather than a state: keep what was there.
+
+    One step needs it. QTI finalization runs after ADAPT already holds the
+    question and the rungs may or may not have synced, so naming either state
+    would undo the other. Naming the pair instead would be a list to keep in
+    step with the states that can actually reach it.
+    """
+
+    def __repr__(self) -> str:
+        return "RETAINS_CURRENT"
+
+
+RETAINS_CURRENT = RetainsCurrentState()
+
+
 @dataclass(frozen=True)
 class PublicationStep:
     """One step of the publish path, declared rather than described.
@@ -31,15 +58,16 @@ class PublicationStep:
     """
 
     action: str
-    reaches: PublicationState
-    # One state, which is all this step needs and deliberately not all the path
-    # needs. Two of the four steps still to be ported do not fit it: an ADAPT
-    # create leaves `unknown` when the call was ambiguous and `failed` when it
-    # plainly did not land, and a QTI finalize retains whichever of two prior
-    # states the publication was already in. Widen this when porting them --
-    # collapsing either onto one state would change the disposition, which is
-    # the one thing those tickets may not do.
-    leaves_on_failure: PublicationState
+    # None for a step that advances nothing: a check either passes, leaving the
+    # publication exactly where it was and appending no attempt, or it fails.
+    # Two of the five are that shape.
+    reaches: PublicationState | None
+    leaves_on_failure: PublicationState | RetainsCurrentState
+    # Only for a step whose external write may have landed without saying so.
+    # None means the step has no such case, and a body reporting one is refused
+    # rather than quietly filed under `leaves_on_failure` -- that would assert
+    # the call did not land, which is the opposite of what the body said.
+    leaves_when_ambiguous: PublicationState | None = None
 
 
 @dataclass(frozen=True)
@@ -63,10 +91,15 @@ class StepFailed:
     leaves the publication is the declaration's answer, not the body's. That is
     what stops the disposition from being decided again at every step, which is
     how five steps came to disagree.
+
+    `ambiguous` is the one thing about a failure only the body can know: whether
+    the write may have landed anyway. Which state *that* means is still the
+    declaration's to say.
     """
 
     code: str
     message: str
+    ambiguous: bool = False
 
 
 StepOutcome = StepSucceeded | StepFailed
@@ -114,10 +147,52 @@ class PublicationRecords(Protocol):
         """Returns the appended attempt; this module never reads it back."""
 
 
-# The publish path in the order it runs. To add a step you declare it here, and
-# its failure disposition is visible at the declaration rather than implied by
-# the code around the call. Steps arrive as they are ported: a declaration
-# nothing runs is a claim the suite cannot check.
+# The publish path in the order it runs. All five are here; to add a sixth you
+# declare it here, and its failure disposition is visible at the declaration
+# rather than implied by the code around the call.
+#
+# The five disagree about what a failure leaves behind, and the disagreement is
+# deliberate -- each comment below says why that step's answer is the right one
+# for it. Reading them together is the point: this is the first place the five
+# have ever been legible side by side.
+#
+# The recovery taken from `unknown` is not here. It is not a step: it rejoins
+# this sequence partway rather than holding a position in it.
+QTI_PREFLIGHT = PublicationStep(
+    action="qti_preflight",
+    # A check, not an advance: passing leaves the publication where it was and
+    # writes no attempt. Preserved from the code it replaces; the append-only
+    # log arguably wants the passing try in it, which is a deliberate change to
+    # make rather than a side effect of moving the step.
+    reaches=None,
+    # Nothing external has happened yet, so `failed` costs nothing: the retry
+    # re-enters at the top and re-runs the check.
+    leaves_on_failure=PublicationState.FAILED,
+)
+
+IMATHAS_CREATE = PublicationStep(
+    action="imathas_create",
+    # The other silent step. What it produces is an engine question ID bound for
+    # the ADAPT payload, which is neither a publication column nor evidence.
+    reaches=None,
+    # `failed` even though the bridge write may have landed, and that is not the
+    # oversight it looks like: the bridge keys on `publication_key`, so a retry
+    # after a write of unknown fate returns the same question rather than making
+    # a second one. There is nothing ambiguous left for a disposition to hold.
+    leaves_on_failure=PublicationState.FAILED,
+)
+
+ADAPT_CREATE = PublicationStep(
+    action="adapt_create",
+    reaches=PublicationState.ADAPT_CREATED,
+    leaves_on_failure=PublicationState.FAILED,
+    # The only step with two. A create that may have landed is not a create that
+    # did not: `unknown` is what the reconcile path recovers from by asking ADAPT
+    # what it holds, and collapsing it onto `failed` would send the retry back
+    # through the create and duplicate the question.
+    leaves_when_ambiguous=PublicationState.UNKNOWN,
+)
+
 ADAPT_HINT_SYNC = PublicationStep(
     action="adapt_hint_sync",
     reaches=PublicationState.HINTS_SYNCED,
@@ -127,7 +202,48 @@ ADAPT_HINT_SYNC = PublicationStep(
     leaves_on_failure=PublicationState.ADAPT_CREATED,
 )
 
-PUBLICATION_STEPS: tuple[PublicationStep, ...] = (ADAPT_HINT_SYNC,)
+QTI_FINALIZE = PublicationStep(
+    action="qti_finalize",
+    reaches=PublicationState.SUCCEEDED,
+    # Retains whichever state it found. ADAPT already holds the question by now,
+    # so failing here must not walk the publication backwards -- and writing
+    # `adapt_created` over one whose rungs had synced would lose that and
+    # re-sync them on the retry.
+    leaves_on_failure=RETAINS_CURRENT,
+)
+
+PUBLICATION_STEPS: tuple[PublicationStep, ...] = (
+    QTI_PREFLIGHT,
+    IMATHAS_CREATE,
+    ADAPT_CREATE,
+    ADAPT_HINT_SYNC,
+    QTI_FINALIZE,
+)
+
+
+def _disposition(
+    step: PublicationStep,
+    publication: Publication,
+    outcome: StepFailed,
+) -> PublicationState:
+    """The state this failure leaves behind, read off the declaration."""
+
+    if outcome.ambiguous:
+        if step.leaves_when_ambiguous is None:
+            raise PublicationStepContractError(
+                f"the {step.action} step declares no disposition for a call that "
+                "may have landed, and its body reported one"
+            )
+        return step.leaves_when_ambiguous
+    leaves = step.leaves_on_failure
+    if isinstance(leaves, RetainsCurrentState):
+        # Unreachable today: every path into a retaining step arrives in one
+        # of two recognised states. If one ever does not, `PublicationState(...)`
+        # raises rather than inventing a state to keep. That is this step
+        # declining to guess -- not ADR 0003's refusal, which is about the resume
+        # dispatch and raises a `PublicationValidationError` naming the state.
+        return PublicationState(publication.state)
+    return leaves
 
 
 async def run_publication_step(
@@ -154,27 +270,37 @@ async def run_publication_step(
         # is reached *after* the external call has landed -- so the message
         # names the step and the contract rather than surfacing as an attribute
         # error on a value three frames from where it was written.
-        raise TypeError(
+        raise PublicationStepContractError(
             f"the {step.action} step body reported {outcome!r}; "
             "a step body returns StepSucceeded or StepFailed"
         )
     if isinstance(outcome, StepFailed):
+        leaves = _disposition(step, publication, outcome)
         records.record_publication_attempt(
             publication.id,
             action=step.action,
-            resulting_state=step.leaves_on_failure,
+            resulting_state=leaves,
             error_code=outcome.code,
             error_message=outcome.message,
         )
         return RecordedAttempt(
             publication=records.update_publication(
                 publication.id,
-                state=step.leaves_on_failure,
+                state=leaves,
                 error_code=outcome.code,
                 error_message=outcome.message,
             ),
             succeeded=False,
         )
+    if step.reaches is None:
+        if outcome.values or outcome.response is not None:
+            # There is no write to hang them on, and discarding them would lose
+            # evidence the body meant to keep.
+            raise PublicationStepContractError(
+                f"the {step.action} step reaches no state, so its body may not "
+                "report values or a response"
+            )
+        return RecordedAttempt(publication=publication, succeeded=True)
     moved = records.update_publication(
         publication.id,
         state=step.reaches,
