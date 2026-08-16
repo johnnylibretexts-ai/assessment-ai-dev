@@ -1,5 +1,7 @@
+import json
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote_plus
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,6 +20,7 @@ from app.db import (
 )
 from app.main import create_app
 from app.schemas import (
+    AssessmentItemType,
     BloomLevel,
     Choice,
     Concept,
@@ -26,6 +29,7 @@ from app.schemas import (
     HintLadderDraft,
     HintRungDraft,
     HintRungType,
+    ItemResponse,
     NormalizedPage,
     Paragraph,
     QuestionDraft,
@@ -847,6 +851,277 @@ def test_a_specialist_confirmation_is_recorded_in_no_column(tmp_path: Path) -> N
     assert not [
         column.name for column in Draft.__table__.columns if "specialist" in column.name
     ]
+
+
+def edit(client: TestClient, draft_id: int, **fields: str) -> Response:
+    """One edit submission, carrying only the fields a test cares about."""
+
+    return client.post(
+        f"/drafts/{draft_id}/edit",
+        data={"reviewer_notes": "", **fields},
+        headers={
+            "X-Reviewer": "reviewer@example.org",
+            "Origin": "http://testserver",
+        },
+        follow_redirects=False,
+    )
+
+
+def refused(response: Response, because: str) -> bool:
+    """This route reports a refusal by redirecting with an `error`, not a 422.
+
+    `because` is required rather than optional: any refusal on this route looks
+    the same in the status line -- the same-origin check, a JSON decode failure,
+    a fixture that stopped validating -- so a test that asserted only "an error
+    came back" could stay green while the guard it names had gone.
+    """
+
+    if response.status_code != 303:
+        return False
+    location = response.headers["location"]
+    return "error=" in location and quote_plus(because) in location
+
+
+def test_item_json_is_refused_for_a_multiple_choice_draft(tmp_path: Path) -> None:
+    """The edit route picks its branch from the draft, not from the caller.
+
+    The review page offers the JSON editor only for typed items, and the
+    field-by-field form only for multiple choice. The route used to decide by
+    asking which field arrived, so a caller could reach the typed branch for a
+    multiple-choice draft -- a branch that rebuilds the question from the payload
+    alone and carries nothing forward. `specialist_review_required` defaults to
+    false, so that path could clear it and let the draft approve with no
+    specialist confirmation.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        repository = app.state.repository
+        draft_id = seed(repository, specialist=True)
+        before = repository.require_draft(draft_id)
+        payload = json.loads(before.current.model_dump_json())
+        payload["specialist_review_required"] = False
+
+        response = edit(client, draft_id, item_json=json.dumps(payload))
+
+        assert refused(response, "edit it with the question form")
+        after = repository.require_draft(draft_id)
+        assert after.edit_count == before.edit_count
+        assert after.current.specialist_review_required is True
+
+
+def ordering_question() -> QuestionDraft:
+    """A typed item, so the review page would offer it the JSON editor."""
+
+    return QuestionDraft(
+        concept_label="Energy conservation",
+        stem="Order these by increasing energy.",
+        choices=[
+            Choice(id="A", text="Potential energy", correct=False),
+            Choice(id="B", text="Kinetic energy", correct=False),
+            Choice(id="C", text="Thermal energy", correct=False),
+        ],
+        explanation="The source orders these forms by the energy each carries.",
+        bloom=BloomLevel.UNDERSTAND,
+        difficulty=Difficulty.EASY,
+        citation_paragraphs=[0],
+        item_type=AssessmentItemType.ORDERING,
+        response=ItemResponse(correct_order=["A", "B", "C"]),
+        specialist_review_required=True,
+    )
+
+
+def seed_typed(repository: DraftRepository) -> int:
+    stored = repository.replace_generated_drafts(
+        page=page(),
+        pipeline_version="test-v1",
+        drafts=[
+            DraftWrite(
+                position=0,
+                concept=Concept(
+                    label="Energy conservation",
+                    description="Energy changes form without disappearing.",
+                    source_paragraphs=[0],
+                ),
+                raw=ordering_question(),
+                critique=Critique(
+                    issues=["Order was unclear."], revision_required=True
+                ),
+                revised=ordering_question(),
+            )
+        ],
+        llm_calls=[],
+    )
+    return stored.draft_ids[0]
+
+
+def test_the_question_form_is_refused_for_a_typed_draft(tmp_path: Path) -> None:
+    """The same mis-dispatch running the other way, which costs more.
+
+    The form branch builds a question without naming an item type, and that
+    field defaults to multiple choice -- so reaching it for a typed draft
+    rewrites the item as multiple choice and drops its response specification
+    entirely. Nothing about the submission looks wrong on the way in.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        repository = app.state.repository
+        draft_id = seed_typed(repository)
+        before = repository.require_draft(draft_id)
+
+        response = edit(
+            client,
+            draft_id,
+            stem="Order these again.",
+            choice_a="Potential energy",
+            choice_b="Kinetic energy",
+            choice_c="Thermal energy",
+            choice_d="Chemical energy",
+            correct_choice="A",
+            explanation="A rewritten explanation of the ordering.",
+            bloom="understand",
+            difficulty="easy",
+        )
+
+        assert refused(response, "edit it as JSON")
+        after = repository.require_draft(draft_id)
+        assert after.edit_count == before.edit_count
+        assert after.current.item_type == AssessmentItemType.ORDERING
+        assert after.current.response.correct_order == ["A", "B", "C"]
+
+
+def typed_payload(repository: DraftRepository, draft_id: int) -> dict[str, object]:
+    """The draft's own JSON, which is exactly what the textarea is prefilled with."""
+
+    return json.loads(repository.require_draft(draft_id).current.model_dump_json())
+
+
+def test_a_typed_edit_cannot_retract_the_specialist_requirement(
+    tmp_path: Path,
+) -> None:
+    """The JSON editor edits content; it does not edit what review the item needs.
+
+    `specialist_review_required` is an assertion about the item, and the approval
+    guard reads it. A reviewer who did not want to claim specialist
+    qualification could otherwise clear it here and approve unchallenged.
+
+    Refused rather than quietly restored. Overwriting the submitted value would
+    return the same "Draft saved" notice as a real edit, which is the failure
+    this whole issue is about -- a caller told it succeeded while the thing it
+    asked for did not happen.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        repository = app.state.repository
+        draft_id = seed_typed(repository)
+        before = repository.require_draft(draft_id)
+        payload = typed_payload(repository, draft_id)
+        payload["specialist_review_required"] = False
+        payload["stem"] = "Order these by increasing energy, carefully."
+
+        response = edit(client, draft_id, item_json=json.dumps(payload))
+
+        assert refused(response, "specialist_review_required")
+        after = repository.require_draft(draft_id)
+        assert after.edit_count == before.edit_count
+        assert after.current.specialist_review_required is True
+        assert after.current.stem == before.current.stem
+
+
+def seed_convertible(repository: DraftRepository) -> int:
+    """A typed draft whose shape is *also* valid as multiple choice.
+
+    Four choices, one correct -- so relabelling it `multiple_choice` passes the
+    schema's own shape rules and reaches the route's guard. The ordering fixture
+    cannot: it has three choices and none correct, so the model rejects the
+    relabelled payload before any of this route's code runs, and a test built on
+    it would pass while proving nothing.
+    """
+
+    item = QuestionDraft(
+        concept_label="Energy conservation",
+        stem="Select the statement that holds.",
+        choices=[
+            Choice(id="A", text="Energy is conserved.", correct=True),
+            Choice(id="B", text="Energy disappears.", correct=False),
+            Choice(id="C", text="Energy is matter.", correct=False),
+            Choice(id="D", text="Energy has no units.", correct=False),
+        ],
+        explanation="The source states that energy is conserved.",
+        bloom=BloomLevel.UNDERSTAND,
+        difficulty=Difficulty.EASY,
+        citation_paragraphs=[0],
+        item_type=AssessmentItemType.SELECT_CHOICE,
+    )
+    stored = repository.replace_generated_drafts(
+        page=page(),
+        pipeline_version="test-v1",
+        drafts=[
+            DraftWrite(
+                position=0,
+                concept=Concept(
+                    label="Energy conservation",
+                    description="Energy changes form without disappearing.",
+                    source_paragraphs=[0],
+                ),
+                raw=item,
+                critique=Critique(
+                    issues=["Wording was loose."], revision_required=True
+                ),
+                revised=item,
+            )
+        ],
+        llm_calls=[],
+    )
+    return stored.draft_ids[0]
+
+
+def test_a_typed_edit_cannot_change_the_item_type(tmp_path: Path) -> None:
+    """The field the dispatch reads must not be editable through the dispatch.
+
+    The branch is chosen from the stored item type, and the payload carries an
+    item type too -- so without this, one edit converts a typed item to multiple
+    choice, and the guard then refuses the JSON editor that would convert it
+    back while the form branch cannot set the field at all. The item strands,
+    holding a response specification nothing reads.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        repository = app.state.repository
+        draft_id = seed_convertible(repository)
+        before = repository.require_draft(draft_id)
+        payload = typed_payload(repository, draft_id)
+        payload["item_type"] = AssessmentItemType.MULTIPLE_CHOICE.value
+
+        response = edit(client, draft_id, item_json=json.dumps(payload))
+
+        assert refused(response, "item_type")
+        after = repository.require_draft(draft_id)
+        assert after.edit_count == before.edit_count
+        assert after.current.item_type == AssessmentItemType.SELECT_CHOICE
+
+
+def test_a_typed_edit_that_changes_only_content_still_lands(tmp_path: Path) -> None:
+    """The guards refuse two fields, not the edit. Everything else still saves."""
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        repository = app.state.repository
+        draft_id = seed_typed(repository)
+        payload = typed_payload(repository, draft_id)
+        payload["stem"] = "Order these by increasing energy, carefully."
+
+        response = edit(client, draft_id, item_json=json.dumps(payload))
+
+        assert response.status_code == 303
+        assert "error=" not in response.headers["location"]
+        after = repository.require_draft(draft_id)
+        assert after.current.stem == "Order these by increasing energy, carefully."
+        assert after.current.specialist_review_required is True
+        assert after.current.item_type == AssessmentItemType.ORDERING
 
 
 def test_hint_validation_preserves_posted_edits_and_persisted_version(

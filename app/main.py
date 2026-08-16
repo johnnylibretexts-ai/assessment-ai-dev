@@ -727,8 +727,61 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             stored = repository.require_draft(draft_id)
             current = stored.current
+            # Which editor an edit came from is the draft's answer, not the
+            # caller's. The review page offers the JSON textarea only for typed
+            # items and the field-by-field form only for multiple choice; this
+            # route used to decide by asking which field arrived, so either
+            # branch was reachable for either kind of draft. Both directions
+            # lost something silently -- the typed branch rebuilds from the
+            # payload alone and carries nothing forward, and the form branch
+            # names no item type, so it defaults back to multiple choice and
+            # drops a typed item's response specification.
+            typed_item = current.item_type != AssessmentItemType.MULTIPLE_CHOICE
+            if item_json is not None and not typed_item:
+                raise ValueError(
+                    "This is a multiple-choice item; edit it with the question "
+                    "form rather than as JSON."
+                )
+            if item_json is None and typed_item:
+                raise ValueError(
+                    f"This is a {current.item_type.value} item; edit it as JSON "
+                    "rather than with the multiple-choice form."
+                )
             if item_json is not None:
                 updated = QuestionDraft.model_validate(json.loads(item_json))
+                # This route edits content. Two of the fields the payload carries
+                # are not content, and both are refused rather than quietly
+                # restored -- overwriting them would return the same "Draft
+                # saved" notice as a real edit, which is the failure this whole
+                # guard exists to remove: a caller told it succeeded while what
+                # it asked for did not happen.
+                #
+                # `item_type` is what the dispatch above reads, so leaving it
+                # editable here would make that dispatch a one-way door: convert
+                # a typed item once and the JSON editor refuses the way back
+                # while the form branch cannot set the field at all.
+                #
+                # `specialist_review_required` is what the item asserts about the
+                # review it needs, and the approval guard reads it. A reviewer
+                # editing a question does not get to retract the requirement that
+                # a specialist look at it. Raising it is refused too, for now:
+                # the form branch offers no way to raise it either, and inventing
+                # one on a single path is a change with its own reasoning.
+                if updated.item_type != current.item_type:
+                    raise ValueError(
+                        "item_type is not editable here: this item is "
+                        f"{current.item_type.value} and the payload says "
+                        f"{updated.item_type.value}."
+                    )
+                if (
+                    updated.specialist_review_required
+                    != current.specialist_review_required
+                ):
+                    raise ValueError(
+                        "specialist_review_required is not editable here: it "
+                        f"is {current.specialist_review_required} and the "
+                        f"payload says {updated.specialist_review_required}."
+                    )
             else:
                 if None in {
                     stem,
