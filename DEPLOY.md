@@ -90,9 +90,17 @@ Neither appears in `.env.example`, deliberately — there is nothing to configur
 setting: it toggles whether sandbox pages may be used as generation sources at
 all.)
 
-**A fork that needs a different CXone scope must change those validators in
-code and re-scope the guard deliberately** — it is not an environment change,
-and it should not be made into one casually.
+**In a default deployment this never comes up.** `sandbox_sources_enabled` is
+`false`, and the CXone adapter — the only thing that enforces the pin — is
+constructed solely when that flag is on. Public LibreTexts pages, which is the
+normal generation path, go through a different adapter that does not touch CXone
+at all. So you can deploy, generate, review and publish without the pinned scope
+ever being reached.
+
+It matters only if you deliberately enable sandbox sources. **A fork that needs
+its own CXone scope must change those validators in code and re-scope the guard
+deliberately** — it is not an environment change, and it should not be made into
+one casually.
 
 Every capability ships **disabled**. That is the intended starting state:
 
