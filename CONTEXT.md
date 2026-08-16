@@ -29,6 +29,26 @@ One recorded try at a single step of a publication, kept append-only so the hist
 survives its retries.
 _Avoid_: try, run, log entry
 
+**Publication step**:
+One stage of the publish path, declared as data: its name, the state a success moves the publication
+to, and its failure disposition. The publish path is the ordered list of them. The recovery taken
+from the *unknown* state is not a step — it rejoins the sequence rather than holding a position in
+it.
+_Avoid_: stage, phase, action (that is the column a step's attempts are recorded under)
+
+**Step body**:
+The external call a publication step exists to make. Passed to the attempts module as a callable and
+left where it lives, because one interface cannot honestly cover an HTTP create, a bridge request and
+a local file write.
+_Avoid_: handler, task, operation
+
+**Failure disposition**:
+The state a publication step's failure leaves behind, declared with the step rather than decided at
+the call site. The steps deliberately disagree — an external write that may have landed is a
+different situation from a local check that wrote nothing — and declaring it is what keeps that
+disagreement visible instead of implied.
+_Avoid_: rollback, error state
+
 **Unreadable publication state**:
 A publication whose recorded state is not one this build knows. Distinct from the *unknown* state,
 which is a state this build does know and has a recovery path for. Unreadable means the record was
