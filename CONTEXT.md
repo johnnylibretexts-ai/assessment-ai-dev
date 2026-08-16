@@ -29,6 +29,13 @@ One recorded try at a single step of a publication, kept append-only so the hist
 survives its retries.
 _Avoid_: try, run, log entry
 
+**Unreadable publication state**:
+A publication whose recorded state is not one this build knows. Distinct from the *unknown* state,
+which is a state this build does know and has a recovery path for. Unreadable means the record was
+written by something else — a successor build, or a hand edit — so this build cannot say what has
+already happened to it.
+_Avoid_: unknown state (that's a different, recognised thing), invalid state, corrupt
+
 **Publication precondition**:
 A condition that must hold before a draft may be published. There is one enumerated set of them;
 each either passes or emits a blocker. This is the structural concept — *gate* is a property some
