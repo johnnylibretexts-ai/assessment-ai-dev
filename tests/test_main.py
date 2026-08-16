@@ -128,7 +128,9 @@ def seed(
     return stored.draft_ids[0]
 
 
-SPECIALIST_REFUSAL = "Confirm you have seen the specialist-review flag before approving."
+SPECIALIST_REFUSAL = (
+    "Confirm you have seen the specialist-review flag before approving."
+)
 CONFIRMATION_REFUSAL = (
     "Confirm both the Bloom level and difficulty before approving this draft."
 )

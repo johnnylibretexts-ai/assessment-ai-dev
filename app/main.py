@@ -931,8 +931,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 request,
                 draft_id,
                 error=(
-                    "Confirm you have seen the specialist-review flag "
-                    "before approving."
+                    "Confirm you have seen the specialist-review flag before approving."
                 ),
                 active_form="question_review",
                 form_values=review_values,
