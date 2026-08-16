@@ -308,6 +308,18 @@ class PublicationService:
             engine_binding=engine_binding,
         )
         publication_key = _sha256_json(key_material)
+        # The earliest point the row this publish would resume can be named: the
+        # key needs the resolved alignment, so it does not exist before the
+        # `resolve_destination` above. ADR 0003 explains why that is also the
+        # reason this cannot be a publication precondition.
+        #
+        # It has to come before the reservation rather than after it. Reserving
+        # is not the read it looks like -- the guarded form locks the draft,
+        # re-verifies every binding, and freezes computation evidence onto the
+        # row it finds -- so a refusal that waits to be handed a publication has
+        # already written, and can be pre-empted by an evidence conflict whose
+        # message says nothing about the state.
+        self._refuse_unreadable_publication_state(publication_key)
         tag = f"assessment-ai-{publication_key}"
         tags = ["assessment-ai", tag]
         if draft.current.set_key:
@@ -429,29 +441,10 @@ class PublicationService:
             return await self._continue_after_adapt(
                 publication, title=title, metadata=metadata
             )
-        # Below here the state is not a position in the sequence at all -- and
-        # `steps_after` answers `None` for two different reasons. Three
-        # recognised states resume from here (`unknown`, `pending`, `failed`); a
-        # state this build cannot read at all is refused before any of them can
-        # adopt it. Nothing is written, not even `failed`: that would overwrite
-        # a successor's state with a guess and turn this refusal into the
-        # in-place retry it exists to prevent. ADR 0003.
-        try:
-            PublicationState(publication.state)
-        except ValueError as exc:
-            # "No create request" rather than "nothing was sent to ADAPT":
-            # `resolve_destination` has already been called by this point, and a
-            # message that overstates what did not happen is the wrong thing to
-            # hand someone who is about to go and check. It matches the wording
-            # of the reservation refusal above for the same reason.
-            raise PublicationValidationError(
-                f"This publication is recorded in the state "
-                f"{publication.state!r}, which this build cannot read; no "
-                "external create request was sent to ADAPT and the record was "
-                "left as it was found. A newer build most likely wrote it, so "
-                "publishing can only continue once someone has looked at the "
-                "record."
-            ) from exc
+        # Below here the state is not a position in the sequence at all. Three
+        # recognised states arrive here -- `unknown`, `pending`, `failed` -- and
+        # a state this build cannot read reaches none of them: it was refused
+        # above, before the row was reserved.
         if publication.state == PublicationState.UNKNOWN.value:
             # Deliberately not a step: the recovery rejoins the sequence partway
             # rather than holding a place in it, so the list cannot answer for
@@ -567,6 +560,39 @@ class PublicationService:
         return await self._continue_after_adapt(
             attempt.publication, title=title, metadata=metadata
         )
+
+    def _refuse_unreadable_publication_state(self, publication_key: str) -> None:
+        """Refuse a publication recorded in a state this build cannot read.
+
+        The refusal writes nothing at all -- not even `failed`, which would
+        overwrite a successor's state with a guess, destroy the evidence an
+        operator needs, and quietly become the `failed` in-place retry that
+        republishes from the start. No publication attempt is appended either: a
+        refusal tries no step, and the log is only worth reading if every row in
+        it is a real try. ADR 0003.
+
+        Membership is asked of the enum rather than a set kept here, so a state
+        added later is readable without anyone remembering to update a guard.
+        """
+
+        existing = self._repository.find_publication_by_key(publication_key)
+        if existing is None:
+            return
+        try:
+            PublicationState(existing.state)
+        except ValueError as exc:
+            # "No external create request" rather than "nothing was sent to
+            # ADAPT": `resolve_destination` has already been called by the time
+            # the key exists, and overstating what did not happen is the wrong
+            # thing to hand someone who is about to go and check. The wording
+            # matches the reservation refusal for the same reason.
+            raise PublicationValidationError(
+                f"This publication is recorded in the state "
+                f"{existing.state!r}, which this build cannot read; no external "
+                "create request was sent to ADAPT and the record was left as it "
+                "was found. A newer build most likely wrote it, so publishing "
+                "can only continue once someone has looked at the record."
+            ) from exc
 
     async def _reconcile(
         self,

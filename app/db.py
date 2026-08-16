@@ -2590,6 +2590,22 @@ class DraftRepository:
                 reserved = False
         return self.require_publication(publication_id), reserved
 
+    def find_publication_by_key(self, publication_key: str) -> Publication | None:
+        """The row a publish with this key would resume, or None.
+
+        A plain read, unlike the two reservation methods, which lock the draft
+        and -- on the enforce path -- freeze evidence onto the row they find
+        before handing it back. The unreadable-state refusal needs to look at
+        that row without any of that happening, so it looks here.
+        """
+
+        with self._sessions() as session:
+            return session.scalar(
+                select(Publication).where(
+                    Publication.publication_key == publication_key
+                )
+            )
+
     def get_publication(self, publication_id: int) -> Publication | None:
         with self._sessions() as session:
             return session.scalar(

@@ -1617,6 +1617,81 @@ async def test_unreadable_publication_state_refuses_and_writes_nothing(
 
 
 @pytest.mark.asyncio
+async def test_unreadable_publication_state_refuses_before_the_reservation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The refusal comes before the row is reserved, not after it is handed back.
+
+    Reserving is not the read it looks like. `create_or_get_publication_guarded`
+    locks the draft, re-verifies every binding, and on the enforce path freezes
+    computation evidence *onto the row it found* before returning it -- so a
+    refusal that waits for the reservation to hand it a publication has already
+    let two things happen that ADR 0003 says must not.
+
+    A newer build that changed the evidence snapshot as well as the state raises
+    `ComputationEvidenceConflictError`, which `publish` catches and reports as
+    "changed before publication reservation" -- so the operator is told the wrong
+    thing and never learns which state blocks them, the one thing the ADR
+    requires the message to name. And where the newer build froze no evidence at
+    all, the older one inserts a `PublicationComputationEvidence` row against the
+    pre-existing publication, which is a write, from a refusal that promises
+    none.
+
+    Setting up a publishable enforce-mode draft takes the whole computation
+    evidence apparatus, so this pins the property that forecloses both instead:
+    the reservation is never reached.
+    """
+
+    config = configured_settings(tmp_path)
+    app = create_app(config)
+    fake = FakeAdapt()
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_approved(repository)
+        service = PublicationService(config, repository, fake)
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+        arguments = {
+            "publisher": "reviewer@example.org",
+            "topic_stable_id": topic.stable_id,
+            "alignment_confirmed": True,
+        }
+
+        published = await service.publish(draft_id, **arguments)
+        assert published.state == PublicationState.SUCCEEDED.value
+
+        with app.state.database.session_factory.begin() as session:
+            stored = session.get(Publication, published.id)
+            assert stored is not None
+            stored.state = "awaiting_engine_binding"
+
+        reservations: list[str] = []
+        for name in (
+            "create_or_get_publication",
+            "create_or_get_publication_guarded",
+        ):
+            original = getattr(repository, name)
+
+            def spy(
+                *args: object,
+                _name: str = name,
+                _original: object = original,
+                **kwargs: object,
+            ) -> object:
+                reservations.append(_name)
+                return _original(*args, **kwargs)  # type: ignore[operator]
+
+            monkeypatch.setattr(repository, name, spy)
+
+        with pytest.raises(PublicationValidationError) as raised:
+            await service.publish(draft_id, **arguments)
+
+        assert "awaiting_engine_binding" in str(raised.value)
+        assert reservations == []
+
+
+@pytest.mark.asyncio
 async def test_concurrent_publication_reservations_send_one_adapt_create(
     tmp_path: Path,
 ) -> None:

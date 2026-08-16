@@ -2,8 +2,9 @@
 
 **Status:** accepted and implemented (2026-08-15) via
 [#13](https://github.com/johnnylibretexts/assessment-ai-dev/issues/13). The guard is in the resume
-dispatch in `app/publishing.py`, at the point `steps_after` reports the state holds no place in the
-step list; `test_unreadable_publication_state_refuses_and_writes_nothing` pins the refusal.
+`app/publishing.py`, taken as soon as `publication_key` exists and deliberately *before* the row is
+reserved; `test_unreadable_publication_state_refuses_and_writes_nothing` and
+`test_unreadable_publication_state_refuses_before_the_reservation` pin the two halves.
 
 A publication's `state` is a plain `String(30)` with no CHECK constraint, so a value outside
 `PublicationState` is representable. The resume dispatch used to match the recognised states and let
@@ -52,6 +53,14 @@ worse than one that is stuck, because only the second kind gets noticed.
   draft, which would over-block: a row for an earlier revision has a different key, would never
   enter the dispatch, and would block the current revision forever with nothing the reviewer could
   do about it.
+- **The refusal is keyed, so it does not cover every rollback.** It looks up the row this publish
+  would resume, by `publication_key`. A rollback that changed *key material* as well as the enum —
+  the alignment, the hint snapshot, the computation decision inputs, the exporter versions — makes
+  the older build compute a different key, find no row, reserve a fresh `pending` one and publish
+  normally. That is a second ADAPT question for the same draft, which is the harm this guard is
+  named for, and the guard never fires on it. Not a regression, and not something a state check can
+  reach: a row under another key is not this publication. Worth knowing before reading the guard as
+  full rollback cover.
 - **Scope is out-of-enum only.** A recognised state whose columns contradict it already fails closed
   — `_continue_after_adapt` raises when `adapt_question_id` is missing. Closing the fall-through
   makes the publish path uniform: it refuses whenever it is confused.
