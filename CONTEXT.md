@@ -95,3 +95,22 @@ _Avoid_: approval (that's a review gate), sign-off
 **Reviewer**:
 The authenticated person acting on a draft, identified by their SSO subject.
 _Avoid_: user, author, editor
+
+**Computation specialist**:
+The allowlisted, identified person whose *attestation* binds to an exact validation-report hash.
+"Specialist" unqualified means this one — the word is earned here by the allowlist and the binding,
+and belongs to no other role on the review page.
+_Avoid_: specialist (unqualified, when the *specialist-review flag* is meant), reviewer
+
+**Model self-assessment**:
+A field the generator emits about its own output. It may inform a *reviewer*; it may never, on its
+own, satisfy or block a *publication precondition* — nothing can verify it and no human can
+override it.
+_Avoid_: confidence, flag, self-report
+
+**Specialist-review flag**:
+The *model self-assessment* that an item is clinical or parameterized and warrants specialist
+attention. Set only at generation and editable by nobody. It is answered by an acknowledgement on
+the review form, which is not recorded: no column, no *reviewer*, no timestamp. It refuses an
+approval until it is seen; it establishes nothing about who saw it.
+_Avoid_: specialist review (implies a recorded review), specialist gate, specialist confirmation

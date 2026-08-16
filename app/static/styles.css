@@ -184,6 +184,10 @@ code { padding: 2px 5px; border-radius: 5px; background: #eef3f7; }
 .computation-attestation { margin-top: 18px; padding: 15px; border: 1px solid #d9b650; border-radius: 8px; background: #fff; }
 .computation-attestation textarea { margin: 7px 0 12px; }
 .review-form { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }
+/* Reads as a notice, not as a peer of the bordered required-checks fieldset. */
+.specialist-flag { margin: 0 0 18px; padding: 12px 14px; border-left: 4px solid var(--warning); background: var(--warning-bg); }
+.specialist-flag .check { margin: 0; }
+.specialist-flag .help { margin: 8px 0 0; }
 fieldset { margin: 0 0 18px; border: 1px solid var(--line); border-radius: 9px; }
 .check { display: grid; grid-template-columns: auto 1fr; gap: 10px; margin: 12px 0; font-weight: 400; }
 .check input { width: 19px; height: 19px; }

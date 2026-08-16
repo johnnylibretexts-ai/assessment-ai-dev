@@ -761,12 +761,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 # a typed item once and the JSON editor refuses the way back
                 # while the form branch cannot set the field at all.
                 #
-                # `specialist_review_required` is what the item asserts about the
-                # review it needs, and the approval guard reads it. A reviewer
-                # editing a question does not get to retract the requirement that
-                # a specialist look at it. Raising it is refused too, for now:
-                # the form branch offers no way to raise it either, and inventing
-                # one on a single path is a change with its own reasoning.
+                # `specialist_review_required` is a model self-assessment: the
+                # generator's own claim about the item, which the approval
+                # acknowledgement reads. It is stored -- it is part of the
+                # draft's content, and it is the reviewer's *answer* to it that
+                # is recorded nowhere. A reviewer editing a question does not
+                # get to retract the claim. Raising it is refused too: the form
+                # branch offers no way to raise it either, and inventing one on
+                # a single path is a change with its own reasoning. Making it
+                # human-raisable is the precondition for ever persisting the
+                # acknowledgement -- see ADR 0005.
                 if updated.item_type != current.item_type:
                     raise ValueError(
                         "item_type is not editable here: this item is "
@@ -899,6 +903,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 form_values=review_values,
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             )
+        # An acknowledgement, not a review gate: `specialist_confirmed` is
+        # deliberately not persisted and is not passed to `ReviewDecision`
+        # below. Refusing the approval is how the generator's flag is put in
+        # front of the reviewer; it establishes nothing about who they are, and
+        # the wording must not imply otherwise. ADR 0005.
         if (
             decision == ReviewStatus.READY_TO_PUBLISH.value
             and stored_draft.current.specialist_review_required
@@ -907,7 +916,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return await render_draft_page(
                 request,
                 draft_id,
-                error="A qualified specialist must confirm this item before approval.",
+                error=(
+                    "Confirm you have seen the specialist-review flag "
+                    "before approving."
+                ),
                 active_form="question_review",
                 form_values=review_values,
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

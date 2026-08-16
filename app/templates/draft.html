@@ -679,18 +679,26 @@
         </section>
       {% else %}
         <form method="post" action="/drafts/{{ draft.id }}/review" class="review-form" data-question-review-form>
+          {# Deliberately outside the required-checks fieldset. Nothing stores
+             this, so it asserts no qualification and leaves no audit record;
+             its whole job is to put the generator's flag in front of the
+             reviewer before they approve. Unticked on every fresh render is
+             correct — there is no stored value to re-check from. ADR 0005. #}
+          {% if draft.specialist_review_required %}
+            <div class="specialist-flag">
+              <label class="check">
+                <input type="checkbox" name="specialist_confirmed" value="true" {% if active_form == 'question_review' and form_values.get('specialist_confirmed') %}checked{% endif %}>
+                <span><strong>This item is flagged for specialist review.</strong> The generator marked it as clinical or parameterized. Confirm you have seen this before approving.</span>
+              </label>
+              <p class="help">This acknowledgement is not recorded. It is not a specialist sign-off, and nothing downstream reads it.</p>
+            </div>
+          {% endif %}
           <fieldset>
             <legend>Required human checks</legend>
             <label class="check">
               <input type="checkbox" name="bloom_confirmed" value="true" {% if active_form == 'question_review' %}{% if form_values.get('bloom_confirmed') %}checked{% endif %}{% elif draft.bloom_confirmed %}checked{% endif %}>
               <span><strong>Bloom level:</strong> {{ draft.bloom }} is accurate for the work the learner must do.</span>
             </label>
-            {% if draft.specialist_review_required %}
-              <label class="check">
-                <input type="checkbox" name="specialist_confirmed" value="true" {% if active_form == 'question_review' and form_values.get('specialist_confirmed') %}checked{% endif %}>
-                <span><strong>Specialist review:</strong> I am qualified to verify this clinical or parameterized item and its scoring behavior.</span>
-              </label>
-            {% endif %}
             <label class="check">
               <input type="checkbox" name="difficulty_confirmed" value="true" {% if active_form == 'question_review' %}{% if form_values.get('difficulty_confirmed') %}checked{% endif %}{% elif draft.difficulty_confirmed %}checked{% endif %}>
               <span><strong>Difficulty:</strong> {{ draft.difficulty }} is accurate for the intended learner.</span>
