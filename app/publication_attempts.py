@@ -221,6 +221,30 @@ PUBLICATION_STEPS: tuple[PublicationStep, ...] = (
 )
 
 
+def steps_after(state: str) -> tuple[PublicationStep, ...] | None:
+    """The steps still to run for a publication in this state.
+
+    A publication's state names the step that put it there, so everything after
+    that step in the list is what has not run. This is the whole reason the order
+    is data: resume reads it here instead of restating the sequence in a chain of
+    `if`s that has to be kept in step with the forward path by hand.
+
+    `None` means no step reaches this state, so it is not a position in the
+    sequence and where it resumes is not this function's question. That covers
+    `pending` (reserved, nothing run yet), `failed`, `unknown` -- whose recovery
+    rejoins the sequence partway rather than occupying a place in it -- and any
+    state this build cannot read at all.
+
+    An empty tuple is a different answer from `None`: the last step reached this
+    state, and the publication is finished.
+    """
+
+    for index, step in enumerate(PUBLICATION_STEPS):
+        if step.reaches is not None and step.reaches.value == state:
+            return PUBLICATION_STEPS[index + 1 :]
+    return None
+
+
 def _disposition(
     step: PublicationStep,
     publication: Publication,
@@ -237,12 +261,20 @@ def _disposition(
         return step.leaves_when_ambiguous
     leaves = step.leaves_on_failure
     if isinstance(leaves, RetainsCurrentState):
-        # Unreachable today: every path into a retaining step arrives in one
-        # of two recognised states. If one ever does not, `PublicationState(...)`
-        # raises rather than inventing a state to keep. That is this step
-        # declining to guess -- not ADR 0003's refusal, which is about the resume
-        # dispatch and raises a `PublicationValidationError` naming the state.
-        return PublicationState(publication.state)
+        try:
+            return PublicationState(publication.state)
+        except ValueError as exc:
+            # Unreachable today: every path into a retaining step arrives in one
+            # of two recognised states. This is only the step declining to
+            # invent a state to keep -- ADR 0003's refusal is a different thing,
+            # belongs to the resume dispatch, and lands with #13. Raised as a
+            # contract error rather than let out as the bare `ValueError`, which
+            # the publish route would render to the reviewer as a 422 reading
+            # "not a valid PublicationState".
+            raise PublicationStepContractError(
+                f"the {step.action} step retains the state it found, and "
+                f"{publication.state!r} is not one this build can read"
+            ) from exc
     return leaves
 
 
@@ -301,13 +333,24 @@ async def run_publication_step(
                 "report values or a response"
             )
         return RecordedAttempt(publication=publication, succeeded=True)
-    moved = records.update_publication(
-        publication.id,
-        state=step.reaches,
-        error_code=None,
-        error_message=None,
-        **dict(outcome.values),
-    )
+    try:
+        moved = records.update_publication(
+            publication.id,
+            state=step.reaches,
+            error_code=None,
+            error_message=None,
+            **dict(outcome.values),
+        )
+    except ValueError as exc:
+        # The repository refuses a column it does not allow a publication update
+        # to name. Same reason as above for not letting it out as a `ValueError`
+        # -- but note what is already lost when this fires: the external call
+        # landed, and the attempt row is written after this, so the log has no
+        # record that it happened. Whoever hits this has to look at the far end.
+        raise PublicationStepContractError(
+            f"the {step.action} step body reported values the repository will "
+            f"not write: {exc}"
+        ) from exc
     records.record_publication_attempt(
         publication.id,
         action=step.action,

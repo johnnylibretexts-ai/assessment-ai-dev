@@ -30,7 +30,12 @@ from app.engines import IMathASQuestion
 from app.main import create_app
 from app.pipeline import ReviewService
 from app.parameterized import compile_parameterized_item
+from app import publication_attempts
 from app import publishing as publishing_module
+from app.publication_attempts import (
+    PublicationStep,
+    PublicationStepContractError,
+)
 from app.publishing import PublicationService, PublicationValidationError
 from app.qti import QTIExportError
 from app.schemas import (
@@ -1342,6 +1347,125 @@ async def test_hints_synced_publication_resumes_without_a_second_adapt_create(
             "qti_finalize",
             "qti_finalize",
         ]
+
+
+@pytest.mark.asyncio
+async def test_a_resume_refuses_to_skip_a_step_declared_before_finalization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The payoff for resume reading the list rather than restating it.
+
+    A sixth step declared between the ADAPT create and QTI finalization lands in
+    what a publication in `adapt_created` still owes. The code that continues
+    after a create has no way to run it, and the failure worth preventing is the
+    silent one: the publication would resume, finalize, and report success with
+    that step never run.
+
+    Before the list drove resume, this desync had no symptom at all -- the
+    resume branch matched on a hardcoded set of states and simply would not have
+    mentioned the new step.
+    """
+
+    blocked_storage = tmp_path / "blocked-sixth-step-storage"
+    blocked_storage.write_text("not a directory", encoding="utf-8")
+    config = configured_settings(tmp_path).model_copy(
+        update={"qti_storage_dir": blocked_storage}
+    )
+    app = create_app(config)
+    fake = FakeAdapt()
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_approved(repository)
+        service = PublicationService(config, repository, fake)
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+        arguments = {
+            "publisher": "reviewer@example.org",
+            "topic_stable_id": topic.stable_id,
+            "alignment_confirmed": True,
+        }
+
+        held = await service.publish(draft_id, **arguments)
+        assert held.state == PublicationState.ADAPT_CREATED.value
+        blocked_storage.unlink()
+
+        sixth = PublicationStep(
+            action="engine_receipt_check",
+            reaches=None,
+            leaves_on_failure=PublicationState.FAILED,
+        )
+        declared = publication_attempts.PUBLICATION_STEPS
+        after_create = [step.action for step in declared].index("adapt_create") + 1
+        monkeypatch.setattr(
+            publication_attempts,
+            "PUBLICATION_STEPS",
+            declared[:after_create] + (sixth,) + declared[after_create:],
+        )
+
+        with pytest.raises(PublicationStepContractError, match="engine_receipt_check"):
+            await service.publish(draft_id, **arguments)
+
+        # The refusal is before any work: still no QTI, still one create.
+        assert repository.require_publication(held.id).qti_path is None
+        assert fake.create_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_an_unrunnable_step_is_named_before_the_missing_adapt_question_id(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two guards whose order decides which one a reader is sent chasing.
+
+    A step declared *ahead* of the ADAPT create leaves a resumed publication
+    owing that create, so its question ID is legitimately absent. Checking for
+    the ID first answers with "the ADAPT question ID is required", which sends
+    whoever reads it to ADAPT to look for a problem that is really a step this
+    method has no way to run.
+
+    The publication here is fabricated -- today no step reaches `pending` and no
+    resume arrives without a question ID, which is exactly why the two guards
+    can be reordered without anything else noticing.
+    """
+
+    config = configured_settings(tmp_path)
+    app = create_app(config)
+    fake = FakeAdapt()
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_approved(repository)
+        service = PublicationService(config, repository, fake)
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+        arguments = {
+            "publisher": "reviewer@example.org",
+            "topic_stable_id": topic.stable_id,
+            "alignment_confirmed": True,
+        }
+
+        published = await service.publish(draft_id, **arguments)
+        with app.state.database.session_factory.begin() as session:
+            stored = session.get(Publication, published.id)
+            assert stored is not None
+            stored.state = PublicationState.PENDING.value
+            stored.adapt_question_id = None
+
+        earlier = PublicationStep(
+            action="destination_precheck",
+            reaches=PublicationState.PENDING,
+            leaves_on_failure=PublicationState.FAILED,
+        )
+        declared = publication_attempts.PUBLICATION_STEPS
+        before_create = [step.action for step in declared].index("adapt_create")
+        monkeypatch.setattr(
+            publication_attempts,
+            "PUBLICATION_STEPS",
+            declared[:before_create] + (earlier,) + declared[before_create:],
+        )
+
+        with pytest.raises(PublicationStepContractError, match="adapt_create"):
+            await service.publish(draft_id, **arguments)
 
 
 @pytest.mark.asyncio
