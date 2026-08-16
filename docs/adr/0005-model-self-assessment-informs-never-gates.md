@@ -87,6 +87,41 @@ misreading, at the moment and place someone would make it.
     now measured: **1 of the 380 corpus drafts** carries it, and it is not the same item as the one
     carrying `specialist_review_required` (overlap: zero). So the note is rare enough to mean
     something when it appears, and it covers an item the specialist flag does not.
+- **Reviewer-raised escalation was asked for, and declined (#20, 2026-08-16).** The flag being
+  generator-only cuts both ways, and #20 filed the other edge: a reviewer who opens an item and
+  recognises it needs a subject specialist cannot say so in the field either. The case for allowing
+  it was real — raising is strictly safer than clearing, since it *adds* a review requirement rather
+  than removing one, so an asymmetric rule would restore escalation without reopening #19's bypass.
+  Three things closed it:
+  - **Nothing would receive the escalation.** There is no assignment, no notification, no queue
+    filter and no status for an item awaiting a specialist; `ReviewStatus` is four values and none
+    of them says this. So the reviewer who raises the flag is the one standing in front of the
+    acknowledgement it arms, and can supply it in the same session. Escalation without routing is a
+    speed bump one installs for oneself, and building the routing is a far larger change than the
+    one #20 asked for, with no more demand behind it.
+  - **The channel already exists, and is stronger.** Rejecting the revision with `reviewer_notes` is
+    persisted, attributed through `last_reviewed_by`, and blocks publication outright — where the
+    flag only demands a tick that establishes nothing. So the accurate statement of the gap is not
+    "a reviewer has no way to say so"; it is "no way to say so *as that boolean*", which is a much
+    smaller thing to be missing.
+  - **The field could not carry the claim.** It is defined as a model self-assessment. Let a human
+    write to it and `specialist_review_required=True` no longer says who asserted it, which is the
+    distinction the first argument of this ADR rests on. If escalation is ever built it takes its
+    own field, name and provenance rather than overloading this one; a discriminator bolted onto
+    this field would be more work than a new one, for less clarity.
+
+  Unlike #11, the fix is **not** a sentence on the page. That one was needed because the interface
+  invited a misreading — a control recording nothing, dressed as a peer gate. An absent control
+  invites nothing, and the specialist notice renders only on items already flagged, which is not the
+  audience the gap describes. `needs_human_verification` is decided-no on its own terms rather than
+  by extension: it gates nothing, so raising it adds no requirement at all and only changes what the
+  page asserts about provenance — the safety argument above does not transfer to it.
+
+  Refusing the raise is now pinned by `test_a_typed_edit_cannot_raise_the_specialist_requirement`.
+  Both directions come off one comparison in the edit route, so narrowing it to clear-no/raise-yes
+  previously passed the entire suite; it now fails. Reopens if a human reviewer asks, or if an
+  accreditation or clinical-safety process needs the record — the build is the bullet below, plus
+  the routing that bullet does not mention.
 - **The door to persistence is not nailed shut, and its hinges are named.** If an accreditation or
   clinical-safety process ever needs this record, the work is: make the flag human-raisable, decide
   who counts as a specialist (the allowlist already exists for computation), add the column with
