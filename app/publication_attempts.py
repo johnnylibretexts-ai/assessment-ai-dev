@@ -58,9 +58,10 @@ class PublicationStep:
     """
 
     action: str
-    # None for a step that advances nothing: a check either passes, leaving the
-    # publication exactly where it was and appending no attempt, or it fails.
-    # Two of the five are that shape.
+    # None for a step that advances nothing: it passes, leaving the publication
+    # exactly where it was, or it fails. Two of the five are that shape. This
+    # says only whether the step moves the publication on -- every step records
+    # its try either way, which is what `reaches=None` used to also decide.
     reaches: PublicationState | None
     leaves_on_failure: PublicationState | RetainsCurrentState
     # Only for a step whose external write may have landed without saying so.
@@ -160,10 +161,10 @@ class PublicationRecords(Protocol):
 # this sequence partway rather than holding a position in it.
 QTI_PREFLIGHT = PublicationStep(
     action="qti_preflight",
-    # A check, not an advance: passing leaves the publication where it was and
-    # writes no attempt. Preserved from the code it replaces; the append-only
-    # log arguably wants the passing try in it, which is a deliberate change to
-    # make rather than a side effect of moving the step.
+    # A check, not an advance: passing leaves the publication where it was, and
+    # the try is recorded under that same state. It used to record nothing --
+    # changed deliberately, on its own, once the step declarations had made the
+    # silence visible.
     reaches=None,
     # Nothing external has happened yet, so `failed` costs nothing: the retry
     # re-enters at the top and re-runs the check.
@@ -172,8 +173,9 @@ QTI_PREFLIGHT = PublicationStep(
 
 IMATHAS_CREATE = PublicationStep(
     action="imathas_create",
-    # The other silent step. What it produces is an engine question ID bound for
-    # the ADAPT payload, which is neither a publication column nor evidence.
+    # The other step that advances nothing. What it produces is an engine
+    # question ID bound for the ADAPT payload -- no publication column holds it,
+    # so its attempt row is the only place it is ever written down.
     reaches=None,
     # `failed` even though the bridge write may have landed, and that is not the
     # oversight it looks like: the bridge keys on `publication_key`, so a retry
@@ -245,6 +247,32 @@ def steps_after(state: str) -> tuple[PublicationStep, ...] | None:
     return None
 
 
+def _state_it_is_in(
+    step: PublicationStep, publication: Publication, because: str
+) -> PublicationState:
+    """The state the publication already holds, for a step that names no other.
+
+    Two callers need it and neither may invent one: the retaining disposition,
+    and a step that advances nothing recording the try it just made.
+
+    Unreachable today -- since ADR 0003 `publish` refuses an unreadable state
+    before it even reserves the row, and every other path arrives in a state
+    some step reached. Reaching here means a state arrived from somewhere that
+    check does not cover, and naming that beats writing a state nobody chose.
+    Raised as a contract error rather than let out as the bare `ValueError`,
+    which the publish route would render to the reviewer as a 422 reading "not
+    a valid PublicationState" and blame them for it.
+    """
+
+    try:
+        return PublicationState(publication.state)
+    except ValueError as exc:
+        raise PublicationStepContractError(
+            f"the {step.action} step {because}, and {publication.state!r} is "
+            "not one this build can read"
+        ) from exc
+
+
 def _disposition(
     step: PublicationStep,
     publication: Publication,
@@ -261,21 +289,7 @@ def _disposition(
         return step.leaves_when_ambiguous
     leaves = step.leaves_on_failure
     if isinstance(leaves, RetainsCurrentState):
-        try:
-            return PublicationState(publication.state)
-        except ValueError as exc:
-            # Unreachable today: every path into a retaining step arrives in one
-            # of two recognised states, and since ADR 0003 `publish` refuses an
-            # unreadable state before it even reserves the row. This is only the
-            # step declining to invent a state to keep -- that refusal is a
-            # different thing and belongs to `publish`. Raised as a
-            # contract error rather than let out as the bare `ValueError`, which
-            # the publish route would render to the reviewer as a 422 reading
-            # "not a valid PublicationState".
-            raise PublicationStepContractError(
-                f"the {step.action} step retains the state it found, and "
-                f"{publication.state!r} is not one this build can read"
-            ) from exc
+        return _state_it_is_in(step, publication, "retains the state it found")
     return leaves
 
 
@@ -326,13 +340,25 @@ async def run_publication_step(
             succeeded=False,
         )
     if step.reaches is None:
-        if outcome.values or outcome.response is not None:
-            # There is no write to hang them on, and discarding them would lose
-            # evidence the body meant to keep.
+        if outcome.values:
+            # A response is evidence and the attempt row carries it. Values are
+            # columns on the publication, and this branch makes no write to put
+            # them in -- so discarding them would lose something the body meant
+            # to persist, and the mismatch is named instead.
             raise PublicationStepContractError(
                 f"the {step.action} step reaches no state, so its body may not "
-                "report values or a response"
+                "report values"
             )
+        records.record_publication_attempt(
+            publication.id,
+            action=step.action,
+            resulting_state=_state_it_is_in(
+                step,
+                publication,
+                "advances nothing, so it records the try under the state it found",
+            ),
+            response=outcome.response,
+        )
         return RecordedAttempt(publication=publication, succeeded=True)
     try:
         moved = records.update_publication(

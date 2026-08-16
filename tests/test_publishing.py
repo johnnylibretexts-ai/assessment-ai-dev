@@ -993,6 +993,7 @@ async def test_qualification_canary_publishes_approved_hints_with_flag_false(
     assert fake.hint_payload is not None
     assert len(fake.hint_payload["ladder"]["rungs"]) == 3
     assert [attempt.action for attempt in persisted.attempts] == [
+        "qti_preflight",
         "adapt_create",
         "adapt_hint_sync",
         "qti_finalize",
@@ -1083,22 +1084,25 @@ async def test_failed_imathas_create_fails_before_any_adapt_create(
         assert failed.adapt_question_id is None
         assert fake.create_calls == 0
         persisted = repository.require_publication(failed.id)
-        assert [attempt.action for attempt in persisted.attempts] == ["imathas_create"]
-        assert persisted.attempts[0].resulting_state == PublicationState.FAILED.value
+        assert [attempt.action for attempt in persisted.attempts] == [
+            "qti_preflight",
+            "imathas_create",
+        ]
+        assert persisted.attempts[1].resulting_state == PublicationState.FAILED.value
 
 
 @pytest.mark.asyncio
-async def test_imathas_question_id_reaches_the_adapt_payload_and_records_nothing(
+async def test_imathas_question_id_reaches_the_adapt_payload_and_its_attempt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The success half of the bridge step, which is a value and not a state.
+    """The success half of the bridge step: a value, a row, and no state move.
 
-    The engine question ID is the one thing a step produces that is neither a
-    publication column nor attempt evidence: it goes straight into the ADAPT
-    payload. So this pins the value arriving, and pins the deliberate silence
-    around it -- a successful bridge create writes no attempt row and moves no
-    state, unlike every other step here.
+    The engine question ID goes straight into the ADAPT payload, and no
+    publication column holds it -- so its attempt row is the only durable record
+    that the bridge was called at all, or of what it made. This pins the value
+    arriving at the payload and the evidence arriving at the log, while the
+    publication stays exactly where it was.
 
     The bridge client is replaced at its construction site rather than on the
     built service, so the service still wires its own collaborator.
@@ -1150,9 +1154,14 @@ async def test_imathas_question_id_reaches_the_adapt_payload_and_records_nothing
         assert fake.payloads[0]["technology"] == "imathas"
         persisted = repository.require_publication(published.id)
         assert [attempt.action for attempt in persisted.attempts] == [
+            "qti_preflight",
+            "imathas_create",
             "adapt_create",
             "qti_finalize",
         ]
+        bridge_attempt = persisted.attempts[1]
+        assert bridge_attempt.response_json == {"question_id": 8801, "created": True}
+        assert bridge_attempt.resulting_state == PublicationState.PENDING.value
 
 
 @pytest.mark.asyncio
@@ -1342,6 +1351,9 @@ async def test_hints_synced_publication_resumes_without_a_second_adapt_create(
         assert len(repository.require_draft(draft_id).publications) == 1
         persisted = repository.require_publication(completed.id)
         assert [attempt.action for attempt in persisted.attempts] == [
+            # One preflight, not two: a resume re-enters at the step after the
+            # one the state names, so it never runs the check again.
+            "qti_preflight",
             "adapt_create",
             "adapt_hint_sync",
             "qti_finalize",
@@ -1536,12 +1548,13 @@ async def test_failed_hint_sync_holds_adapt_created_and_retries_only_the_rungs(
         assert len(repository.require_draft(draft_id).publications) == 1
         persisted = repository.require_publication(completed.id)
         assert [attempt.action for attempt in persisted.attempts] == [
+            "qti_preflight",
             "adapt_create",
             "adapt_hint_sync",
             "adapt_hint_sync",
             "qti_finalize",
         ]
-        held_attempt = persisted.attempts[1]
+        held_attempt = persisted.attempts[2]
         assert held_attempt.resulting_state == PublicationState.ADAPT_CREATED.value
         assert held_attempt.error_code == "adapt_hint_sync_failed"
 
@@ -1609,8 +1622,10 @@ async def test_unreadable_publication_state_refuses_and_writes_nothing(
         assert after.error_message is None
         assert after.adapt_question_id == before.adapt_question_id
         assert len(repository.require_draft(draft_id).publications) == 1
-        # A refusal tries no step, so the append-only log gains no row.
+        # A refusal tries no step, so the append-only log gains no row: these
+        # are the rows the earlier successful publication left, unchanged.
         assert [attempt.action for attempt in after.attempts] == [
+            "qti_preflight",
             "adapt_create",
             "qti_finalize",
         ]

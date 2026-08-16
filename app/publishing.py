@@ -486,10 +486,12 @@ class PublicationService:
                 async def create_engine_question() -> StepOutcome:
                     """The step body: the bridge create.
 
-                    The engine question ID is the one thing a step produces that
-                    is neither a publication column nor attempt evidence -- it
-                    goes into the ADAPT payload -- so it is bound here instead of
-                    carried through a module that has nowhere to put it.
+                    The engine question ID goes into the ADAPT payload, so it is
+                    bound here rather than carried through a module that has no
+                    column to put it in. It is also reported as evidence: no
+                    publication column holds it, so the attempt row is the only
+                    place a later reader can learn which question the bridge
+                    made, or that it was called at all.
                     """
 
                     nonlocal technology_id
@@ -504,7 +506,12 @@ class PublicationService:
                     except EnginePublishingError as exc:
                         return StepFailed(code=exc.code, message=str(exc))
                     technology_id = engine_question.question_id
-                    return StepSucceeded()
+                    return StepSucceeded(
+                        response={
+                            "question_id": engine_question.question_id,
+                            "created": engine_question.created,
+                        }
+                    )
 
                 engine = await run_publication_step(
                     self._repository,

@@ -29,6 +29,7 @@ from app.db import Publication, PublicationState
 from app.publication_attempts import (
     ADAPT_CREATE,
     ADAPT_HINT_SYNC,
+    IMATHAS_CREATE,
     PUBLICATION_STEPS,
     QTI_FINALIZE,
     QTI_PREFLIGHT,
@@ -357,14 +358,18 @@ async def test_an_ambiguous_report_a_step_cannot_answer_is_refused() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_step_that_reaches_no_state_writes_nothing_when_it_passes() -> None:
-    """Two of the five steps are checks, not advances, and stay silent.
+async def test_a_step_that_advances_nothing_still_records_the_try() -> None:
+    """Two of the five steps are checks rather than advances. They still count.
 
-    A preflight that passes leaves the publication exactly where it was and
-    appends no attempt -- so `reaches` is None, and the module writes neither
-    row. Preserved rather than corrected: the append-only log arguably wants the
-    passing try in it, which is a change to make deliberately and not as a side
-    effect of moving the step.
+    `reaches` says whether a step moves the publication on, and that is now all
+    it says. A preflight that passes is a try that happened, and the log is only
+    worth reading as a history if every real try is a row in it -- so the module
+    appends one and moves no state.
+
+    The state it records is the one the publication was already in. That is not
+    a placeholder for a missing answer: `resulting_state` means the state the
+    publication is in *after* this try, which is what the column already holds
+    for every advance and every failure.
     """
 
     repository = RecordingRepository(publication_at(PublicationState.PENDING))
@@ -378,16 +383,66 @@ async def test_a_step_that_reaches_no_state_writes_nothing_when_it_passes() -> N
 
     assert attempt.succeeded
     assert attempt.publication.state == PublicationState.PENDING.value
-    assert repository.calls == []
+    assert repository.calls == [
+        RecordedCall(
+            "record_publication_attempt",
+            17,
+            {
+                "action": "qti_preflight",
+                "resulting_state": PublicationState.PENDING,
+                "error_code": None,
+                "error_message": None,
+                "response": None,
+            },
+        ),
+    ]
 
 
 @pytest.mark.asyncio
-async def test_a_silent_step_refuses_a_body_that_earned_something() -> None:
-    """Values with nowhere to go are a mismatch, not something to discard.
+async def test_a_step_that_advances_nothing_keeps_the_evidence_it_reports() -> None:
+    """A step with no state to reach still has a row to hang evidence on.
 
-    A step declaring no state to reach has no write to attach a column or a
-    response to. Dropping them would lose evidence a body meant to record, so
-    the mismatch between declaration and body is named instead.
+    The bridge create is the case this exists for: it produces an engine
+    question ID that is stored in no publication column anywhere, so without
+    this the log says the bridge was called and never says what it made. The
+    attempt row already has `response_json`, so the evidence costs nothing but
+    the decision to keep it.
+    """
+
+    repository = RecordingRepository(publication_at(PublicationState.PENDING))
+
+    attempt = await run_publication_step(
+        repository,
+        repository.publication,
+        IMATHAS_CREATE,
+        body_returning(StepSucceeded(response={"question_id": 8801})),
+    )
+
+    assert attempt.succeeded
+    assert attempt.publication.state == PublicationState.PENDING.value
+    assert repository.calls == [
+        RecordedCall(
+            "record_publication_attempt",
+            17,
+            {
+                "action": "imathas_create",
+                "resulting_state": PublicationState.PENDING,
+                "error_code": None,
+                "error_message": None,
+                "response": {"question_id": 8801},
+            },
+        ),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_step_that_advances_nothing_refuses_columns_to_write() -> None:
+    """Values are still a mismatch: there is no state write to carry them.
+
+    A response is evidence and belongs on the attempt. Values are columns on the
+    publication, and a step that moves the publication nowhere makes no write to
+    put them in -- so discarding them silently would lose something the body
+    meant to persist, and the mismatch is named instead.
     """
 
     repository = RecordingRepository(publication_at(PublicationState.PENDING))
@@ -397,7 +452,7 @@ async def test_a_silent_step_refuses_a_body_that_earned_something() -> None:
             repository,
             repository.publication,
             QTI_PREFLIGHT,
-            body_returning(StepSucceeded(response={"validated": True})),
+            body_returning(StepSucceeded(values={"qti_sha256": "abc"})),
         )
 
     assert repository.calls == []
