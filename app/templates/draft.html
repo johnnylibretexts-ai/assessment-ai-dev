@@ -669,6 +669,17 @@
         </section>
       {% endif %}
 
+      {# Read-only, and outside the review form on purpose: it belongs to the
+         item rather than to the pending approval, so it stays visible after the
+         question is approved. No input, no name, nothing submitted and nothing
+         stored -- it informs, and that is the whole of it. ADR 0005. #}
+      {% if draft.needs_human_verification %}
+        <p class="needs-verification-note">
+          <strong>The generator flagged this item as needing human verification.</strong>
+          That is the model's assessment of its own output, shown here for information. Reading it is not recorded, and it does not affect approval or publication.
+        </p>
+      {% endif %}
+
       {% if draft.status == 'ready_to_publish' %}
         <section class="approval-summary" aria-labelledby="question-approval-heading">
           <h3 id="question-approval-heading">Question approved</h3>

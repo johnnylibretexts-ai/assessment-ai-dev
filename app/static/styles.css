@@ -188,6 +188,10 @@ code { padding: 2px 5px; border-radius: 5px; background: #eef3f7; }
 .specialist-flag { margin: 0 0 18px; padding: 12px 14px; border-left: 4px solid var(--warning); background: var(--warning-bg); }
 .specialist-flag .check { margin: 0; }
 .specialist-flag .help { margin: 8px 0 0; }
+/* Deliberately quieter than the specialist flag above: neutral rather than
+   warning-toned, because there is nothing here to do. */
+.needs-verification-note { margin: 24px 0 0; padding: 11px 14px; border-left: 3px solid #aebbc8; background: var(--canvas); color: var(--muted); font-size: .9rem; }
+.needs-verification-note strong { color: var(--ink); font-weight: 750; }
 fieldset { margin: 0 0 18px; border: 1px solid var(--line); border-radius: 9px; }
 .check { display: grid; grid-template-columns: auto 1fr; gap: 10px; margin: 12px 0; font-weight: 400; }
 .check input { width: 19px; height: 19px; }

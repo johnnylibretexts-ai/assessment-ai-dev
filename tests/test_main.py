@@ -90,12 +90,20 @@ def seed(
     source_page: NormalizedPage | None = None,
     *,
     specialist: bool = False,
+    verification: bool = False,
 ) -> int:
-    """One reviewable draft. `specialist` arms the specialist-review guard."""
+    """One reviewable draft.
+
+    `specialist` arms the specialist-review guard. `verification` sets the
+    sibling self-assessment, which arms nothing at all -- it is read only by
+    the note on the review page, and that asymmetry is the point of it.
+    """
 
     revised = question()
     if specialist:
         revised = revised.model_copy(update={"specialist_review_required": True})
+    if verification:
+        revised = revised.model_copy(update={"needs_human_verification": True})
     stored = repository.replace_generated_drafts(
         page=source_page or page(),
         pipeline_version="test-v1",
@@ -120,7 +128,9 @@ def seed(
     return stored.draft_ids[0]
 
 
-SPECIALIST_REFUSAL = "Confirm you have seen the specialist-review flag before approving."
+SPECIALIST_REFUSAL = (
+    "Confirm you have seen the specialist-review flag before approving."
+)
 CONFIRMATION_REFUSAL = (
     "Confirm both the Bloom level and difficulty before approving this draft."
 )
@@ -892,6 +902,90 @@ def test_a_specialist_confirmation_is_recorded_in_no_column(tmp_path: Path) -> N
     ]
 
 
+def test_the_verification_note_says_the_generator_asserted_it(tmp_path: Path) -> None:
+    """`needs_human_verification` reaches a human, and says whose claim it is.
+
+    The field was emitted on every generated item, carried across every edit,
+    and read by nothing: not in the view dict, so the template could not see
+    it, so no reviewer has ever been shown it. A self-assessment that informs
+    nobody is the same defect as an acknowledgement that records nothing, one
+    step further along -- and this one costs generation tokens to produce.
+
+    Attribution is load-bearing. Unattributed, the sentence reads as the
+    service's own judgement that the item is doubtful; attributed, it is what
+    it actually is, which is the generator's opinion of its own output. The
+    assertion below pins the subject of the sentence, not just its keywords.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        detail = client.get(f"/drafts/{seed(app.state.repository, verification=True)}")
+
+        assert detail.status_code == 200
+        assert "The generator flagged this item as needing human verification." in (
+            detail.text
+        )
+        # A note, not a control. Nothing to tick means nothing submitted, which
+        # is what keeps a reader from inferring that reading it was recorded.
+        assert 'name="needs_human_verification"' not in detail.text
+        assert "needs-verification-note" in detail.text
+
+    with TestClient(create_app(settings(tmp_path / "b"))) as client:
+        unflagged = client.get(f"/drafts/{seed(client.app.state.repository)}")
+
+        assert "needing human verification" not in unflagged.text
+
+
+def test_the_verification_flag_leaves_approval_alone(tmp_path: Path) -> None:
+    """The test that matters: this stayed a note.
+
+    Its sibling `specialist_review_required` does block an approval, and sits
+    two lines away in the same schema, so the obvious next commit is to give
+    this one a checkbox and a 422 to match. ADR 0005 says a field the generator
+    emits about its own output may inform a reviewer but may never, on its own,
+    satisfy or block a publication precondition -- so a flagged draft must
+    approve on exactly the fields an unflagged one needs, and no others.
+
+    Both halves are asserted deliberately. The flagged approval proves no new
+    refusal appeared; the unflagged one proves the flagged case was not passing
+    for some unrelated reason.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        repository = app.state.repository
+        flagged = seed(repository, verification=True)
+
+        # A second page, so seeding the control does not replace the draft
+        # under test -- a generation for the same source returns the first one.
+        second_page = page()
+        second_page.source.canonical_url += "/Second"
+        second_page.source.path += "/Second"
+        second_page.source.page_id = "86188"
+        unflagged = seed(repository, second_page)
+
+        confirmations = {"bloom_confirmed": "true", "difficulty_confirmed": "true"}
+        assert approve(client, flagged, **confirmations).status_code == 303
+        assert approve(client, unflagged, **confirmations).status_code == 303
+
+        stored = repository.require_draft(flagged)
+        assert stored.status == ReviewStatus.READY_TO_PUBLISH
+        # The claim survives the approval it did not gate: still true, still
+        # nobody's answer to it recorded anywhere.
+        assert stored.current.needs_human_verification is True
+        assert not [
+            column.name
+            for column in Draft.__table__.columns
+            if "verification" in column.name
+        ]
+
+        # And it is still on the page afterwards. The note sits outside the
+        # review form for this reason: publishing is a separate action taken
+        # after approval, so a note that vanished on approval would be gone at
+        # the one moment it is most worth having.
+        assert "needing human verification" in client.get(f"/drafts/{flagged}").text
+
+
 def edit(client: TestClient, draft_id: int, **fields: str) -> Response:
     """One edit submission, carrying only the fields a test cares about."""
 
@@ -1067,6 +1161,48 @@ def test_a_typed_edit_cannot_retract_the_specialist_requirement(
         assert after.edit_count == before.edit_count
         assert after.current.specialist_review_required is True
         assert after.current.stem == before.current.stem
+
+
+def test_a_typed_edit_cannot_put_words_in_the_generator_s_mouth(
+    tmp_path: Path,
+) -> None:
+    """The note names who made the claim, so a human must not be able to make it.
+
+    The review page tells the reviewer *the generator* flagged this item. That
+    sentence is only true while the field is what it says it is: something the
+    generator emitted about its own output. The JSON editor prefills the
+    textarea with the whole item, this field included, so without a guard a
+    reviewer could type `true` and the page would then attribute their edit to
+    the model -- a false statement about provenance on the one screen where
+    provenance is the entire point.
+
+    Refused in both directions by the same comparison, for the reason its
+    specialist sibling above is: clearing it would silently delete a claim the
+    generator did make, and return "Draft saved" while doing it. Tested in the
+    raising direction because that is the one this note's wording created.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        repository = app.state.repository
+        draft_id = seed_typed(repository)
+        before = repository.require_draft(draft_id)
+        assert before.current.needs_human_verification is False
+        payload = typed_payload(repository, draft_id)
+        payload["needs_human_verification"] = True
+        payload["stem"] = "Order these by increasing energy, carefully."
+
+        response = edit(client, draft_id, item_json=json.dumps(payload))
+
+        assert refused(response, "needs_human_verification")
+        after = repository.require_draft(draft_id)
+        assert after.edit_count == before.edit_count
+        assert after.current.needs_human_verification is False
+        assert after.current.stem == before.current.stem
+        # The claim the reviewer tried to make is not on the page either.
+        assert (
+            "needing human verification" not in client.get(f"/drafts/{draft_id}").text
+        )
 
 
 def seed_convertible(repository: DraftRepository) -> int:

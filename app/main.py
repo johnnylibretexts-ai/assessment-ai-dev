@@ -771,6 +771,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 # a single path is a change with its own reasoning. Making it
                 # human-raisable is the precondition for ever persisting the
                 # acknowledgement -- see ADR 0005.
+                #
+                # `needs_human_verification` is the same kind of claim and is
+                # guarded for the same reason, plus one of its own: the review
+                # page attributes it out loud, in those words, to the
+                # generator. A reviewer who could set it here would be making
+                # the page state something false about where it came from --
+                # and one who could clear it would delete a claim the generator
+                # did make, against a "Draft saved" notice.
                 if updated.item_type != current.item_type:
                     raise ValueError(
                         "item_type is not editable here: this item is "
@@ -785,6 +793,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         "specialist_review_required is not editable here: it "
                         f"is {current.specialist_review_required} and the "
                         f"payload says {updated.specialist_review_required}."
+                    )
+                if updated.needs_human_verification != current.needs_human_verification:
+                    raise ValueError(
+                        "needs_human_verification is not editable here: it is "
+                        f"{current.needs_human_verification} and the payload "
+                        f"says {updated.needs_human_verification}."
                     )
             else:
                 if None in {
@@ -917,8 +931,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 request,
                 draft_id,
                 error=(
-                    "Confirm you have seen the specialist-review flag "
-                    "before approving."
+                    "Confirm you have seen the specialist-review flag before approving."
                 ),
                 active_form="question_review",
                 form_values=review_values,
@@ -1539,6 +1552,12 @@ def _draft_detail(
         "last_reviewed_by": draft.last_reviewed_by,
         "last_reviewed_at": draft.last_reviewed_at,
         "edit_count": draft.edit_count,
+        # Both are the generator's assessments of its own output, and neither
+        # is a gate (ADR 0005). They reach the page by different routes because
+        # they do different things there: the specialist flag arms an
+        # acknowledgement the reviewer must tick, this one is read only by a
+        # note. Emitting it and showing it to nobody was the defect.
+        "needs_human_verification": current.needs_human_verification,
         "specialist_review_required": current.specialist_review_required,
         "computation": computation,
         "engine_validation": {
