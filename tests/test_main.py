@@ -3,12 +3,14 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import Response
 from pydantic import SecretStr
 
 from app import main as main_module
 from app.config import Settings
 from app.content import PublicLibreTextsContentAdapter
 from app.db import (
+    Draft,
     DraftRepository,
     DraftWrite,
     HintGroundingIssue,
@@ -79,7 +81,17 @@ def question(stem: str = "Which statement about energy is accurate?") -> Questio
     )
 
 
-def seed(repository: DraftRepository, source_page: NormalizedPage | None = None) -> int:
+def seed(
+    repository: DraftRepository,
+    source_page: NormalizedPage | None = None,
+    *,
+    specialist: bool = False,
+) -> int:
+    """One reviewable draft. `specialist` arms the specialist-review guard."""
+
+    revised = question()
+    if specialist:
+        revised = revised.model_copy(update={"specialist_review_required": True})
     stored = repository.replace_generated_drafts(
         page=source_page or page(),
         pipeline_version="test-v1",
@@ -96,12 +108,32 @@ def seed(repository: DraftRepository, source_page: NormalizedPage | None = None)
                     issues=["The initial stem was vague."],
                     revision_required=True,
                 ),
-                revised=question(),
+                revised=revised,
             )
         ],
         llm_calls=[],
     )
     return stored.draft_ids[0]
+
+
+SPECIALIST_REFUSAL = "A qualified specialist must confirm this item before approval."
+CONFIRMATION_REFUSAL = (
+    "Confirm both the Bloom level and difficulty before approving this draft."
+)
+
+
+def approve(client: TestClient, draft_id: int, **fields: str) -> Response:
+    """One approval submission, carrying only the fields a test cares about."""
+
+    return client.post(
+        f"/drafts/{draft_id}/review",
+        data={"decision": "ready_to_publish", **fields},
+        headers={
+            "X-Reviewer": "reviewer@example.org",
+            "Origin": "http://testserver",
+        },
+        follow_redirects=False,
+    )
 
 
 def mark_published(
@@ -626,20 +658,10 @@ def test_edit_and_independent_review_gates(tmp_path: Path) -> None:
         assert stored.bloom_confirmed is False
         assert stored.difficulty_confirmed is False
 
-        blocked = client.post(
-            f"/drafts/{draft_id}/review",
-            data={"decision": "ready_to_publish", "reviewer_notes": "Looks good."},
-            headers={
-                "X-Reviewer": "reviewer@example.org",
-                "Origin": "http://testserver",
-            },
-            follow_redirects=False,
-        )
+        blocked = approve(client, draft_id, reviewer_notes="Looks good.")
         assert blocked.status_code == 422
         blocked_page = blocked
-        assert (
-            "Confirm both the Bloom level and difficulty before approving this draft."
-        ) in blocked_page.text
+        assert CONFIRMATION_REFUSAL in blocked_page.text
         assert "Looks good." in blocked_page.text
         assert "input_value" not in blocked_page.text
         assert "pydantic.dev" not in blocked_page.text
@@ -648,25 +670,183 @@ def test_edit_and_independent_review_gates(tmp_path: Path) -> None:
             == ReviewStatus.READY_FOR_REVIEW
         )
 
-        approved = client.post(
-            f"/drafts/{draft_id}/review",
-            data={
-                "decision": "ready_to_publish",
-                "bloom_confirmed": "true",
-                "difficulty_confirmed": "true",
-                "reviewer_notes": "Both labels checked.",
-            },
-            headers={
-                "X-Reviewer": "reviewer@example.org",
-                "Origin": "http://testserver",
-            },
-            follow_redirects=False,
+        approved = approve(
+            client,
+            draft_id,
+            bloom_confirmed="true",
+            difficulty_confirmed="true",
+            reviewer_notes="Both labels checked.",
         )
         assert approved.status_code == 303
         stored = app.state.repository.require_draft(draft_id)
         assert stored.status == ReviewStatus.READY_TO_PUBLISH
         assert stored.bloom_confirmed is True
         assert stored.difficulty_confirmed is True
+
+
+def test_specialist_review_refuses_approval_until_the_box_is_ticked(
+    tmp_path: Path,
+) -> None:
+    """The guard as it ships, which nothing else in the suite exercises.
+
+    Characterization, not a new requirement: this pins the refusal so that
+    changing it later -- see the question of whether specialist review should be
+    persisted at all -- is a deliberate edit to a failing test rather than a
+    silent change to behaviour no test describes.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository, specialist=True)
+
+        refused = approve(
+            client,
+            draft_id,
+            bloom_confirmed="true",
+            difficulty_confirmed="true",
+            reviewer_notes="Both labels checked.",
+        )
+
+        assert refused.status_code == 422
+        assert SPECIALIST_REFUSAL in refused.text
+        assert "Both labels checked." in refused.text
+        stored = app.state.repository.require_draft(draft_id)
+        assert stored.status == ReviewStatus.READY_FOR_REVIEW
+        # The refusal is whole: the two confirmations it did receive are not
+        # banked on the way past.
+        assert stored.bloom_confirmed is False
+        assert stored.difficulty_confirmed is False
+
+
+def test_specialist_review_approves_once_the_box_is_ticked(tmp_path: Path) -> None:
+    """The other half of the guard: ticked, the draft approves like any other."""
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository, specialist=True)
+
+        approved = approve(
+            client,
+            draft_id,
+            bloom_confirmed="true",
+            difficulty_confirmed="true",
+            specialist_confirmed="true",
+            reviewer_notes="Specialist checked.",
+        )
+
+        assert approved.status_code == 303
+        stored = app.state.repository.require_draft(draft_id)
+        assert stored.status == ReviewStatus.READY_TO_PUBLISH
+        assert stored.bloom_confirmed is True
+        assert stored.difficulty_confirmed is True
+
+
+def test_a_draft_not_requiring_specialist_review_is_unaffected_by_the_box(
+    tmp_path: Path,
+) -> None:
+    """The flag arms the guard, so without it the field decides nothing.
+
+    Both submissions approve. The point is that the second one -- which ticks a
+    box the draft never asked for -- is neither refused nor treated as meaning
+    anything.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        repository = app.state.repository
+        without = seed(repository)
+        approved = approve(
+            client,
+            without,
+            bloom_confirmed="true",
+            difficulty_confirmed="true",
+        )
+        assert approved.status_code == 303
+        assert repository.require_draft(without).status == ReviewStatus.READY_TO_PUBLISH
+
+        # A second page, so seeding does not replace the draft just approved.
+        second_page = page()
+        second_page.source.canonical_url += "/Second"
+        second_page.source.path += "/Second"
+        second_page.source.page_id = "86188"
+        volunteered = seed(repository, second_page)
+        approved = approve(
+            client,
+            volunteered,
+            bloom_confirmed="true",
+            difficulty_confirmed="true",
+            specialist_confirmed="true",
+        )
+        assert approved.status_code == 303
+        assert (
+            repository.require_draft(volunteered).status
+            == ReviewStatus.READY_TO_PUBLISH
+        )
+
+
+def test_missing_everything_reports_the_bloom_and_difficulty_refusal_first(
+    tmp_path: Path,
+) -> None:
+    """Which of two refusals a reviewer sees when both apply.
+
+    Pinned as found rather than chosen: the confirmation check simply runs
+    first. A reviewer who ticks nothing is sent to fix the labels, and only sees
+    the specialist requirement on the next attempt. Worth a test because the
+    order is invisible at the call site and easy to swap while tidying.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository, specialist=True)
+
+        refused = approve(client, draft_id, reviewer_notes="Nothing ticked.")
+
+        assert refused.status_code == 422
+        assert CONFIRMATION_REFUSAL in refused.text
+        assert SPECIALIST_REFUSAL not in refused.text
+
+
+def test_a_specialist_confirmation_is_recorded_in_no_column(tmp_path: Path) -> None:
+    """The tripwire for the decision this issue was split from.
+
+    Bloom and difficulty each persist three columns and are enforced by a
+    database constraint. Specialist review persists nothing -- so an approval
+    that required a specialist is indistinguishable afterwards from one that did
+    not. That is the defect under discussion, and pinning it here means the day
+    someone adds the column, this test fails and says so, instead of the change
+    landing unremarked.
+
+    Two things this does not cover, both worth knowing before reading it as full
+    coverage of the gap. `ReviewService.decide` accepts no specialist signal at
+    all -- the check exists only in the HTTP handler, unlike bloom and difficulty
+    which are also enforced in the review decision, in the transition, and by the
+    database. And the flag itself is editable: the edit route's JSON branch
+    rebuilds the question without carrying it forward, so a reviewer can clear it
+    and approve unchallenged.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        draft_id = seed(app.state.repository, specialist=True)
+
+        approved = approve(
+            client,
+            draft_id,
+            bloom_confirmed="true",
+            difficulty_confirmed="true",
+            specialist_confirmed="true",
+        )
+        assert approved.status_code == 303
+
+        stored = app.state.repository.require_draft(draft_id)
+        assert stored.current.specialist_review_required is True
+        assert not hasattr(stored, "specialist_confirmed")
+
+    # Named for the one event this test exists to catch, so that an unrelated
+    # future column cannot fail it and send the reader to the wrong change.
+    assert not [
+        column.name for column in Draft.__table__.columns if "specialist" in column.name
+    ]
 
 
 def test_hint_validation_preserves_posted_edits_and_persisted_version(
