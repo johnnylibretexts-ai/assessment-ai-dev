@@ -1,13 +1,16 @@
 # An unreadable publication state refuses to publish rather than resuming
 
-**Status:** accepted (2026-08-15)
+**Status:** accepted, not yet implemented (2026-08-15) — the guard lands with
+[#13](https://github.com/johnnylibretexts/assessment-ai-dev/issues/13), which is blocked by #10.
+**Until then the fall-through described below is still live**, and
+`test_unrecognised_publication_state_republishes_from_the_start` pins it.
 
 A publication's `state` is a plain `String(30)` with no CHECK constraint, so a value outside
 `PublicationState` is representable. The resume dispatch matches four recognised states and lets
 everything else fall through into the full publish path, which sends a **second** `adapt_create` for
 a question ADAPT already holds and repoints the record at it, stranding the first. Nobody chose
-that; it is where the `if` chain happens to end. **A state this build does not recognise now raises
-`PublicationValidationError` instead, leaving the record untouched.**
+that; it is where the `if` chain happens to end. **The decision is that a state this build does not
+recognise will raise `PublicationValidationError` instead, leaving the record untouched.**
 
 ## Why this is a live scenario and not a hypothetical
 
