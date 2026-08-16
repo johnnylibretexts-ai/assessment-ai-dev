@@ -1,16 +1,16 @@
 # An unreadable publication state refuses to publish rather than resuming
 
-**Status:** accepted, not yet implemented (2026-08-15) — the guard lands with
-[#13](https://github.com/johnnylibretexts/assessment-ai-dev/issues/13), which is blocked by #10.
-**Until then the fall-through described below is still live**, and
-`test_unrecognised_publication_state_republishes_from_the_start` pins it.
+**Status:** accepted and implemented (2026-08-15) via
+[#13](https://github.com/johnnylibretexts/assessment-ai-dev/issues/13). The guard is in the resume
+dispatch in `app/publishing.py`, at the point `steps_after` reports the state holds no place in the
+step list; `test_unreadable_publication_state_refuses_and_writes_nothing` pins the refusal.
 
 A publication's `state` is a plain `String(30)` with no CHECK constraint, so a value outside
-`PublicationState` is representable. The resume dispatch matches four recognised states and lets
-everything else fall through into the full publish path, which sends a **second** `adapt_create` for
-a question ADAPT already holds and repoints the record at it, stranding the first. Nobody chose
-that; it is where the `if` chain happens to end. **The decision is that a state this build does not
-recognise will raise `PublicationValidationError` instead, leaving the record untouched.**
+`PublicationState` is representable. The resume dispatch used to match the recognised states and let
+everything else fall through into the full publish path, which sent a **second** `adapt_create` for
+a question ADAPT already held and repointed the record at it, stranding the first. Nobody chose
+that; it was where the `if` chain happened to end. **The decision is that a state this build does not
+recognise raises `PublicationValidationError` instead, leaving the record untouched.**
 
 ## Why this is a live scenario and not a hypothetical
 
@@ -42,7 +42,7 @@ worse than one that is stuck, because only the second kind gets noticed.
 
 - **The refusal writes nothing.** Not even `failed`. Marking the row would overwrite a successor's
   state with a guess, destroy the evidence an operator needs, and silently convert the refusal into
-  the `failed` in-place retry — which republishes from the start, the behaviour being removed.
+  the `failed` in-place retry — which republishes from the start, the behaviour this removes.
 - **No publication attempt is recorded.** A *publication attempt* is one recorded try at one step;
   a refusal tries no step, and the append-only log is only worth reading if every row is a real try.
 - **This is not a publication precondition**, though the enumerated list is where a reader will look

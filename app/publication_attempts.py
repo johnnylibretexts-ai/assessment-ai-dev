@@ -265,9 +265,10 @@ def _disposition(
             return PublicationState(publication.state)
         except ValueError as exc:
             # Unreachable today: every path into a retaining step arrives in one
-            # of two recognised states. This is only the step declining to
-            # invent a state to keep -- ADR 0003's refusal is a different thing,
-            # belongs to the resume dispatch, and lands with #13. Raised as a
+            # of two recognised states, and since ADR 0003 the resume dispatch
+            # refuses an unreadable state before any step runs. This is only the
+            # step declining to invent a state to keep -- that refusal is a
+            # different thing and belongs to the dispatch. Raised as a
             # contract error rather than let out as the bare `ValueError`, which
             # the publish route would render to the reviewer as a 422 reading
             # "not a valid PublicationState".

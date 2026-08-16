@@ -1547,23 +1547,23 @@ async def test_failed_hint_sync_holds_adapt_created_and_retries_only_the_rungs(
 
 
 @pytest.mark.asyncio
-async def test_unrecognised_publication_state_republishes_from_the_start(
+async def test_unreadable_publication_state_refuses_and_writes_nothing(
     tmp_path: Path,
 ) -> None:
-    """Characterization, not intent: an unrecognised state retries everything.
+    """An *unreadable* state refuses; it does not republish from the start.
 
-    Unrecognised is not `PublicationState.UNKNOWN`, which is a recognised state
+    Unreadable is not `PublicationState.UNKNOWN`, which is a recognised state
     with its own reconcile path. This is a value outside the enum entirely: the
-    state column is a plain string with no constraint, so one is representable.
-    The resume dispatch matches four known states and anything else falls off
-    the end into the full publish path, which sends a second create for a
-    question ADAPT already holds.
+    state column is a plain string with no constraint, so one is representable,
+    and a rollback to a build with an older enum is how one arrives -- the
+    normal deploy procedure here rather than an accident.
 
-    Nobody chose this behaviour, so it is recorded rather than endorsed -- the
-    refactor is measured against what the code does, not against what it ought
-    to do. If a later change makes this reuse the existing question instead,
-    that is an improvement, and this test should be rewritten deliberately as
-    part of it rather than treated as a regression.
+    What this forbids is what the dispatch used to do with it: fall off the end
+    into the full publish path, send a second `adapt_create` for a question
+    ADAPT already holds, and repoint the record at it, stranding the first.
+    The refusal writes nothing at all -- not even `failed`, which would
+    overwrite a successor's state with a guess and turn the refusal into the
+    in-place retry that republishes. See ADR 0003.
     """
 
     config = configured_settings(tmp_path)
@@ -1593,17 +1593,24 @@ async def test_unrecognised_publication_state_republishes_from_the_start(
             stored = session.get(Publication, published.id)
             assert stored is not None
             stored.state = "awaiting_engine_binding"
+        before = repository.require_publication(published.id)
 
-        retried = await service.publish(draft_id, **arguments)
+        with pytest.raises(PublicationValidationError) as raised:
+            await service.publish(draft_id, **arguments)
 
-        assert retried.state == PublicationState.SUCCEEDED.value
-        assert fake.create_calls == 2
-        assert retried.adapt_question_id == 501
+        # The message has to name the state, because during a rollback window
+        # the operator's only lead is which build wrote it.
+        assert "awaiting_engine_binding" in str(raised.value)
+        assert "no external create request was sent to ADAPT" in str(raised.value)
+        assert fake.create_calls == 1
+        after = repository.require_publication(published.id)
+        assert after.state == "awaiting_engine_binding"
+        assert after.error_code is None
+        assert after.error_message is None
+        assert after.adapt_question_id == before.adapt_question_id
         assert len(repository.require_draft(draft_id).publications) == 1
-        persisted = repository.require_publication(retried.id)
-        assert [attempt.action for attempt in persisted.attempts] == [
-            "adapt_create",
-            "qti_finalize",
+        # A refusal tries no step, so the append-only log gains no row.
+        assert [attempt.action for attempt in after.attempts] == [
             "adapt_create",
             "qti_finalize",
         ]

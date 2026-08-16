@@ -18,7 +18,7 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 - `docs/adr/` — **exists**, currently three decisions:
   - `0001-forward-auth-identity-binding.md` — how Assessment AI binds identity through oauth2-proxy `forward_auth` to the OIDC `sub`. Read it before touching anything in the auth, session, or user-identity path.
   - `0002-publication-preconditions-not-review-gates.md` — why there is no "gate" concept, only one enumerated list of publication preconditions. Read it before adding anything that must hold before a draft publishes; it also says why the `ck_publish_ready_requires_review_gates` constraint keeps its misleading name.
-  - `0003-unreadable-publication-state-refuses-rather-than-resumes.md` — what a resume does with a publication state this build cannot read. **Accepted but not yet implemented**; its own status line names the ticket the guard lands with, and the current fall-through is still pinned by a test.
+  - `0003-unreadable-publication-state-refuses-rather-than-resumes.md` — what a resume does with a publication state this build cannot read: it refuses, and writes nothing. **Accepted and implemented**; the guard is in the resume dispatch in `app/publishing.py` and a test pins the refusal.
 
 ## File structure
 

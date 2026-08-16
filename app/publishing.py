@@ -429,7 +429,29 @@ class PublicationService:
             return await self._continue_after_adapt(
                 publication, title=title, metadata=metadata
             )
-        # Below here the state is not a position in the sequence at all.
+        # Below here the state is not a position in the sequence at all -- and
+        # `steps_after` answers `None` for two different reasons. Three
+        # recognised states resume from here (`unknown`, `pending`, `failed`); a
+        # state this build cannot read at all is refused before any of them can
+        # adopt it. Nothing is written, not even `failed`: that would overwrite
+        # a successor's state with a guess and turn this refusal into the
+        # in-place retry it exists to prevent. ADR 0003.
+        try:
+            PublicationState(publication.state)
+        except ValueError as exc:
+            # "No create request" rather than "nothing was sent to ADAPT":
+            # `resolve_destination` has already been called by this point, and a
+            # message that overstates what did not happen is the wrong thing to
+            # hand someone who is about to go and check. It matches the wording
+            # of the reservation refusal above for the same reason.
+            raise PublicationValidationError(
+                f"This publication is recorded in the state "
+                f"{publication.state!r}, which this build cannot read; no "
+                "external create request was sent to ADAPT and the record was "
+                "left as it was found. A newer build most likely wrote it, so "
+                "publishing can only continue once someone has looked at the "
+                "record."
+            ) from exc
         if publication.state == PublicationState.UNKNOWN.value:
             # Deliberately not a step: the recovery rejoins the sequence partway
             # rather than holding a place in it, so the list cannot answer for
