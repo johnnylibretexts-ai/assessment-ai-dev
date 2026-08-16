@@ -90,17 +90,20 @@ Neither appears in `.env.example`, deliberately — there is nothing to configur
 setting: it toggles whether sandbox pages may be used as generation sources at
 all.)
 
-**In a default deployment this never comes up.** `sandbox_sources_enabled` is
-`false`, and the CXone adapter — the only thing that enforces the pin — is
-constructed solely when that flag is on. Public LibreTexts pages, which is the
-normal generation path, go through a different adapter that does not touch CXone
-at all. So you can deploy, generate, review and publish without the pinned scope
-ever being reached.
+**The pin is enforced at startup, in every deployment.** The two validators are
+ordinary field validators on `Settings`, so they run every time settings are
+constructed, whatever else is switched on. Setting your own host with sandbox
+sources disabled does not quietly do nothing — the service refuses to boot.
 
-It matters only if you deliberately enable sandbox sources. **A fork that needs
-its own CXone scope must change those validators in code and re-scope the guard
-deliberately** — it is not an environment change, and it should not be made into
-one casually.
+What `sandbox_sources_enabled` changes is only whether the scope is ever *used*.
+With it `false`, nothing reads the CXone scope: the normal generation path is
+public LibreTexts pages through a different adapter that does not touch CXone,
+and the CXone adapter's own second check on the same values never runs. So the
+pinned values sit there unused, but they still have to be the pinned values.
+
+**A fork that needs its own CXone scope must change those validators in code and
+re-scope the guard deliberately** — it is not an environment change, and it
+should not be made into one casually.
 
 Every capability ships **disabled**. That is the intended starting state:
 
