@@ -1090,6 +1090,84 @@ async def test_hints_synced_publication_resumes_without_a_second_adapt_create(
 
 
 @pytest.mark.asyncio
+async def test_failed_hint_sync_holds_adapt_created_and_retries_only_the_rungs(
+    tmp_path: Path,
+) -> None:
+    """A hint sync that does not land costs the publication nothing it had.
+
+    The step's failure disposition: hold `adapt_created`. The rungs are a second
+    write against a question ADAPT already created, so a failure to sync them
+    leaves the publication exactly where it was, carrying the error, and the
+    retry re-enters at the rungs rather than re-creating the question.
+
+    The success half of this step was covered twice; this half was covered
+    nowhere, which is a hole in the safety net at the point the attempt module
+    takes the step over.
+    """
+
+    config = configured_settings(tmp_path).model_copy(
+        update={"hint_generation_enabled": True}
+    )
+    app = create_app(config)
+
+    class FailingHintSyncAdapt(FakeAdapt):
+        async def sync_hint_rungs(
+            self, _question_id: int, payload: dict[str, object]
+        ) -> None:
+            self.hint_sync_calls += 1
+            if self.hint_sync_calls == 1:
+                raise AdaptPublishingError(
+                    "ADAPT rejected the hint rungs.",
+                    code="adapt_hint_sync_failed",
+                )
+            self.hint_payload = payload
+
+    fake = FailingHintSyncAdapt()
+    with TestClient(app):
+        repository = app.state.repository
+        draft_id = seed_approved(repository)
+        approve_hint_ladder(repository, draft_id)
+        service = PublicationService(config, repository, fake)
+        topic = suggested_topic(ISOTOPES_URL)
+        assert topic is not None
+        arguments = {
+            "publisher": "reviewer@example.org",
+            "topic_stable_id": topic.stable_id,
+            "alignment_confirmed": True,
+        }
+
+        held = await service.publish(draft_id, **arguments)
+        assert held.state == PublicationState.ADAPT_CREATED.value
+        assert held.error_code == "adapt_hint_sync_failed"
+        assert held.error_message == "ADAPT rejected the hint rungs."
+        assert held.adapt_question_id == 501
+        assert held.hints_synced_at is None
+        assert held.qti_path is None
+        assert fake.create_calls == 1
+        assert fake.hint_sync_calls == 1
+
+        completed = await service.publish(draft_id, **arguments)
+
+        assert completed.state == PublicationState.SUCCEEDED.value
+        assert completed.error_code is None
+        assert completed.hints_synced_at is not None
+        assert completed.qti_path is not None
+        assert fake.create_calls == 1
+        assert fake.hint_sync_calls == 2
+        assert len(repository.require_draft(draft_id).publications) == 1
+        persisted = repository.require_publication(completed.id)
+        assert [attempt.action for attempt in persisted.attempts] == [
+            "adapt_create",
+            "adapt_hint_sync",
+            "adapt_hint_sync",
+            "qti_finalize",
+        ]
+        held_attempt = persisted.attempts[1]
+        assert held_attempt.resulting_state == PublicationState.ADAPT_CREATED.value
+        assert held_attempt.error_code == "adapt_hint_sync_failed"
+
+
+@pytest.mark.asyncio
 async def test_unrecognised_publication_state_republishes_from_the_start(
     tmp_path: Path,
 ) -> None:

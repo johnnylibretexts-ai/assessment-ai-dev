@@ -60,6 +60,13 @@ from app.parameterized import (
     compile_parameterized_item,
     compile_typed_parameterized_item,
 )
+from app.publication_attempts import (
+    ADAPT_HINT_SYNC,
+    StepFailed,
+    StepOutcome,
+    StepSucceeded,
+    run_publication_step,
+)
 from app.publication_preconditions import (
     PublicationBlocker,
     PublicationContext,
@@ -611,43 +618,41 @@ class PublicationService:
             publication.hint_ladder_snapshot_json is not None
             and publication.hints_synced_at is None
         ):
-            try:
-                await self._adapt.sync_hint_rungs(
-                    publication.adapt_question_id,
-                    {
-                        "publication_key": publication.publication_key,
-                        "concept_type": "question",
-                        "concept_id": 0,
-                        "ladder": publication.hint_ladder_snapshot_json,
-                    },
+            question_id = publication.adapt_question_id
+            payload = {
+                "publication_key": publication.publication_key,
+                "concept_type": "question",
+                "concept_id": 0,
+                "ladder": publication.hint_ladder_snapshot_json,
+            }
+
+            async def sync_hint_rungs() -> StepOutcome:
+                """The step body: the ADAPT call, and nothing but.
+
+                What it reports is what happened at ADAPT. Where that leaves the
+                publication is `ADAPT_HINT_SYNC`'s answer, not this closure's --
+                the reason the disposition is declared once instead of decided
+                again at every step.
+                """
+
+                try:
+                    await self._adapt.sync_hint_rungs(question_id, payload)
+                except AdaptPublishingError as exc:
+                    return StepFailed(code=exc.code, message=str(exc))
+                return StepSucceeded(
+                    values={"hints_synced_at": utc_now()},
+                    response={"synced": True},
                 )
-            except AdaptPublishingError as exc:
-                self._repository.record_publication_attempt(
-                    publication.id,
-                    action="adapt_hint_sync",
-                    resulting_state=PublicationState.ADAPT_CREATED,
-                    error_code=exc.code,
-                    error_message=str(exc),
-                )
-                return self._repository.update_publication(
-                    publication.id,
-                    state=PublicationState.ADAPT_CREATED,
-                    error_code=exc.code,
-                    error_message=str(exc),
-                )
-            publication = self._repository.update_publication(
-                publication.id,
-                state=PublicationState.HINTS_SYNCED,
-                hints_synced_at=utc_now(),
-                error_code=None,
-                error_message=None,
+
+            attempt = await run_publication_step(
+                self._repository,
+                publication,
+                ADAPT_HINT_SYNC,
+                sync_hint_rungs,
             )
-            self._repository.record_publication_attempt(
-                publication.id,
-                action="adapt_hint_sync",
-                resulting_state=PublicationState.HINTS_SYNCED,
-                response={"synced": True},
-            )
+            if not attempt.succeeded:
+                return attempt.publication
+            publication = attempt.publication
         return self._finalize_qti(publication, title=title, metadata=metadata)
 
     def _finalize_qti(
