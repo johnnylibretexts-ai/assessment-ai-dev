@@ -763,12 +763,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 #
                 # `specialist_review_required` is a model self-assessment: the
                 # generator's own claim about the item, which the approval
-                # acknowledgement reads. A reviewer editing a question does not
-                # get to retract it. Raising it is refused too: the form branch
-                # offers no way to raise it either, and inventing one on a
-                # single path is a change with its own reasoning. Making it
-                # human-raisable is the precondition for ever persisting it --
-                # see ADR 0005, which is why it is not persisted today.
+                # acknowledgement reads. It is stored -- it is part of the
+                # draft's content, and it is the reviewer's *answer* to it that
+                # is recorded nowhere. A reviewer editing a question does not
+                # get to retract the claim. Raising it is refused too: the form
+                # branch offers no way to raise it either, and inventing one on
+                # a single path is a change with its own reasoning. Making it
+                # human-raisable is the precondition for ever persisting the
+                # acknowledgement -- see ADR 0005.
                 if updated.item_type != current.item_type:
                     raise ValueError(
                         "item_type is not editable here: this item is "
