@@ -29,6 +29,7 @@ from app.schemas import (
     HintLadderDraft,
     HintRungDraft,
     HintRungType,
+    ItemContextType,
     ItemResponse,
     NormalizedPage,
     Paragraph,
@@ -701,12 +702,15 @@ def test_edit_and_independent_review_gates(tmp_path: Path) -> None:
 def test_specialist_review_refuses_approval_until_the_box_is_ticked(
     tmp_path: Path,
 ) -> None:
-    """The guard as it ships, which nothing else in the suite exercises.
+    """The guard as it ships, and the only test that fails if it is removed.
 
-    Characterization, not a new requirement: this pins the refusal so that
-    changing it later -- see the question of whether specialist review should be
-    persisted at all -- is a deliberate edit to a failing test rather than a
-    silent change to behaviour no test describes.
+    Written as characterization while the question of whether specialist review
+    should be persisted was still open. It has since been answered -- ADR 0005,
+    it is not persisted and will not be -- so this no longer guards a pending
+    decision; it guards the refusal that decision chose to keep. Deleting the
+    check in the handler fails here and nowhere else, including the sibling
+    below that asserts this same message is *absent* when bloom and difficulty
+    are missing too.
     """
 
     app = create_app(settings(tmp_path))
@@ -1013,6 +1017,139 @@ def refused(response: Response, because: str) -> bool:
         return False
     location = response.headers["location"]
     return "error=" in location and quote_plus(because) in location
+
+
+def seed_with_every_carried_field_set(repository: DraftRepository) -> int:
+    """A multiple-choice draft holding a non-default value in every carried field.
+
+    The form branch rebuilds the question from the nine fields the form submits
+    and hand-carries eight it does not, plus each choice's feedback. A carried
+    field still sitting at its schema default cannot demonstrate that it was
+    dropped -- `None` looks the same either way -- so every one of them is set
+    here to something the default is not.
+    """
+
+    revised = question().model_copy(
+        update={
+            "context_type": ItemContextType.SCENARIO,
+            "stimulus": "A cyclist coasts down a hill without pedalling.",
+            "set_key": "energy-conservation-set",
+            "citation_paragraphs": [0],
+            "needs_human_verification": True,
+            "specialist_review_required": True,
+            "targeted_misconception": "That energy is used up rather than moved.",
+            "choices": [
+                Choice(
+                    id="A",
+                    text="It is conserved.",
+                    correct=True,
+                    feedback="Correct: the total is unchanged.",
+                ),
+                Choice(
+                    id="B",
+                    text="It disappears.",
+                    correct=False,
+                    feedback="Energy moves; it does not vanish.",
+                ),
+                Choice(id="C", text="It is matter.", correct=False),
+                Choice(id="D", text="It has no units.", correct=False),
+            ],
+        }
+    )
+    stored = repository.replace_generated_drafts(
+        page=page(),
+        pipeline_version="test-v1",
+        drafts=[
+            DraftWrite(
+                position=0,
+                concept=Concept(
+                    label="Energy conservation",
+                    description="Energy changes form without disappearing.",
+                    source_paragraphs=[0],
+                ),
+                raw=question("Initial question about energy?"),
+                critique=Critique(
+                    issues=["The initial stem was vague."], revision_required=True
+                ),
+                revised=revised,
+            )
+        ],
+        llm_calls=[],
+    )
+    return stored.draft_ids[0]
+
+
+def test_a_form_edit_carries_forward_what_the_form_cannot_show(
+    tmp_path: Path,
+) -> None:
+    """The multiple-choice form edits nine fields and must not silently drop nine more.
+
+    This branch does not update the stored question; it constructs a new one and
+    replaces it. Everything the form does not submit therefore has to be named
+    explicitly, and six of those fields carry a schema default -- `False`,
+    `None`, `standard` -- so omitting a line loses the value without raising
+    anything. `concept_label` and `citation_paragraphs` are the exceptions,
+    required by the model and so self-protecting; the rest are not.
+
+    Two of them arm things. Dropping `specialist_review_required` disarms the
+    approval guard, which is #19's bypass reached through the form instead of
+    the JSON editor -- and multiple choice is the common case, so it is the
+    wider door of the two. Dropping `needs_human_verification` deletes the note
+    #21 added. Both were unheld until this test: the whole suite passed with
+    those two lines removed, because every other edit test posts `item_json` and
+    the one form edit that succeeds starts from an unflagged draft with nothing
+    to lose.
+    """
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as client:
+        repository = app.state.repository
+        draft_id = seed_with_every_carried_field_set(repository)
+        before = repository.require_draft(draft_id).current
+
+        response = edit(
+            client,
+            draft_id,
+            stem="What happens to the total energy of the system?",
+            choice_a="It remains conserved.",
+            choice_b="It vanishes.",
+            choice_c="It becomes matter.",
+            choice_d="It loses all units.",
+            correct_choice="A",
+            explanation="The source states that energy is conserved.",
+            bloom="apply",
+            difficulty="medium",
+        )
+
+        assert response.status_code == 303
+        assert "error=" not in response.headers["location"]
+        after = repository.require_draft(draft_id).current
+
+        # The nine the form submits did change, or the edit proved nothing.
+        assert after.stem == "What happens to the total energy of the system?"
+        assert after.bloom == BloomLevel.APPLY
+        assert after.difficulty == Difficulty.MEDIUM
+        assert [choice.text for choice in after.choices] != [
+            choice.text for choice in before.choices
+        ]
+
+        # Everything else survived it.
+        assert after.concept_label == before.concept_label
+        assert after.context_type == ItemContextType.SCENARIO
+        assert after.stimulus == before.stimulus
+        assert after.set_key == before.set_key
+        assert after.citation_paragraphs == before.citation_paragraphs
+        assert after.targeted_misconception == before.targeted_misconception
+        assert after.needs_human_verification is True
+        assert after.specialist_review_required is True
+        assert [choice.feedback for choice in after.choices] == [
+            choice.feedback for choice in before.choices
+        ]
+
+        # And the two flags still reach the reviewer, which is the point of them.
+        detail = client.get(f"/drafts/{draft_id}").text
+        assert "flagged for specialist review" in detail
+        assert "needing human verification" in detail
 
 
 def test_item_json_is_refused_for_a_multiple_choice_draft(tmp_path: Path) -> None:
