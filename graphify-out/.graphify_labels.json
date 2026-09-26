@@ -1,0 +1,22 @@
+{
+  "0": "DraftRepository",
+  "1": "QuestionDraft",
+  "2": "PublicSourceValidationError",
+  "3": "test_llm.py",
+  "4": "schemas.py",
+  "5": "NormalizedPage",
+  "6": "test_pipeline.py",
+  "7": "Settings",
+  "8": "create_app",
+  "9": "main.py",
+  "10": "jobs.py",
+  "11": "IMathASBridgeClient",
+  "12": "HotspotMediaStore",
+  "13": "Design QA — generation progress state",
+  "14": "LibreTexts Assessment AI",
+  "15": "__init__.py",
+  "16": "IMPLEMENTATION_NOTES.md",
+  "17": "generation.js",
+  "18": "jobs.js",
+  "19": "libretexts-assessment-ai"
+}
