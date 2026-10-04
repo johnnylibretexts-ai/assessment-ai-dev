@@ -16,10 +16,10 @@ Edit the right-hand column to match whatever vocabulary you actually use.
 
 ## Creating the labels
 
-They do not exist in `johnnylibretexts/assessment-ai-dev` until something creates them. `gh issue edit --add-label` fails on a label that isn't defined, so create them once, up front:
+They do not exist in `johnnylibretexts-ai/assessment-ai-dev` until something creates them. `gh issue edit --add-label` fails on a label that isn't defined, so create them once, up front:
 
 ```bash
-REPO=johnnylibretexts/assessment-ai-dev
+REPO=johnnylibretexts-ai/assessment-ai-dev
 gh label create needs-triage    --repo "$REPO" --color FBCA04 --description "Maintainer needs to evaluate this issue"
 gh label create needs-info      --repo "$REPO" --color D4C5F9 --description "Waiting on reporter for more information"
 gh label create ready-for-agent --repo "$REPO" --color 0E8A16 --description "Fully specified, ready for an AFK agent"

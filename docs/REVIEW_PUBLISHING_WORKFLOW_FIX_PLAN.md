@@ -5,7 +5,7 @@
 The repaired ladders remain subject to their own human review. Draft 14 was subsequently approved
 and published during live workflow verification; Draft 16 remains intentionally unpublished.
 **Assessment AI baseline:** `feat/math-rendering` at `6bc57fe`
-**Writable remotes:** `johnnylibretexts/assessment-ai-dev` and `johnnylibretexts/adapt-dev` only
+**Writable remotes:** `johnnylibretexts-ai/assessment-ai-dev` and `johnnylibretexts-ai/adapt-dev` only
 
 ## Deployment closure — 2026-07-24
 
@@ -135,7 +135,7 @@ Existing successful publications must remain immutable.
 
 **ADAPT**
 
-- Create an isolated worktree from the current accepted `johnnylibretexts/adapt-dev` source line.
+- Create an isolated worktree from the current accepted `johnnylibretexts-ai/adapt-dev` source line.
 - Confirm the push remote owner is `johnnylibretexts`; never push to `origin`
   (`kreut/libretext`) or `libretexts/*`.
 - Before live deployment, back up the Assessment AI database and record the exact live Assessment
@@ -335,7 +335,7 @@ Create four visible states near the top of the review pane:
 
 ### Phase 6 — Generalize ADAPT’s idempotent framework provisioning
 
-**Modify in an isolated `johnnylibretexts/adapt-dev` worktree**
+**Modify in an isolated `johnnylibretexts-ai/adapt-dev` worktree**
 
 - `app/Console/Commands/LibreTexts/ProvisionAssessmentAI.php`
 - `tests/Feature/LibreTexts/ProvisionAssessmentAITest.php`
@@ -359,7 +359,7 @@ Create four visible states near the top of the review pane:
 - Running the command twice creates no duplicates.
 - The existing GOB framework is unchanged.
 - The new Mathematical Methods framework and exact draft 16 topic exist in ADAPT.
-- No upstream `origin` write occurs; commits target only `johnnylibretexts/adapt-dev`.
+- No upstream `origin` write occurs; commits target only `johnnylibretexts-ai/adapt-dev`.
 
 ### Phase 7 — Bounded existing-data repair
 

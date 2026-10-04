@@ -14,7 +14,7 @@ place on every machine that clones it.)
 
 ### Issue tracker
 
-GitHub Issues on `johnnylibretexts/assessment-ai-dev`, always with an explicit
+GitHub Issues on `johnnylibretexts-ai/assessment-ai-dev`, always with an explicit
 `--repo`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels

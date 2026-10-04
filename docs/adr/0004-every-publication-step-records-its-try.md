@@ -1,7 +1,7 @@
 # Every publication step records its try, including the two that advance nothing
 
 **Status:** accepted and implemented (2026-08-16) via
-[#14](https://github.com/johnnylibretexts/assessment-ai-dev/issues/14). The recording is in
+[#14](https://github.com/johnnylibretexts-ai/assessment-ai-dev/issues/14). The recording is in
 `run_publication_step` in `app/publication_attempts.py`;
 `test_a_step_that_advances_nothing_still_records_the_try`,
 `test_a_step_that_advances_nothing_keeps_the_evidence_it_reports` and
@@ -26,7 +26,7 @@ The glossary needed no edit; the code moved to meet it.
 A single `None` on `PublicationStep.reaches` silently owned two unrelated facts: *this step advances
 no state*, and *this step records nothing*. Nothing forced them together — they arrived as one value
 because one value was cheap. `reaches` now says only the first. This is the same defect shape
-[#2](https://github.com/johnnylibretexts/assessment-ai-dev/issues/2) removed elsewhere in this path,
+[#2](https://github.com/johnnylibretexts-ai/assessment-ai-dev/issues/2) removed elsewhere in this path,
 one level down.
 
 ## Why the row carries the state the publication was already in
@@ -59,7 +59,7 @@ already what it held for every advance and for every failure disposition.
   ever reached. A retry from `failed` does re-run it, and gets a second row — correctly, because it
   is a second try.
 - **Five existing publishing tests changed.** All five gained exactly one row at the front of a
-  sequence, none lost or reordered a step. Unlike the [#2](https://github.com/johnnylibretexts/assessment-ai-dev/issues/2)
+  sequence, none lost or reordered a step. Unlike the [#2](https://github.com/johnnylibretexts-ai/assessment-ai-dev/issues/2)
   refactor — whose whole evidence was that the publishing suite passed *unmodified* — this is a
   deliberate behaviour change, so editing those assertions is the correct outcome rather than a
   signal that a seam is wrong.

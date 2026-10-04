@@ -103,7 +103,7 @@ Local worktree:
 Writable repository:
 
 ```text
-https://github.com/johnnylibretexts/assessment-ai-dev.git
+https://github.com/johnnylibretexts-ai/assessment-ai-dev.git
 ```
 
 Branch:
@@ -158,7 +158,7 @@ Local worktree:
 Writable remote:
 
 ```text
-johnnylibretexts-dev -> https://github.com/johnnylibretexts/adapt-dev.git
+johnnylibretexts-dev -> https://github.com/johnnylibretexts-ai/adapt-dev.git
 ```
 
 Forbidden upstream remote:
@@ -188,7 +188,7 @@ git diff 0201a1b6d..43137d01a
 ```
 
 ADAPT’s fork `main` is not a safe automatic PR base for this review. Create a temporary
-`johnnylibretexts/adapt-dev` review-base branch at exactly `0201a1b6d`, or review the exact commit
+`johnnylibretexts-ai/adapt-dev` review-base branch at exactly `0201a1b6d`, or review the exact commit
 range locally. Never create or push that base branch on `origin`.
 
 Current expected worktree noise:
@@ -1228,7 +1228,7 @@ Do not run `docker compose down`, and never run it with `-v`.
 
 6. Run the exact diff commands and confirm the bases.
 7. Run the focused tests and catalog verifier.
-8. Prepare correctly based draft PRs in `johnnylibretexts/*` only.
+8. Prepare correctly based draft PRs in `johnnylibretexts-ai/*` only.
 9. Trigger CodeRabbit and Greptile.
 10. Triage findings with evidence; do not auto-apply fixes.
 11. Run the full and Docker suites after valid fixes.

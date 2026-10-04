@@ -1,7 +1,7 @@
 # An unreadable publication state refuses to publish rather than resuming
 
 **Status:** accepted and implemented (2026-08-15) via
-[#13](https://github.com/johnnylibretexts/assessment-ai-dev/issues/13). The guard is in the resume
+[#13](https://github.com/johnnylibretexts-ai/assessment-ai-dev/issues/13). The guard is in the resume
 `app/publishing.py`, taken as soon as `publication_key` exists and deliberately *before* the row is
 reserved; `test_unreadable_publication_state_refuses_and_writes_nothing` and
 `test_unreadable_publication_state_refuses_before_the_reservation` pin the two halves.
